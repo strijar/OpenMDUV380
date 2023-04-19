@@ -30,7 +30,7 @@
 #include "user_interface/languages/english.h"
 #if defined(LANGUAGE_BUILD_JAPANESE)
 #include "user_interface/languages/japanese.h"
-#else
+#elif !defined(LANGUAGE_ENGLISH_ONLY)
 #include "user_interface/languages/french.h"
 #include "user_interface/languages/german.h"
 #include "user_interface/languages/portuguese.h"
@@ -61,7 +61,7 @@
 const stringsTable_t languages[NUM_LANGUAGES]= { 	englishLanguage,        // englishLanguageName
 #if defined(LANGUAGE_BUILD_JAPANESE)
 													japaneseLanguage,       // japaneseLanguageName
-#else
+#elif !defined(LANGUAGE_ENGLISH_ONLY)
 													catalanLanguage,        // catalanLanguageName
 													danishLanguage,         // danishLanguageName
 													frenchLanguage,         // frenchLanguageName
@@ -88,7 +88,7 @@ const stringsTable_t *currentLanguage;
 const int LANGUAGE_DISPLAY_ORDER[NUM_LANGUAGES] = {	englishLanguageName,
 #if defined(LANGUAGE_BUILD_JAPANESE)
 													japaneseLanguageName,
-#else
+#elif !defined(LANGUAGE_ENGLISH_ONLY)
 													catalanLanguageName,
 													croatianLanguageName,
 													czechLanguageName,
