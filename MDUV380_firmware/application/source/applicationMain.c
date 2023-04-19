@@ -318,7 +318,7 @@ void applicationMainTask(void)
 
 	if (!SPI_Flash_init())
 	{
-		displayInit(0x000000, 0xffffff, settingsIsOptionBitSet(BIT_INVERSE_VIDEO));
+		displayInit(0x000000, 0x11ff11, settingsIsOptionBitSet(BIT_INVERSE_VIDEO));
 		gpioInitDisplay();
 		displayEnableBacklight(true, 100);
 		displayClearBuf();
@@ -360,7 +360,7 @@ void applicationMainTask(void)
 		wasRestoringDefaultsettings = settingsLoadSettings();
 	}
 
-	displayInit(0x000000, 0xffffff, settingsIsOptionBitSet(BIT_INVERSE_VIDEO));
+	displayInit(0x000000, 0x11ff11, settingsIsOptionBitSet(BIT_INVERSE_VIDEO));
 	gpioInitDisplay();
 
 	radioPowerOn();
