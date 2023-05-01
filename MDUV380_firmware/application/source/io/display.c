@@ -29,14 +29,15 @@
 
 #include <FreeRTOS.h>
 #include <hardware/HX8353E.h>
+#include "user_interface/colors.h"
 #include "io/display.h"
 #include "functions/settings.h"
 #include "interfaces/gpio.h"
 #include "main.h"
 
 uint8_t displayLCD_Type = 1;
-static u_int32_t foregroundR8G8B8;
-static u_int32_t backgroundR8G8B8;
+static uint16_t foreground_color;
+static uint16_t background_color;
 static bool displayIsInverseVideo;
 
 void displayWriteCmd(uint8_t cmd)
@@ -67,20 +68,20 @@ void displayWriteCmds(uint8_t cmd, size_t len, uint8_t opts[])
 void displaySetInvertedState(bool isInverted)
 {
 	displayIsInverseVideo = isInverted;
-    displaySetForegroundColour(isInverted ? backgroundR8G8B8 : foregroundR8G8B8);
-    displaySetBackgroundColour(isInverted ? foregroundR8G8B8 : backgroundR8G8B8);
+    displaySetForegroundColour(isInverted ? background_color : foreground_color);
+    displaySetBackgroundColour(isInverted ? foreground_color : background_color);
 }
 
 void displaySetToDefaultForegroundColour(void)
 {
-    displaySetForegroundColour(displayIsInverseVideo ? backgroundR8G8B8 : foregroundR8G8B8);
+    displaySetForegroundColour(displayIsInverseVideo ? background_color : foreground_color);
 }
 
-void displayInit(int32_t fgR8G8B8,int32_t bgR8G8B8, bool isInverted)
+void displayInit()
 {
-	foregroundR8G8B8 = fgR8G8B8;
-	backgroundR8G8B8 = bgR8G8B8;
-	displayIsInverseVideo = isInverted;
+	foreground_color = MAIN_COLOR;
+	background_color = BACKGROUND_COLOR;
+	displayIsInverseVideo = false;
 
 	GPIO_InitTypeDef GPIO_InitStruct = {0};
 
@@ -372,7 +373,7 @@ void displayInit(int32_t fgR8G8B8,int32_t bgR8G8B8, bool isInverted)
 
 	HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_SET);
 
-	displaySetInvertedState(isInverted);
+	displaySetInvertedState(false);
 
     displayClearBuf();
     displayRender();

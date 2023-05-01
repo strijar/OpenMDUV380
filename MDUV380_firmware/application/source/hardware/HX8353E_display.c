@@ -54,8 +54,8 @@ static float _angleOffset = DEFAULT_ANGLE_OFFSET;
 
 extern bool headerRowIsDirty;
 
-static uint16_t bgColour = 0xFFFF;
-static uint16_t fgColour = 0x0000;
+static uint16_t background_color = 0xFFFF;
+static uint16_t foreground_color = 0x0000;
 
 static uint16_t screenBufData[DISPLAY_SIZE_X * DISPLAY_SIZE_Y];
 uint16_t *screenBuf = screenBufData;
@@ -76,7 +76,7 @@ int16_t displaySetPixel(int16_t x, int16_t y, bool color)
 		return -1;// off the screen
 	}
 
-	screenBuf[i] = color ? fgColour : bgColour;
+	screenBuf[i] = color ? foreground_color : background_color;
 
 	return 0;
 }
@@ -219,7 +219,7 @@ int displayPrintCore(int16_t xPos, int16_t yPos, const char *szMsg, ucFont_t fon
 				uint8_t rowData = currentCharData[x + ((y / 8) * charWidthPixels)];
 				if ((rowData>>(y % 8) & 0x01))
 				{
-					screenBuf[xp + ((yPos + y) * DISPLAY_SIZE_X) + charPixelOffset] =  isInverted ? bgColour : fgColour;
+					screenBuf[xp + ((yPos + y) * DISPLAY_SIZE_X) + charPixelOffset] =  isInverted ? background_color : foreground_color;
 				}
 
 			}
@@ -234,7 +234,7 @@ void displayClearBuf(void)
 	// may be able to do this using DMA
 	for(int i = 0; i < DISPLAY_SIZE_X * DISPLAY_SIZE_Y; i++)
 	{
-		screenBuf[i] = bgColour;
+		screenBuf[i] = background_color;
 	}
 }
 
@@ -254,7 +254,7 @@ void displayClearRows(int16_t startRow, int16_t endRow, bool isInverted)
 	startRow *= (8 * DISPLAY_SIZE_X);
 	endRow *= (8 * DISPLAY_SIZE_X);
 
-	uint16_t fillColour = (isInverted ? fgColour : bgColour);
+	uint16_t fillColour = (isInverted ? foreground_color : background_color);
 
 	for(int i = startRow; i < endRow; i++)
 	{
@@ -953,7 +953,7 @@ void displayFillRect(int16_t x, int16_t y, int16_t width, int16_t height, bool i
 		lineStartOffset = (y + yp) * DISPLAY_SIZE_X;
 		for(int xp = 0; xp < width; xp++)
 		{
-			screenBuf[lineStartOffset + x + xp] = isInverted ? bgColour : fgColour;
+			screenBuf[lineStartOffset + x + xp] = isInverted ? background_color : foreground_color;
 		}
 	}
 }
@@ -1211,16 +1211,16 @@ void displayRenderRows(int16_t startRow, int16_t endRow)
 
 void displaySetInverseVideo(bool inverted)
 {
-	uint16_t tmp = bgColour;
-	bgColour = fgColour;
-	fgColour = tmp;
+	uint16_t tmp = background_color;
+	background_color = foreground_color;
+	foreground_color = tmp;
 }
 
 void displayBegin(bool inverted)
 {
-	uint16_t tmp = bgColour;
-	bgColour = fgColour;
-	fgColour = tmp;
+	uint16_t tmp = background_color;
+	background_color = foreground_color;
+	foreground_color = tmp;
     displayClearBuf();
     displayRender();
 }
@@ -1230,34 +1230,25 @@ void displaySetContrast(uint8_t contrast)
 // this display does not have a contrast control
 }
 
-uint16_t displayR8G8B8ToNative(uint32_t R8G8B8)
+void displaySetBackgroundColour(uint16_t color)
 {
-	uint32_t red 	= ((R8G8B8 >> 16) >> 3) << 11;
-	uint32_t green 	= (((R8G8B8 >> 8) & 0xFF) >> 2) << 5;
-	uint32_t blue 	= (R8G8B8 & 0xFF) >> 3;
-
-	return __builtin_bswap16(red + green + blue);
+	background_color = color;
 }
 
-void displaySetBackgroundColour(uint32_t R8G8B8)
+void displaySetForegroundColour(uint16_t color)
 {
-	bgColour = displayR8G8B8ToNative(R8G8B8);
-}
-
-void displaySetForegroundColour(uint32_t R8G8B8)
-{
-	fgColour = displayR8G8B8ToNative(R8G8B8);
+	foreground_color = color;
 }
 
 uint16_t displayGetForegroundColour(void)
 {
-	return fgColour;
+	return foreground_color;
 }
 
 
 uint16_t displayGetBackgroundColour(void)
 {
-	return bgColour;
+	return background_color;
 }
 
 // Note.
@@ -1282,7 +1273,7 @@ void displayConvertGD77ImageData(uint8_t *dataBuf)
 			uint8_t d = dataBuf[(y * 128) + x];
 			for(int r = 0; r < 8; r++)
 			{
-				screenBufData[startOffset + (((y * 8) + r) * DISPLAY_SIZE_X) + x] = ((d >> r) & 0x01)? fgColour : bgColour;
+				screenBufData[startOffset + (((y * 8) + r) * DISPLAY_SIZE_X) + x] = ((d >> r) & 0x01)? foreground_color : background_color;
 			}
 		}
 	}
@@ -1290,6 +1281,6 @@ void displayConvertGD77ImageData(uint8_t *dataBuf)
 	// clear beginning of display buff used to store the image read from flash
 	for(int i = 0; i < (128 * 64 / 8 / 2); i++)
 	{
-		screenBuf[i] = bgColour;
+		screenBuf[i] = background_color;
 	}
 }

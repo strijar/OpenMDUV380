@@ -28,6 +28,7 @@
 #include "user_interface/menuSystem.h"
 #include "user_interface/uiLocalisation.h"
 #include "user_interface/uiUtilities.h"
+#include "user_interface/colors.h"
 #include "functions/settings.h"
 #include "functions/ticks.h"
 
@@ -516,13 +517,17 @@ const menuItemsList_t menuDataOptions =
 
 void menuDisplayTitle(const char *title)
 {
+	displaySetForegroundColour(MENU_TITLE_COLOR);
 	displayDrawFastHLine(0, 13, DISPLAY_SIZE_X, true);
 	displayPrintCore(0, 3, title, FONT_SIZE_2, TEXT_ALIGN_CENTER, false);
+	displaySetForegroundColour(MAIN_COLOR);
 }
 
 void menuDisplayEntry(int loopOffset, int focusedItem, const char *entryText)
 {
 	bool focused = (focusedItem == menuDataGlobal.currentItemIndex);
+
+	displaySetForegroundColour(MENU_ENTRY_COLOR);
 
 	if (focused)
 	{
@@ -534,6 +539,7 @@ void menuDisplayEntry(int loopOffset, int focusedItem, const char *entryText)
 #else
 	displayPrintCore(DISPLAY_X_POS_MENU_OFFSET, DISPLAY_Y_POS_MENU_ENTRY_HIGHLIGHT + (loopOffset * MENU_ENTRY_HEIGHT), entryText, FONT_SIZE_3, TEXT_ALIGN_LEFT, focused);
 #endif
+	displaySetForegroundColour(MAIN_COLOR);
 }
 
 // Returns menu offset, -1 if the line is before the first menu item, -2 if the line is after the last menu item

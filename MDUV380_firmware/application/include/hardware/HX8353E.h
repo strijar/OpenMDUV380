@@ -126,6 +126,8 @@ typedef enum
 #define DISPLAY_SIZE_X                          160
 #define DISPLAY_NUMBER_OF_ROWS  (DISPLAY_SIZE_Y / 8)
 
+#define COLOR(x) (uint16_t)(((x & 0xF80000) >> 16) | ((x & 0xFC00) >> 13) | ((x & 0x1C00) << 3) | ((x & 0xF8) << 5))
+
 void displayBegin(bool isInverted);
 void displayClearBuf(void);
 void displayClearRows(int16_t startRow, int16_t endRow, bool isInverted);
@@ -179,9 +181,8 @@ void displayRestorePrimaryScreenBuffer(void);
 uint16_t *displayGetPrimaryScreenBuffer(void);
 void displayOverrideScreenBuffer(uint16_t *buffer);
 
-void displaySetForegroundColour(uint32_t R8G8B8);
-void displaySetBackgroundColour(uint32_t R8G8B8);
-uint16_t displayR8G8B8ToNative(uint32_t R8G8B8);
+void displaySetForegroundColour(uint16_t color);
+void displaySetBackgroundColour(uint16_t color);
 void displayConvertGD77ImageData(uint8_t *dataBuf);
 
 #endif /* _OPENGD77_HX8353E_H_ */

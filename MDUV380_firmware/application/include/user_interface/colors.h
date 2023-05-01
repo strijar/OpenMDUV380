@@ -1,7 +1,7 @@
 /*
- * Copyright (C) 2019      Kai Ludwig, DG4KLU
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
+ *                         Oleg Belousov, R1CBU
  *
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions
@@ -27,21 +27,19 @@
  *
  */
 
-#ifndef _OPENGD77_DISPLAY_H_
-#define _OPENGD77_DISPLAY_H_
 
-#include <stdbool.h>
-#define BACKLIGHT_MIN_USABLE_VALUE 1
+#ifndef INCLUDE_USER_INTERFACE_COLORS_H_
+#define INCLUDE_USER_INTERFACE_COLORS_H_
 
-extern uint8_t displayLCD_Type;
+#include <hardware/HX8353E.h>
 
-void displayInit();
-void displaySetInvertedState(bool isInverted);
-void displayEnableBacklight(bool enable, int displayBacklightPercentageOff);
-bool displayIsBacklightLit(void);
-void displayWriteCmd(uint8_t cmd);
-void displayWriteData(uint8_t val);
-void displayWriteCmds(uint8_t cmd, size_t len, uint8_t opts[]);
-void displaySetToDefaultForegroundColour(void);
+#define BACKGROUND_COLOR	COLOR(0x000000)
+#define MAIN_COLOR			COLOR(0x11FF11)
 
-#endif /* _OPENGD77_DISPLAY_H_ */
+#define GPS_SAT_COLOR		COLOR(0x0000FF)
+#define BD_SAT_COLOR		COLOR(0xFF0000)
+
+#define MENU_TITLE_COLOR	COLOR(0xFFAA11)
+#define MENU_ENTRY_COLOR	COLOR(0xFFAA11)
+
+#endif /* INCLUDE_USER_INTERFACE_COLORS_H_ */

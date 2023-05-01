@@ -313,13 +313,11 @@ void applicationMainTask(void)
 	displayLCD_Type = SPI_Flash_readSingleSecurityRegister(0x301D);
 	displayLCD_Type &= 0x03;
 
-
-
+	displayInit();
+	gpioInitDisplay();
 
 	if (!SPI_Flash_init())
 	{
-		displayInit(0x000000, 0x11ff11, settingsIsOptionBitSet(BIT_INVERSE_VIDEO));
-		gpioInitDisplay();
 		displayEnableBacklight(true, 100);
 		displayClearBuf();
 		displayPrintCentered(4,"OpenMDUV380", FONT_SIZE_3);
@@ -359,9 +357,6 @@ void applicationMainTask(void)
 	{
 		wasRestoringDefaultsettings = settingsLoadSettings();
 	}
-
-	displayInit(0x000000, 0x11ff11, settingsIsOptionBitSet(BIT_INVERSE_VIDEO));
-	gpioInitDisplay();
 
 	radioPowerOn();
 

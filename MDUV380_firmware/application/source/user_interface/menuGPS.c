@@ -31,13 +31,14 @@
 #include "user_interface/menuSystem.h"
 #include "user_interface/uiUtilities.h"
 #include "user_interface/uiLocalisation.h"
+#include "user_interface/colors.h"
 #include "interfaces/gps.h"
 
 static void updateScreen(bool isFirstRun);
 static void handleEvent(uiEvent_t *ev);
 static void displayGPSData(bool isFirstRun);
 static void displayCoords(bool isFirstRun);
-static int displayBars(gpsSatellitesData_t satellitesArray[],int dispPosition, float spacing, uint32_t barColour);
+static int displayBars(gpsSatellitesData_t satellitesArray[],int dispPosition, float spacing, uint16_t barColour);
 static void displayRSSI(void);
 static void displaySatellitesPolar(gpsSatellitesData_t satellitesArray[]);
 static void displayPolar(void);
@@ -104,7 +105,7 @@ static int countSatellites(gpsSatellitesData_t satellitesArray[])
     return count;
 }*/
 
-static int displayBars(gpsSatellitesData_t satellitesArray[],int dispPosition, float spacing, uint32_t barColour)
+static int displayBars(gpsSatellitesData_t satellitesArray[],int dispPosition, float spacing, uint16_t barColour)
 {
 	char buf[3];
 	const int Y_POS = 120;
@@ -158,8 +159,8 @@ static void displayRSSI(void)
 
 	if ((gpsData.SatsInViewGP + gpsData.SatsInViewBD) > 0)
 	{
-		dispPosition = displayBars(gpsData.GPSatellites, dispPosition, spacing, 0x0000FF);
-		displayBars(gpsData.BDSatellites, dispPosition, spacing, 0xFF0000);
+		dispPosition = displayBars(gpsData.GPSatellites, dispPosition, spacing, COLOR(0x0000FF));
+		displayBars(gpsData.BDSatellites, dispPosition, spacing, COLOR(0xFF0000));
 	}
 }
 
@@ -208,9 +209,9 @@ static void displayPolar(void)
 
 	if ((gpsData.SatsInViewGP + gpsData.SatsInViewBD) > 0)
 	{
-		displaySetForegroundColour(0x0000FF);
+		displaySetForegroundColour(GPS_SAT_COLOR);
 		displaySatellitesPolar(gpsData.GPSatellites);
-		displaySetForegroundColour(0xFF0000);
+		displaySetForegroundColour(BD_SAT_COLOR);
 		displaySatellitesPolar(gpsData.BDSatellites);
 		displaySetToDefaultForegroundColour();
 	}
