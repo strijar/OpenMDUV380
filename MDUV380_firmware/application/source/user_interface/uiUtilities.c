@@ -1491,7 +1491,7 @@ void uiUtilityRenderQSOData(void)
 		if ((LinkHead->talkGroupOrPcId >> 24) == PC_CALL_FLAG) // &&  (LinkHead->id & 0xFFFFFF) != (trxTalkGroupOrPcId & 0xFFFFFF))
 		{
 			// Its a Private call
-			displayPrintCentered(16, LinkHead->contact, FONT_SIZE_3);
+			displayPrintCentered(DISPLAY_Y_POS_CONTACT, LinkHead->contact, FONT_SIZE_3);
 
 			displayPrintCentered(DISPLAY_Y_POS_CHANNEL_FIRST_LINE, currentLanguage->private_call, FONT_SIZE_3);
 

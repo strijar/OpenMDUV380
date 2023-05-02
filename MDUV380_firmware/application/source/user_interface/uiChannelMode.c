@@ -719,7 +719,7 @@ void uiChannelModeUpdateScreen(int txTimeSecs)
 				if (trxTransmissionEnabled)
 				{
 					displaySetForegroundColour(TX_INFO_CHANNEL_FG_COLOR);
-					uiUtilityDisplayInformation(nameBuf, (uiDataGlobal.reverseRepeaterChannel == true)?DISPLAY_INFO_CHANNEL_INVERTED:DISPLAY_INFO_CHANNEL, DISPLAY_Y_POS_CHANNEL_SECOND_LINE);
+					uiUtilityDisplayInformation(nameBuf, (uiDataGlobal.reverseRepeaterChannel == true)?DISPLAY_INFO_CHANNEL_INVERTED:DISPLAY_INFO_CHANNEL, -1);
 					displaySetForegroundColour(MAIN_FG_COLOR);
 				} else {
 					uiUtilityDisplayInformation(nameBuf, (uiDataGlobal.reverseRepeaterChannel == true)?DISPLAY_INFO_CHANNEL_INVERTED:DISPLAY_INFO_CHANNEL, -1);
@@ -747,7 +747,7 @@ void uiChannelModeUpdateScreen(int txTimeSecs)
 						if (trxTransmissionEnabled)
 						{
 							displaySetForegroundColour(TX_INFO_CONTACT_FG_COLOR);
-							uiUtilityDisplayInformation(NULL, DISPLAY_INFO_CONTACT_OVERRIDE_FRAME, DISPLAY_Y_POS_CONTACT_TX_FRAME);
+							uiUtilityDisplayInformation(NULL, DISPLAY_INFO_CONTACT_OVERRIDE_FRAME, -1);
 							displaySetForegroundColour(MAIN_FG_COLOR);
 						} else {
 							uiUtilityDisplayInformation(NULL, DISPLAY_INFO_CONTACT_OVERRIDE_FRAME, -1);
@@ -762,7 +762,7 @@ void uiChannelModeUpdateScreen(int txTimeSecs)
 				if (trxTransmissionEnabled)
 				{
 					displaySetForegroundColour(TX_INFO_CONTACT_FG_COLOR);
-					uiUtilityDisplayInformation(nameBuf, DISPLAY_INFO_CONTACT, DISPLAY_Y_POS_CONTACT_TX);
+					uiUtilityDisplayInformation(nameBuf, DISPLAY_INFO_CONTACT, -1);
 					displaySetForegroundColour(MAIN_FG_COLOR);
 				} else {
 					uiUtilityDisplayInformation(nameBuf, DISPLAY_INFO_CONTACT, -1);

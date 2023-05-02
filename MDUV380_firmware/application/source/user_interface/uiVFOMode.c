@@ -392,7 +392,7 @@ void uiVFOModeUpdateScreen(int txTimeSecs)
 							if (nonVolatileSettings.overrideTG != 0)
 							{
 								uiUtilityBuildTgOrPCDisplayName(buffer, SCREEN_LINE_BUFFER_SIZE);
-								uiUtilityDisplayInformation(NULL, DISPLAY_INFO_CONTACT_OVERRIDE_FRAME, (trxTransmissionEnabled ? DISPLAY_Y_POS_CONTACT_TX_FRAME : -1));
+								uiUtilityDisplayInformation(NULL, DISPLAY_INFO_CONTACT_OVERRIDE_FRAME, -1);
 							}
 							else
 							{
@@ -400,7 +400,7 @@ void uiVFOModeUpdateScreen(int txTimeSecs)
 							}
 						}
 
-						uiUtilityDisplayInformation(buffer, DISPLAY_INFO_CONTACT, (trxTransmissionEnabled ? DISPLAY_Y_POS_CONTACT_TX : -1));
+						uiUtilityDisplayInformation(buffer, DISPLAY_INFO_CONTACT, -1);
 					}
 				}
 				else
