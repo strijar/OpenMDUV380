@@ -31,6 +31,7 @@
 #include "user_interface/menuSystem.h"
 #include "user_interface/uiUtilities.h"
 #include "user_interface/uiLocalisation.h"
+#include "user_interface/colors.h"
 #include "functions/voicePrompts.h"
 #include "functions/ticks.h"
 #include "functions/rxPowerSaving.h"
@@ -655,10 +656,11 @@ void uiChannelModeUpdateScreen(int txTimeSecs)
 				// Display some channel settings
 				if (uiDataGlobal.displayChannelSettings)
 				{
+					displaySetForegroundColour(CHANNEL_SETTINGS_FG_COLOR);
 					uiUtilityDisplayInformation(NULL, DISPLAY_INFO_TONE_AND_SQUELCH, -1);
-
 					uiUtilityDisplayFrequency(DISPLAY_Y_POS_RX_FREQ, false, false, (uiDataGlobal.reverseRepeaterChannel ? currentChannelData->txFreq : currentChannelData->rxFreq), false, false, 0);
 					uiUtilityDisplayFrequency(DISPLAY_Y_POS_TX_FREQ, true, false, (uiDataGlobal.reverseRepeaterChannel ? currentChannelData->rxFreq : currentChannelData->txFreq), false, false, 0);
+					displaySetForegroundColour(MAIN_FG_COLOR);
 				}
 				else
 				{
@@ -723,6 +725,8 @@ void uiChannelModeUpdateScreen(int txTimeSecs)
 				{
 					uint32_t PCorTG = ((nonVolatileSettings.overrideTG != 0) ? nonVolatileSettings.overrideTG : codeplugContactGetPackedId(&currentContactData));
 
+					displaySetForegroundColour(CHANNEL_SETTINGS_FG_COLOR);
+
 					snprintf(nameBuf, NAME_BUFFER_LEN, "%s %u",
 							(((PCorTG >> 24) == PC_CALL_FLAG) ? currentLanguage->pc : currentLanguage->tg),
 							(PCorTG & 0xFFFFFF));
@@ -741,6 +745,11 @@ void uiChannelModeUpdateScreen(int txTimeSecs)
 				}
 
 				uiUtilityDisplayInformation(nameBuf, DISPLAY_INFO_CONTACT, (trxTransmissionEnabled ? DISPLAY_Y_POS_CONTACT_TX : -1));
+
+				if (uiDataGlobal.displayChannelSettings)
+				{
+					displaySetForegroundColour(MAIN_FG_COLOR);
+				}
 			}
 
 			displayRender();

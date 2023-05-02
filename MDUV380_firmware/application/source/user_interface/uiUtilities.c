@@ -30,6 +30,7 @@
 #include "user_interface/menuSystem.h"
 #include "user_interface/uiUtilities.h"
 #include "user_interface/uiLocalisation.h"
+#include "user_interface/colors.h"
 #include "functions/settings.h"
 #include "hardware/SPI_Flash.h"
 #include "functions/ticks.h"
@@ -1447,7 +1448,9 @@ void uiUtilityDisplayInformation(const char *str, displayInformation_t line, int
 	break;
 
 	case DISPLAY_INFO_TX_TIMER:
+		displaySetForegroundColour(TX_TIMER_FG_COLOR);
 		displayPrintCentered(DISPLAY_Y_POS_TX_TIMER, str, FONT_SIZE_4);
+		displaySetForegroundColour(MAIN_FG_COLOR);
 		break;
 
 	case DISPLAY_INFO_ZONE:
