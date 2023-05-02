@@ -716,7 +716,14 @@ void uiChannelModeUpdateScreen(int txTimeSecs)
 					codeplugUtilConvertBufToString(currentChannelData->name, nameBuf, 16);
 				}
 
-				uiUtilityDisplayInformation(nameBuf, (uiDataGlobal.reverseRepeaterChannel == true)?DISPLAY_INFO_CHANNEL_INVERTED:DISPLAY_INFO_CHANNEL , (trxTransmissionEnabled ? DISPLAY_Y_POS_CHANNEL_SECOND_LINE : -1));
+				if (trxTransmissionEnabled)
+				{
+					displaySetForegroundColour(TX_INFO_CHANNEL_FG_COLOR);
+					uiUtilityDisplayInformation(nameBuf, (uiDataGlobal.reverseRepeaterChannel == true)?DISPLAY_INFO_CHANNEL_INVERTED:DISPLAY_INFO_CHANNEL, DISPLAY_Y_POS_CHANNEL_SECOND_LINE);
+					displaySetForegroundColour(MAIN_FG_COLOR);
+				} else {
+					uiUtilityDisplayInformation(nameBuf, (uiDataGlobal.reverseRepeaterChannel == true)?DISPLAY_INFO_CHANNEL_INVERTED:DISPLAY_INFO_CHANNEL, -1);
+				}
 			}
 
 			if (trxGetMode() == RADIO_MODE_DIGITAL)
@@ -736,7 +743,15 @@ void uiChannelModeUpdateScreen(int txTimeSecs)
 					if (nonVolatileSettings.overrideTG != 0)
 					{
 						uiUtilityBuildTgOrPCDisplayName(nameBuf, SCREEN_LINE_BUFFER_SIZE);
-						uiUtilityDisplayInformation(NULL, DISPLAY_INFO_CONTACT_OVERRIDE_FRAME, (trxTransmissionEnabled ? DISPLAY_Y_POS_CONTACT_TX_FRAME : -1));
+
+						if (trxTransmissionEnabled)
+						{
+							displaySetForegroundColour(TX_INFO_CONTACT_FG_COLOR);
+							uiUtilityDisplayInformation(NULL, DISPLAY_INFO_CONTACT_OVERRIDE_FRAME, DISPLAY_Y_POS_CONTACT_TX_FRAME);
+							displaySetForegroundColour(MAIN_FG_COLOR);
+						} else {
+							uiUtilityDisplayInformation(NULL, DISPLAY_INFO_CONTACT_OVERRIDE_FRAME, -1);
+						}
 					}
 					else
 					{
@@ -744,12 +759,16 @@ void uiChannelModeUpdateScreen(int txTimeSecs)
 					}
 				}
 
-				uiUtilityDisplayInformation(nameBuf, DISPLAY_INFO_CONTACT, (trxTransmissionEnabled ? DISPLAY_Y_POS_CONTACT_TX : -1));
-
-				if (uiDataGlobal.displayChannelSettings)
+				if (trxTransmissionEnabled)
 				{
+					displaySetForegroundColour(TX_INFO_CONTACT_FG_COLOR);
+					uiUtilityDisplayInformation(nameBuf, DISPLAY_INFO_CONTACT, DISPLAY_Y_POS_CONTACT_TX);
 					displaySetForegroundColour(MAIN_FG_COLOR);
+				} else {
+					uiUtilityDisplayInformation(nameBuf, DISPLAY_INFO_CONTACT, -1);
 				}
+
+				displaySetForegroundColour(MAIN_FG_COLOR);
 			}
 
 			displayRender();
