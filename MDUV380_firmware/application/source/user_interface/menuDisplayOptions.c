@@ -71,7 +71,7 @@ enum DISPLAY_MENU_LIST { DISPLAY_MENU_BRIGHTNESS = 0, DISPLAY_MENU_BRIGHTNESS_OF
 	DISPLAY_MENU_CONTRAST,
 #endif
 	DISPLAY_MENU_BACKLIGHT_MODE,
-	DISPLAY_MENU_TIMEOUT, DISPLAY_MENU_COLOUR_INVERT, DISPLAY_MENU_CONTACT_DISPLAY_ORDER, DISPLAY_MENU_CONTACT_DISPLAY_SPLIT_CONTACT,
+	DISPLAY_MENU_TIMEOUT, DISPLAY_MENU_CONTACT_DISPLAY_ORDER, DISPLAY_MENU_CONTACT_DISPLAY_SPLIT_CONTACT,
 	DISPLAY_BATTERY_UNIT_IN_HEADER, DISPLAY_EXTENDED_INFOS, DISPLAY_ALL_LEDS_ENABLED, DISLAY_TIMEZONE_VALUE, DISLAY_TIME_UTC_OR_LOCAL,
 	NUM_DISPLAY_MENU_ITEMS };
 
@@ -190,10 +190,6 @@ static void updateScreen(bool isFirstRun)
 					{
 						rightSideConst = (char * const *)&currentLanguage->n_a;
 					}
-					break;
-				case DISPLAY_MENU_COLOUR_INVERT:
-					leftSide = (char * const *)&currentLanguage->display_background_colour;
-					rightSideConst = settingsIsOptionBitSet(BIT_INVERSE_VIDEO) ? (char * const *)&currentLanguage->colour_invert : (char * const *)&currentLanguage->colour_normal;
 					break;
 				case DISPLAY_MENU_CONTACT_DISPLAY_ORDER:
 					leftSide = (char * const *)&currentLanguage->priority_order;
@@ -509,9 +505,6 @@ static void handleEvent(uiEvent_t *ev)
 						}
 					}
 					break;
-				case DISPLAY_MENU_COLOUR_INVERT:
-					setDisplayInvert(true);
-					break;
 				case DISPLAY_MENU_CONTACT_DISPLAY_ORDER:
 					if (nonVolatileSettings.contactDisplayPriority < CONTACT_DISPLAY_PRIO_TA_DB_CC)
 					{
@@ -632,9 +625,6 @@ static void handleEvent(uiEvent_t *ev)
 					{
 						settingsDecrement(nonVolatileSettings.backLightTimeout, (uint8_t) BACKLIGHT_TIMEOUT_STEP);
 					}
-					break;
-				case DISPLAY_MENU_COLOUR_INVERT:
-					setDisplayInvert(false);
 					break;
 				case DISPLAY_MENU_CONTACT_DISPLAY_ORDER:
 					if (nonVolatileSettings.contactDisplayPriority > CONTACT_DISPLAY_PRIO_CC_DB_TA)
