@@ -32,6 +32,7 @@
 #include "user_interface/menuSystem.h"
 #include "user_interface/uiUtilities.h"
 #include "user_interface/uiLocalisation.h"
+#include "user_interface/colors.h"
 #include "functions/voicePrompts.h"
 
 #define NUM_DTMF_DIGITS  16
@@ -149,11 +150,10 @@ static void updateScreen(bool inputModeHasChanged)
 
 	displayClearBuf();
 
+	displaySetColours(TX_TG_PC_HEADER_FG_COLOR, TX_TG_PC_HEADER_BG_COLOR);
 	displayDrawRoundRectWithDropShadow(2, y - 1, (DISPLAY_SIZE_X - 6), TITLE_BOX_HEIGHT, 3, true);
-
-	// Not really centered, off by 2 pixels
 	displayPrintAt(((DISPLAY_SIZE_X - sLen) >> 1) - 2, y, (char *)menuName[menuDataGlobal.currentItemIndex], FONT_SIZE_3);
-
+	displaySetColours(MAIN_FG_COLOR, MAIN_BG_COLOR);
 
 	if (inputModeHasChanged)
 	{
