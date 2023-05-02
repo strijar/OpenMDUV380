@@ -85,7 +85,7 @@ typedef unsigned int time_t_custom;     /* date/time in unix secs past 1-Jan-70 
 #define DISPLAY_X_POS_MENU_OFFSET			   4
 #define DISPLAY_Y_POS_MENU_START             (16 + MENU_ENTRY_HEIGHT)
 #define DISPLAY_Y_POS_MENU_ENTRY_HIGHLIGHT    64
-#define DISPLAY_Y_POS_BAR                     10
+#define DISPLAY_Y_POS_BAR                     11
 #define DISPLAY_Y_POS_CONTACT                 (16 + 8)
 #define DISPLAY_Y_POS_CHANNEL_FIRST_LINE      (42 + 32)
 #define DISPLAY_Y_POS_CHANNEL_SECOND_LINE     (58 + 48)
@@ -99,6 +99,8 @@ typedef unsigned int time_t_custom;     /* date/time in unix secs past 1-Jan-70 
 #define DISPLAY_Y_POS_RSSI_VALUE              (18 + 16)
 #define DISPLAY_Y_POS_RSSI_BAR                (40 + 32)
 #define TITLE_BOX_HEIGHT                      21
+#define HEADER_BOX_HEIGHT                     16
+#define BAR_BOX_HEIGH                         4
 #else
 #define DISPLAY_H_EXTRA_PIXELS                 0
 #define DISPLAY_H_OFFSET                       0

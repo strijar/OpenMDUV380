@@ -1602,6 +1602,9 @@ void uiUtilityRenderHeader(bool isVFODualWatchScanning, bool isVFOSweepScanning)
 	int batteryPercentage = -1;
 	int16_t itemOffset = 0;
 
+	displaySetBackgroundColour(HEADER_BG_COLOR);
+	displayFillRect(0, 0, DISPLAY_SIZE_X, HEADER_BOX_HEIGHT, true);
+
 	if (nonVolatileSettings.bitfieldOptions & BIT_BATTERY_VOLTAGE_IN_HEADER)
 	{
 		getBatteryVoltage(&volts, &mvolts);
@@ -1823,6 +1826,8 @@ void uiUtilityRenderHeader(bool isVFODualWatchScanning, bool isVFOSweepScanning)
 		snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%d%%", batteryPercentage);
 		displayPrintCore(0, DISPLAY_Y_POS_HEADER, buffer, (apoEnabled ? FONT_SIZE_1_BOLD : FONT_SIZE_1), TEXT_ALIGN_RIGHT, ((batteryIsLow ? scanBlinkPhase : false)));// Display battery percentage at the right
 	}
+
+	displaySetBackgroundColour(MAIN_BG_COLOR);
 }
 
 void uiUtilityRedrawHeaderOnly(bool isVFODualWatchScanning, bool isVFOSweepScanning)
@@ -1856,7 +1861,9 @@ static void drawHeaderBar(int *barWidth, int16_t barHeight)
 	// Clear the end of the bar area, if needed
 	if (*barWidth < DISPLAY_SIZE_X)
 	{
+		displaySetBackgroundColour(HEADER_BG_COLOR);
 		displayFillRect(*barWidth, DISPLAY_Y_POS_BAR, (DISPLAY_SIZE_X - *barWidth), barHeight, true);
+		displaySetBackgroundColour(MAIN_BG_COLOR);
 	}
 }
 
@@ -1883,7 +1890,7 @@ void uiUtilityDrawRSSIBarGraph(void)
 
 	int barWidth = ((rssi * rssiMeterHeaderBarNumUnits) / rssiMeterHeaderBarDivider);
 
-	drawHeaderBar(&barWidth, 4);
+	drawHeaderBar(&barWidth, BAR_BOX_HEIGH);
 
 #if 0 // Commented for now, maybe an option later.
 	int xPos = 0;
