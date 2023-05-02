@@ -28,6 +28,7 @@
 #include "user_interface/menuSystem.h"
 #include "user_interface/uiLocalisation.h"
 #include "user_interface/uiUtilities.h"
+#include "user_interface/colors.h"
 #include "functions/ticks.h"
 #include "utils.h"
 
@@ -122,6 +123,9 @@ void uiNotificationRefresh(void)
 		//displayOverrideScreenBuffer(screenNotificationBufData);
 
 		// Draw whatever
+
+		displaySetColours(NOTIFICATION_FG_COLOR, NOTIFICATION_BG_COLOR);
+
 		switch (notificationData.type)
 		{
 			case NOTIFICATION_TYPE_SQUELCH:
@@ -160,6 +164,8 @@ void uiNotificationRefresh(void)
 			default:
 				break;
 		}
+
+		displaySetColours(MAIN_FG_COLOR, MAIN_BG_COLOR);
 
 		displayRenderWithoutNotification();
 		memcpy(displayGetPrimaryScreenBuffer(), screenNotificationBufData, sizeof(screenNotificationBufData));
