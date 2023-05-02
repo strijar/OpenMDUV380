@@ -1473,6 +1473,7 @@ void uiUtilityRenderQSODataAndUpdateScreen(void)
 void uiUtilityRenderQSOData(void)
 {
 	uiDataGlobal.receivedPcId = 0x00; //reset the received PcId
+	displaySetForegroundColour(RX_QSO_FG_COLOR);
 
 	/*
 	 * Note.
@@ -1574,6 +1575,8 @@ void uiUtilityRenderQSOData(void)
 			}
 		}
 	}
+
+	displaySetForegroundColour(MAIN_FG_COLOR);
 }
 
 void uiUtilityRenderHeader(bool isVFODualWatchScanning, bool isVFOSweepScanning)
