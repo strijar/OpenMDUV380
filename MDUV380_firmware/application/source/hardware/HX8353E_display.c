@@ -1240,6 +1240,12 @@ void displaySetForegroundColour(uint16_t color)
 	foreground_color = color;
 }
 
+void displaySetColours(uint16_t foreground, uint16_t background)
+{
+	foreground_color = foreground;
+	background_color = background;
+}
+
 uint16_t displayGetForegroundColour(void)
 {
 	return foreground_color;

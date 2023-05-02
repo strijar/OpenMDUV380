@@ -517,29 +517,25 @@ const menuItemsList_t menuDataOptions =
 
 void menuDisplayTitle(const char *title)
 {
-	displaySetForegroundColour(MENU_TITLE_COLOR);
-	displayDrawFastHLine(0, 13, DISPLAY_SIZE_X, true);
+	displaySetColours(MENU_TITLE_FG_COLOR, MENU_TITLE_BG_COLOR);
+	displayFillRect(0, 0, DISPLAY_SIZE_X, 13, true);
 	displayPrintCore(0, 3, title, FONT_SIZE_2, TEXT_ALIGN_CENTER, false);
-	displaySetForegroundColour(MAIN_COLOR);
+	displaySetColours(MAIN_FG_COLOR, MAIN_BG_COLOR);
 }
 
 void menuDisplayEntry(int loopOffset, int focusedItem, const char *entryText)
 {
 	bool focused = (focusedItem == menuDataGlobal.currentItemIndex);
 
-	displaySetForegroundColour(MENU_ENTRY_COLOR);
+	displaySetColours(MENU_ENTRY_FG_COLOR, MENU_ENTRY_BG_COLOR);
 
 	if (focused)
 	{
-		displayFillRoundRect(DISPLAY_X_POS_MENU_OFFSET, DISPLAY_Y_POS_MENU_ENTRY_HIGHLIGHT + (loopOffset * MENU_ENTRY_HEIGHT), DISPLAY_SIZE_X, MENU_ENTRY_HEIGHT, 2, true);
+		displayFillRect(0, DISPLAY_Y_POS_MENU_ENTRY_HIGHLIGHT + (loopOffset * MENU_ENTRY_HEIGHT), DISPLAY_SIZE_X, MENU_ENTRY_HEIGHT, false);
 	}
 
-#if 0
-	displayPrintCore(DISPLAY_X_POS_MENU_OFFSET, DISPLAY_Y_POS_MENU_START + (loopOffset * MENU_ENTRY_HEIGHT), entryText, FONT_SIZE_3, TEXT_ALIGN_LEFT, focused);
-#else
 	displayPrintCore(DISPLAY_X_POS_MENU_OFFSET, DISPLAY_Y_POS_MENU_ENTRY_HIGHLIGHT + (loopOffset * MENU_ENTRY_HEIGHT), entryText, FONT_SIZE_3, TEXT_ALIGN_LEFT, focused);
-#endif
-	displaySetForegroundColour(MAIN_COLOR);
+	displaySetColours(MAIN_FG_COLOR, MAIN_BG_COLOR);
 }
 
 // Returns menu offset, -1 if the line is before the first menu item, -2 if the line is after the last menu item

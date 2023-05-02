@@ -183,6 +183,7 @@ void displayOverrideScreenBuffer(uint16_t *buffer);
 
 void displaySetForegroundColour(uint16_t color);
 void displaySetBackgroundColour(uint16_t color);
+void displaySetColours(uint16_t foreground, uint16_t background);
 void displayConvertGD77ImageData(uint8_t *dataBuf);
 
 #endif /* _OPENGD77_HX8353E_H_ */

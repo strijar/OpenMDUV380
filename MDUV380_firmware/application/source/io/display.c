@@ -79,8 +79,8 @@ void displaySetToDefaultForegroundColour(void)
 
 void displayInit()
 {
-	foreground_color = MAIN_COLOR;
-	background_color = BACKGROUND_COLOR;
+	foreground_color = MAIN_FG_COLOR;
+	background_color = MAIN_BG_COLOR;
 	displayIsInverseVideo = false;
 
 	GPIO_InitTypeDef GPIO_InitStruct = {0};

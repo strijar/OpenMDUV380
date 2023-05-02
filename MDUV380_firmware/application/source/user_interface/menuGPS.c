@@ -209,9 +209,9 @@ static void displayPolar(void)
 
 	if ((gpsData.SatsInViewGP + gpsData.SatsInViewBD) > 0)
 	{
-		displaySetForegroundColour(GPS_SAT_COLOR);
+		displaySetForegroundColour(GPS_SAT_FG_COLOR);
 		displaySatellitesPolar(gpsData.GPSatellites);
-		displaySetForegroundColour(BD_SAT_COLOR);
+		displaySetForegroundColour(BD_SAT_FG_COLOR);
 		displaySatellitesPolar(gpsData.BDSatellites);
 		displaySetToDefaultForegroundColour();
 	}
@@ -341,7 +341,9 @@ static void updateScreen(bool isFirstRun)
 	menuDisplayTitle(currentLanguage->gps);
 
 	sprintf(buffer,"%d/2", (displayPage + 1));
+	displaySetForegroundColour(MENU_TITLE_FG_COLOR);
 	displayPrintCore(0, 3, buffer, FONT_SIZE_1, TEXT_ALIGN_RIGHT, false);
+	displaySetForegroundColour(MAIN_FG_COLOR);
 
 #if false
 /* Debugging only */
