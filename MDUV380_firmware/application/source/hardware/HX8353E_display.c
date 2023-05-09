@@ -29,7 +29,6 @@
 
 #include <hardware/HX8353E.h>
 #include <stdlib.h>
-//vk3kyy #include "io/display.h"
 #if defined(LANGUAGE_BUILD_JAPANESE)
 #include "hardware/HX8353E_charset_JA.h"
 #else
@@ -57,15 +56,9 @@ extern bool headerRowIsDirty;
 static uint16_t background_color = 0xFFFF;
 static uint16_t foreground_color = 0x0000;
 
-static uint16_t screenBufData[DISPLAY_SIZE_X * DISPLAY_SIZE_Y];
+static uint16_t screenBufData[0];
+
 uint16_t *screenBuf = screenBufData;
-//#define DISPLAY_CHECK_BOUNDS
-
-#ifdef DISPLAY_CHECK_BOUNDS
-static const uint8_t *screenBufEnd = screenBuf + sizeof(screenBuf);
-#endif
-
-
 
 int16_t displaySetPixel(int16_t x, int16_t y, bool color)
 {
@@ -1154,6 +1147,7 @@ static void dmaCompleteCallback(DMA_HandleTypeDef *hdma)
 
 void displayRenderRows(int16_t startRow, int16_t endRow)
 {
+#if 0
 	GPIO_InitTypeDef GPIO_InitStruct = {0};
 
 	// GD77 display controller has 8 lines per row.
@@ -1177,7 +1171,7 @@ void displayRenderRows(int16_t startRow, int16_t endRow)
     // Set start and end rows of the transfer
     {
     	uint8_t opts[] = { 0x00, startRow, 0x00, endRow };
-    	displayWriteCmds(HX8583_CMD_RASET, sizeof(opts), opts);
+    	displayWriteCmds(HX8583_CMD_PASET, sizeof(opts), opts);
     }
 
     displayWriteCmd(HX8583_CMD_RAMWR);
@@ -1207,6 +1201,7 @@ void displayRenderRows(int16_t startRow, int16_t endRow)
 	HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_SET);
 
    	*((volatile uint8_t*) LCD_FSMC_ADDR_DATA) = 0;// write 0 to the display pins , to pull them all low, so keyboard reads don't need to
+#endif
 }
 
 void displaySetInverseVideo(bool inverted)

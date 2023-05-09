@@ -32,6 +32,7 @@
 #include <memory.h>
 #include <malloc.h>
 #include <stdio.h>
+#include <lvgl.h>
 
 #include "interfaces/adc.h"
 #include "interfaces/batteryRAM.h"
@@ -307,14 +308,61 @@ void applicationMainTask(void)
 
 	adcStartDMA();
 
-	//osDelay(500);
-	//USB_DEBUG_printf("FW started\n");
-
 	displayLCD_Type = SPI_Flash_readSingleSecurityRegister(0x301D);
 	displayLCD_Type &= 0x03;
 
+	lv_init();
+
 	displayInit();
 	gpioInitDisplay();
+
+	if (!SPI_Flash_init()) {
+	}
+
+	/*
+	buttonsInit();
+	keyboardInit();
+	rotaryEncoderISR();
+	*/
+
+	displayEnableBacklight(true, 100);
+	gpioSetDisplayBacklightIntensityPercentage(10);
+
+	/* * */
+
+	lv_obj_t * btn = lv_btn_create(lv_scr_act());
+
+	lv_obj_set_pos(btn, 10, 10);
+	lv_obj_set_size(btn, 120, 32);
+
+	lv_obj_t * label = lv_label_create(btn);
+
+	lv_label_set_text(label, "Button");
+	lv_obj_center(label);
+
+	uint8_t 	led = 1;
+	uint16_t	count = 0;
+	int32_t		tick = 0;
+
+	while (true) {
+		uint32_t now = ticksGetMillis();
+
+		if (count++ > 100) {
+			count = 0;
+			led = led ? 0 : 1;
+
+			LedWriteDirect(LED_GREEN, led);
+
+			lv_label_set_text_fmt(label, "Button %i", tick++);
+		}
+
+		lv_timer_handler();
+
+		osDelay(pdMS_TO_TICKS(5));
+		lv_tick_inc(ticksGetMillis() - now);
+	}
+
+	/* * */
 
 	if (!SPI_Flash_init())
 	{

@@ -29,6 +29,7 @@
 
 #include <FreeRTOS.h>
 #include <hardware/HX8353E.h>
+#include <lvgl.h>
 #include "user_interface/colors.h"
 #include "io/display.h"
 #include "functions/settings.h"
@@ -39,6 +40,13 @@ uint8_t displayLCD_Type = 1;
 static uint16_t foreground_color;
 static uint16_t background_color;
 static bool displayIsInverseVideo;
+
+#define ROWS	(8 * 4)
+
+static lv_disp_draw_buf_t	disp_draw_buf;
+static lv_color_t			disp_buf[DISPLAY_SIZE_X * ROWS];
+static lv_disp_drv_t 		disp_drv;
+static lv_disp_t			*disp;
 
 void displayWriteCmd(uint8_t cmd)
 {
@@ -75,6 +83,61 @@ void displaySetInvertedState(bool isInverted)
 void displaySetToDefaultForegroundColour(void)
 {
     displaySetForegroundColour(displayIsInverseVideo ? background_color : foreground_color);
+}
+
+void display_flush_cb(lv_disp_drv_t * disp_drv, const lv_area_t * area, lv_color_t * color_p) {
+	if (area->x2 < 0) return;
+	if (area->y2 < 0) return;
+	if (area->x1 > DISPLAY_SIZE_X - 1) return;
+	if (area->y1 > DISPLAY_SIZE_Y - 1) return;
+
+	uint8_t	act_x1 = area->x1 < 0 ? 0 : area->x1;
+	uint8_t act_y1 = area->y1 < 0 ? 0 : area->y1;
+    uint8_t act_x2 = area->x2 > DISPLAY_SIZE_X - 1 ? DISPLAY_SIZE_X - 1 : area->x2;
+    uint8_t act_y2 = area->y2 > DISPLAY_SIZE_Y - 1 ? DISPLAY_SIZE_Y - 1 : area->y2;
+
+    uint8_t		*buf = (uint8_t *) &color_p[0];
+    uint16_t	buf_size = DISPLAY_SIZE_X * (act_y2 - act_y1 + 1) * sizeof(lv_color_t);
+
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+	GPIO_InitStruct.Pull = GPIO_NOPULL;
+	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+	GPIO_InitStruct.Alternate = GPIO_AF12_FSMC;
+
+	GPIO_InitStruct.Pin = LCD_D0_Pin | LCD_D1_Pin | LCD_D2_Pin | LCD_D3_Pin;
+	HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+	GPIO_InitStruct.Pin = LCD_D4_Pin | LCD_D5_Pin | LCD_D6_Pin | LCD_D7_Pin;
+	HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+
+	HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_RESET);
+
+	uint8_t data[] = {0, act_y1, 0, act_y2};
+
+	displayWriteCmds(HX8583_CMD_PASET, sizeof(data), data);
+
+	displayWriteCmd(HX8583_CMD_RAMWR);
+
+	HAL_StatusTypeDef status = HAL_DMA_Start(&hdma_memtomem_dma2_stream0, (uint32_t) buf, LCD_FSMC_ADDR_DATA, buf_size);
+
+	if (status == HAL_OK) {
+		HAL_DMA_PollForTransfer(&hdma_memtomem_dma2_stream0, HAL_DMA_FULL_TRANSFER, HAL_MAX_DELAY);
+	}
+
+    HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_SET);
+   	*((volatile uint8_t*) LCD_FSMC_ADDR_DATA) = 0;
+
+   	lv_disp_flush_ready(disp_drv);
+}
+
+void display_rounder_cb(lv_disp_drv_t * disp_drv, lv_area_t * area) {
+	area->x1 = 0;
+    area->x2 = DISPLAY_SIZE_X - 1;
+
+    area->y1 = (area->y1 / 8) * 8;
+    area->y2 = (area->y2 / 8) * 8 + 8;
 }
 
 void displayInit()
@@ -357,7 +420,7 @@ void displayInit()
 
     {
     	uint8_t opts[] = { 0x00, 0x00, 0x00, DISPLAY_SIZE_Y};
-    	displayWriteCmds(HX8583_CMD_RASET, sizeof(opts), opts);
+    	displayWriteCmds(HX8583_CMD_PASET, sizeof(opts), opts);
     }
 
     {
@@ -373,10 +436,17 @@ void displayInit()
 
 	HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_SET);
 
-	displaySetInvertedState(false);
+	lv_disp_draw_buf_init(&disp_draw_buf, disp_buf, NULL, DISPLAY_SIZE_X * ROWS);
 
-    displayClearBuf();
-    displayRender();
+	lv_disp_drv_init(&disp_drv);
+
+	disp_drv.draw_buf = &disp_draw_buf;
+	disp_drv.flush_cb = display_flush_cb;
+	disp_drv.rounder_cb = display_rounder_cb;
+	disp_drv.hor_res = DISPLAY_SIZE_X;
+	disp_drv.ver_res = DISPLAY_SIZE_Y;
+
+	disp = lv_disp_drv_register(&disp_drv);
 }
 
 void displayEnableBacklight(bool enable, int displayBacklightPercentageOff)

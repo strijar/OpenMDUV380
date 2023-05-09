@@ -84,7 +84,7 @@ typedef enum
 #define HX8583_CMD_DISPOFF      0x28 // Display off
 #define HX8583_CMD_DISPON       0x29 // Display on
 #define HX8583_CMD_CASET        0x2a // Column address set
-#define HX8583_CMD_RASET        0x2b // Row address set
+#define HX8583_CMD_PASET        0x2b // Row address set
 #define HX8583_CMD_RAMWR        0x2c // Memory write
 #define HX8583_CMD_RGBSET       0x2d // LUT parameter (16-to-18 color mapping)
 #define HX8583_CMD_RAMRD        0x2e // Memory read
