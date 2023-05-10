@@ -41,7 +41,7 @@ static uint16_t foreground_color;
 static uint16_t background_color;
 static bool displayIsInverseVideo;
 
-#define ROWS	(8 * 4)
+#define ROWS	(DISPLAY_SIZE_Y / 10)
 
 static lv_disp_draw_buf_t	disp_draw_buf;
 static lv_color_t			disp_buf[DISPLAY_SIZE_X * ROWS];
@@ -428,9 +428,9 @@ void displayInit()
     	displayWriteCmds(HX8583_CMD_COLMOD, 1, opts);
     }
 
-    //osDelay(10);// does not seem to be needed
+    osDelay(10);
     displayWriteCmd(HX8583_CMD_SLPOUT); // Activate the display
-    //osDelay(120);// does not seem to be needed
+    osDelay(120);
 
     displayWriteCmd(HX8583_CMD_DISPON);
 

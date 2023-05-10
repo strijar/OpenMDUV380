@@ -286,26 +286,34 @@ static void settingsUpdateAudioAlert(void)
 
 void applicationMainTask(void)
 {
-	keyboardCode_t keys;
-	int key_event = EVENT_KEY_NONE;
-	//  int keyFunction = 0;
-	uint32_t buttons = 0;
-	int button_event = EVENT_BUTTON_NONE;
-	uint32_t rotary = 0;
-	int rotary_event = EVENT_ROTARY_NONE;
-	int function_event = 0;
-	bool keyOrButtonChanged = false;
-	int *quickkeyPushedMenuMelody = NULL;
-	int keyFunction;
-	bool wasRestoringDefaultsettings = false;
-	bool hasSignal = false;
+	keyboardCode_t	keys;
+	int				key_event = EVENT_KEY_NONE;
+	uint32_t		buttons = 0;
+	int				button_event = EVENT_BUTTON_NONE;
+	uint32_t		rotary = 0;
+	int				rotary_event = EVENT_ROTARY_NONE;
+	int				function_event = 0;
+	bool			keyOrButtonChanged = false;
+	int				*quickkeyPushedMenuMelody = NULL;
+	int 			keyFunction;
+	bool 			wasRestoringDefaultsettings = false;
+	bool 			hasSignal = false;
 
+	uiEvent_t ev = {
+		.buttons = 0,
+		.keys = NO_KEYCODE,
+		.rotary = 0,
+		.function = 0,
+		.events = NO_EVENT,
+		.hasEvent = false,
+		.time = ticksGetMillis()
+	};
 
-	uiEvent_t ev = { .buttons = 0, .keys = NO_KEYCODE, .rotary = 0, .function = 0, .events = NO_EVENT, .hasEvent = false, .time = ticksGetMillis() };
+#if 0
+	HAL_GPIO_WritePin(PWR_SW_GPIO_Port, PWR_SW_Pin, GPIO_PIN_SET); // keep the power on
+#endif
 
-	HAL_GPIO_WritePin(PWR_SW_GPIO_Port, PWR_SW_Pin, GPIO_PIN_SET);// keep the power on
 	batteryRAM_Init();
-
 	adcStartDMA();
 
 	displayLCD_Type = SPI_Flash_readSingleSecurityRegister(0x301D);
@@ -313,32 +321,34 @@ void applicationMainTask(void)
 
 	lv_init();
 
+	buttonsInit();
+	keyboardInit();
+	rotaryEncoderISR();
+
 	displayInit();
 	gpioInitDisplay();
+
+	lv_disp_set_bg_color(lv_disp_get_default(), lv_color_black());
+	lv_disp_set_bg_opa(lv_disp_get_default(), LV_OPA_COVER);
 
 	if (!SPI_Flash_init()) {
 	}
 
-	/*
-	buttonsInit();
-	keyboardInit();
-	rotaryEncoderISR();
-	*/
-
 	displayEnableBacklight(true, 100);
-	gpioSetDisplayBacklightIntensityPercentage(10);
+	gpioSetDisplayBacklightIntensityPercentage(50);
 
 	/* * */
 
 	lv_obj_t * btn = lv_btn_create(lv_scr_act());
 
-	lv_obj_set_pos(btn, 10, 10);
 	lv_obj_set_size(btn, 120, 32);
+	lv_obj_center(btn);
 
 	lv_obj_t * label = lv_label_create(btn);
 
 	lv_label_set_text(label, "Button");
 	lv_obj_center(label);
+	lv_obj_set_style_text_font(label, &lv_font_24, 0);
 
 	uint8_t 	led = 1;
 	uint16_t	count = 0;
@@ -364,37 +374,13 @@ void applicationMainTask(void)
 
 	/* * */
 
-	if (!SPI_Flash_init())
-	{
-		displayEnableBacklight(true, 100);
-		displayClearBuf();
-		displayPrintCentered(4,"OpenMDUV380", FONT_SIZE_3);
-		displayPrintCentered(28,"Flash Error", FONT_SIZE_3);
-		displayRender();
-		gpioSetDisplayBacklightIntensityPercentage(100);
-		while(true)
-		{
-			osDelay(1000);
-		}
-	}
-
-
-#if defined(USING_EXTERNAL_DEBUGGER)
-	SEGGER_RTT_ConfigUpBuffer(0, NULL, NULL, 0, SEGGER_RTT_MODE_NO_BLOCK_TRIM);
-	SEGGER_RTT_printf(0,"Segger RTT initialised\n");
-#endif
-
-	buttonsInit();
-	keyboardInit();
-	rotaryEncoderISR();			//call the ISR once to initialise the variables
-
 	// Operator asked for settings reset.
 	// With the modified frontpanel button Col/Row, it's not
 	// possible to use anything else than P3 if the transceiver was
 	// powered off using the power button.
 
-
 	buttonsCheckButtonsEvent(&buttons, &button_event, false);
+
 	if (buttons & BUTTON_SK2)
 	{
 		wasRestoringDefaultsettings = true;
