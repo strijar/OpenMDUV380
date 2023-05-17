@@ -2,6 +2,7 @@
  * Copyright (C) 2021-2022 Roger Clark, VK3KYY / G4KYF
  *                         Colin Durbridge, G4EML
  *                         Daniel Caujolle-Bert, F1RMB
+ *                         Oleg Belousov, R1CBU
  *
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions
@@ -45,6 +46,7 @@
 #include "usb_device.h"
 #include "user_interface/menuSystem.h"
 #include "user_interface/uiUtilities.h"
+#include "user_interface/styles.h"
 #include "functions/ticks.h"
 #include "interfaces/batteryAndPowerManagement.h"
 #include "interfaces/gps.h"
@@ -283,6 +285,7 @@ static void settingsUpdateAudioAlert(void)
 	}
 }
 
+extern const lv_img_dsc_t wallpaper;
 
 void applicationMainTask(void)
 {
@@ -309,9 +312,9 @@ void applicationMainTask(void)
 		.time = ticksGetMillis()
 	};
 
-#if 0
-	HAL_GPIO_WritePin(PWR_SW_GPIO_Port, PWR_SW_Pin, GPIO_PIN_SET); // keep the power on
-#endif
+	/* keep the power on */
+
+	HAL_GPIO_WritePin(PWR_SW_GPIO_Port, PWR_SW_Pin, GPIO_PIN_SET);
 
 	batteryRAM_Init();
 	adcStartDMA();
@@ -334,39 +337,185 @@ void applicationMainTask(void)
 	if (!SPI_Flash_init()) {
 	}
 
-	displayEnableBacklight(true, 100);
-	gpioSetDisplayBacklightIntensityPercentage(50);
+	/* * */
+
+	lv_obj_t *main_obj = lv_obj_create(NULL);
+
+	lv_obj_set_style_bg_img_src(main_obj, &wallpaper, LV_PART_MAIN);
+
+	lv_obj_t * label = lv_label_create(main_obj);
+
+	lv_label_set_text(label, "Menu");
+	lv_obj_set_pos(label, 2, 128 - 20 - 2);
+	lv_obj_set_size(label, 160/3, 20);
+
+	lv_obj_add_style(label, &bottom_item_style, 0);
+
+	label = lv_label_create(main_obj);
+
+	lv_label_set_text(label, "VFO");
+	lv_obj_set_pos(label, 160 - 160/3 - 2, 128 - 20 - 2);
+	lv_obj_set_size(label, 160/3, 20);
+
+	lv_obj_add_style(label, &bottom_item_style, 0);
+
+
+#if 0
+	lv_obj_set_style_bg_opa(lv_scr_act(), LV_OPA_0, 0);
+	lv_scr_load_anim(main_obj, LV_SCR_LOAD_ANIM_FADE_IN, 250, 100, true);
+#else
+	lv_scr_load(main_obj);
+#endif
 
 	/* * */
 
-	lv_obj_t * btn = lv_btn_create(lv_scr_act());
+	buttonsCheckButtonsEvent(&buttons, &button_event, false);
 
-	lv_obj_set_size(btn, 120, 32);
-	lv_obj_center(btn);
+	if (buttons & BUTTON_SK2) {
+		wasRestoringDefaultsettings = true;
+		settingsRestoreDefaultSettings();
+		settingsLoadSettings();
+	} else {
+		wasRestoringDefaultsettings = settingsLoadSettings();
+	}
 
-	lv_obj_t * label = lv_label_create(btn);
+	radioPowerOn();
+	uiDataGlobal.dmrDisabled = !codecIsAvailable();
+	radioInit();
+	calibrationInit();
+	HRC6000Init();
+	radioPostinit();
+	HAL_ADC_Start_IT(&hadc1);
+	HRC6000InitTask();
+	voxInit();
+	menuRadioInfosInit();
+	batteryUpdate();
+	soundInitBeepTask();
+	lastheardInitList();
+	codeplugInitCaches();
+	dmrIDCacheInit();
+	voicePromptsCacheInit();
 
-	lv_label_set_text(label, "Button");
-	lv_obj_center(label);
-	lv_obj_set_style_text_font(label, &lv_font_24, 0);
+	keyboardCheckKeyEvent(&keys, &key_event);
 
-	uint8_t 	led = 1;
-	uint16_t	count = 0;
-	int32_t		tick = 0;
+	if (wasRestoringDefaultsettings || KEYCHECK_DOWN(keys, KEY_HASH)) {
+		enableVoicePromptsIfLoaded(KEYCHECK_DOWN(keys, KEY_HASH));
+	}
+
+	wasRestoringDefaultsettings = settingsIsOptionBitSet(BIT_SETTINGS_UPDATED);
+	voxSetParameters(nonVolatileSettings.voxThreshold, nonVolatileSettings.voxTailUnits);
+	codeplugGetSignallingDTMFDurations(&uiDataGlobal.DTMFContactList.durations);
+	uiDataGlobal.dateTimeSecs = getRtcTime_custom();
+
+	ticksTimerStart(&apoTimer, ((nonVolatileSettings.apo * 30) * 60000U));
+
+	if (nonVolatileSettings.gps > GPS_MODE_OFF) {
+		gpsOn();
+	}
+
+	if (nonVolatileSettings.backlightMode == BACKLIGHT_MODE_MANUAL) {
+		displayEnableBacklight(true, 100);
+	}
+
+	displayEnableBacklight(true, 50);
 
 	while (true) {
 		uint32_t now = ticksGetMillis();
 
-		if (count++ > 100) {
-			count = 0;
-			led = led ? 0 : 1;
-
-			LedWriteDirect(LED_GREEN, led);
-
-			lv_label_set_text_fmt(label, "Button %i", tick++);
-		}
+		mainIsRunning = true;
+		keyOrButtonChanged = false;
 
 		lv_timer_handler();
+		tick_com_request();
+
+		handleTimerCallbacks();
+		batteryUpdate();
+
+		/* * */
+
+		keyboardCheckKeyEvent(&keys, &key_event);
+		buttonsCheckButtonsEvent(&buttons, &button_event, (keys.key != 0));
+
+		if (buttons & BUTTON_SK1) {
+			bool clearSK1 = false;
+
+			if (keys.key == KEY_GREEN) {
+				/* Translate keyboard SK1+GREEN to ORANGE button events */
+
+				buttons |= BUTTON_ORANGE;
+				button_event = EVENT_BUTTON_CHANGE;
+				clearSK1 = true;
+
+				if ((keys.event & (KEY_MOD_PRESS | KEY_MOD_LONG)) == (KEY_MOD_PRESS | KEY_MOD_LONG)) {
+					buttons |= BUTTON_ORANGE_EXTRA_LONG_DOWN;
+				} else if ((keys.event & (KEY_MOD_DOWN | KEY_MOD_LONG)) == (KEY_MOD_DOWN | KEY_MOD_LONG)) {
+					buttons |= BUTTON_ORANGE_LONG_DOWN;
+				} else if ((keys.event & (KEY_MOD_UP | KEY_MOD_LONG)) == KEY_MOD_UP) {
+					buttons |= BUTTON_ORANGE_SHORT_UP;
+				} else if (keys.event & KEY_MOD_UP) {
+					buttons = EVENT_BUTTON_NONE;
+				}
+
+				keys.event = EVENT_KEY_NONE;
+				keys.key = 0;
+			}
+
+			if (clearSK1) {
+				buttons &= ~(BUTTON_SK1 | BUTTON_SK1_SHORT_UP | BUTTON_SK1_LONG_DOWN | BUTTON_SK1_EXTRA_LONG_DOWN);
+
+				if (buttons == BUTTON_NONE) {
+					button_event = EVENT_BUTTON_NONE;
+				}
+			}
+		}
+
+		if (((key_event != EVENT_KEY_NONE) && (keys.key != 0)) || (button_event != EVENT_BUTTON_NONE) || (rotary_event != EVENT_ROTARY_NONE)) {
+			keyOrButtonChanged = true;
+			lv_label_set_text_fmt(label, "%i", keys.key);
+		}
+
+		/* * */
+
+		batteryChecking();
+
+		apoTick((keyOrButtonChanged || (function_event != NO_EVENT) ||
+				(settingsIsOptionBitSet(BIT_APO_WITH_RF) ? (getAudioAmpStatus() & AUDIO_AMP_MODE_RF) : false)));
+
+		if (((nonVolatileSettings.backlightMode == BACKLIGHT_MODE_AUTO)
+				|| (nonVolatileSettings.backlightMode == BACKLIGHT_MODE_BUTTONS)
+				|| (nonVolatileSettings.backlightMode == BACKLIGHT_MODE_SQUELCH)) && (menuDataGlobal.lightTimer > 0))
+		{
+			// Countdown only in (AUTO), (BUTTONS) or (SQUELCH + no audio)
+			if ((nonVolatileSettings.backlightMode == BACKLIGHT_MODE_AUTO) || (nonVolatileSettings.backlightMode == BACKLIGHT_MODE_BUTTONS) ||
+					((nonVolatileSettings.backlightMode == BACKLIGHT_MODE_SQUELCH) && ((getAudioAmpStatus() & AUDIO_AMP_MODE_RF) == 0)))
+			{
+				menuDataGlobal.lightTimer--;
+			}
+
+			if (menuDataGlobal.lightTimer == 0)
+			{
+				displayEnableBacklight(false, nonVolatileSettings.displayBacklightPercentageOff);
+			}
+		}
+
+		/* * */
+
+		voicePromptsTick();
+		soundTickMelody();
+		voxTick();
+		gpsTick();
+		settingsSaveIfNeeded(false);
+
+		if (!trxTransmissionEnabled && !trxIsTransmitting) {
+			rxPowerSavingTick(&ev, hasSignal);
+		}
+
+		int latestVolume = getVolumeControl();
+
+		if (latestVolume != lastVolume) {
+			lastVolume = latestVolume;
+			HRC6000SetDmrRxGain(latestVolume);
+		}
 
 		osDelay(pdMS_TO_TICKS(5));
 		lv_tick_inc(ticksGetMillis() - now);
@@ -378,7 +527,7 @@ void applicationMainTask(void)
 	// With the modified frontpanel button Col/Row, it's not
 	// possible to use anything else than P3 if the transceiver was
 	// powered off using the power button.
-
+#if 0
 	buttonsCheckButtonsEvent(&buttons, &button_event, false);
 
 	if (buttons & BUTTON_SK2)
@@ -451,14 +600,14 @@ void applicationMainTask(void)
 	{
 		displayEnableBacklight(true, 100);
 	}
-
+#endif
 	/* Infinite loop */
 	for(;;)
 	{
 		uint32_t startTime = ticksGetMillis();
 		mainIsRunning = true;
 		keyOrButtonChanged = false;
-
+#if 0
 		tick_com_request();
 		handleTimerCallbacks();
 		batteryUpdate();
@@ -528,6 +677,7 @@ void applicationMainTask(void)
 		{
 			keyOrButtonChanged = true;
 		}
+#endif
 
 		// Settings reset information screen
 		if (wasRestoringDefaultsettings && (menuSystemGetRootMenuNumber() != UI_SPLASH_SCREEN))
@@ -1161,7 +1311,7 @@ void applicationMainTask(void)
 		{
 			uiNotificationHide(true);
 		}
-
+#if 0
 		batteryChecking();
 
 #if !defined(PLATFORM_GD77S)
@@ -1208,5 +1358,6 @@ void applicationMainTask(void)
 		{
 		vTaskDelay(0);
 		}
+#endif
 	}
 }

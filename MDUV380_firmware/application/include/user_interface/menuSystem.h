@@ -376,10 +376,11 @@ menuStatus_t uiChannelMode(uiEvent_t *event, bool isFirstRun);
 menuStatus_t uiChannelModeQuickMenu(uiEvent_t *event, bool isFirstRun);
 menuStatus_t uiCPS(uiEvent_t *event, bool isFirstRun);
 menuStatus_t uiSplashScreen(uiEvent_t *event, bool isFirstRun);
-menuStatus_t uiPowerOff(uiEvent_t *event, bool isFirstRun);
 menuStatus_t menuZoneList(uiEvent_t *event, bool isFirstRun);
 menuStatus_t menuDisplayMenuList(uiEvent_t *event, bool isFirstRun);
 menuStatus_t menuRadioInfos(uiEvent_t *event, bool isFirstRun);
+
+extern void uiPowerOff();
 
 menuStatus_t menuFirmwareInfoScreen(uiEvent_t *event, bool isFirstRun);
 menuStatus_t menuNumericalEntry(uiEvent_t *event, bool isFirstRun);

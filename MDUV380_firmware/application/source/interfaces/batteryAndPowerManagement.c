@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2021-2022 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
+ *                         Oleg Belousov, R1CBU
  *
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions
@@ -86,20 +87,15 @@ bool batteryLastReadingIsCritical(bool isSuspended)
 	return (adcGetBatteryVoltage() < CUTOFF_VOLTAGE_UPPER_HYST);
 }
 
-void batteryChecking(void)
-{
+void batteryChecking(void) {
 	static ticksTimer_t lowBatteryBeepTimer = { 0, 0 };
 	static ticksTimer_t lowBatteryHeaderRedrawTimer = { 0, 0 };
 	static uint32_t lowBatteryCriticalCount = 0;
 	bool lowBatteryWarning = batteryIsLowVoltageWarning();
 	bool batIsLow = false;
 
-	if (batteryVoltage < 20)
-	{
-		if (menuSystemGetCurrentMenuNumber() != UI_POWER_OFF)
-		{
-			menuSystemPushNewMenu(UI_POWER_OFF);
-		}
+	if (batteryVoltage < 20) {
+		uiPowerOff();
 		return;
 	}
 
@@ -111,8 +107,8 @@ void batteryChecking(void)
 
 	// Do we need to redraw the header row now ?
 	batIsLow = batteryIsLowWarning();
-	if (batIsLow && ticksTimerHasExpired(&lowBatteryHeaderRedrawTimer))
-	{
+
+	if (batIsLow && ticksTimerHasExpired(&lowBatteryHeaderRedrawTimer)) {
 		headerRowIsDirty = true;
 		ticksTimerStart(&lowBatteryHeaderRedrawTimer, 500);
 	}
@@ -127,27 +123,21 @@ void batteryChecking(void)
 			ticksTimerHasExpired(&lowBatteryBeepTimer))
 	{
 
-		if (melody_play == NULL)
-		{
-			if (nonVolatileSettings.audioPromptMode < AUDIO_PROMPT_MODE_VOICE_LEVEL_1)
-			{
+		if (melody_play == NULL) {
+			if (nonVolatileSettings.audioPromptMode < AUDIO_PROMPT_MODE_VOICE_LEVEL_1) {
 				soundSetMelody(MELODY_LOW_BATTERY);
-			}
-			else
-			{
+			} else {
 				voicePromptsInit();
 				voicePromptsAppendLanguageString(&currentLanguage->low_battery);
 				voicePromptsPlay();
 			}
 
 			// Let the beep sound, or the VP, to finish to play before resuming the scan (otherwise is could be silent).
-			if (uiDataGlobal.Scan.active)
-			{
+			if (uiDataGlobal.Scan.active) {
 				uiDataGlobal.Scan.active = false;
 				watchdogRun(false);
 
-				while ((melody_play != NULL) || voicePromptsIsPlaying())
-				{
+				while ((melody_play != NULL) || voicePromptsIsPlaying()) {
 					voicePromptsTick();
 					soundTickMelody();
 
@@ -171,32 +161,23 @@ void batteryChecking(void)
 	// Low battery or poweroff (non RD-5R)
 	bool powerSwitchIsOff = false;
 
-
-	if ((powerSwitchIsOff || lowBatteryCritical) && (menuSystemGetCurrentMenuNumber() != UI_POWER_OFF))
-	{
+	if ((powerSwitchIsOff || lowBatteryCritical) && (menuSystemGetCurrentMenuNumber() != UI_POWER_OFF)) {
 		// is considered as flat (stable value), now stop the firmware: make it silent
-		if ((lowBatteryCritical && (lowBatteryCriticalCount > LOW_BATTERY_VOLTAGE_RECOVERY_TIME)) || powerSwitchIsOff)
-		{
+		if ((lowBatteryCritical && (lowBatteryCriticalCount > LOW_BATTERY_VOLTAGE_RECOVERY_TIME)) || powerSwitchIsOff) {
 			radioAudioAmp(false);
 			soundSetMelody(NULL);
 		}
 
 		// Avoids delayed power off (on non RD-5R) if the power switch is turned off while in low battery condition
-		if (lowBatteryCritical && (powerSwitchIsOff == false))
-		{
+		if (lowBatteryCritical && (powerSwitchIsOff == false)) {
 			// Now, the battery is considered as flat (stable value), powering off.
-			if (lowBatteryCriticalCount > LOW_BATTERY_VOLTAGE_RECOVERY_TIME)
-			{
+			if (lowBatteryCriticalCount > LOW_BATTERY_VOLTAGE_RECOVERY_TIME) {
 				showLowBattery();
 				powerOffFinalStage(false, false);
 			}
+		} else {
+			uiPowerOff();
 		}
-#if ! defined(PLATFORM_RD5R)
-		else
-		{
-			menuSystemPushNewMenu(UI_POWER_OFF);
-		}
-#endif // ! PLATFORM_RD5R
 	}
 }
 

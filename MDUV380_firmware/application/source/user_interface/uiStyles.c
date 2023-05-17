@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *                         Oleg Belousov, R1CBU
  *
@@ -27,39 +27,43 @@
  *
  */
 
-#include <lvgl.h>
-
-#include "user_interface/menuSystem.h"
 #include "user_interface/styles.h"
-#include "interfaces/batteryAndPowerManagement.h"
 
-static lv_obj_t	*msg = NULL;
+const lv_style_const_prop_t bottom_item_props[] = {
+   LV_STYLE_CONST_TEXT_FONT(&lv_font_18),
+   LV_STYLE_CONST_TEXT_COLOR(LV_COLOR_MAKE16(0xFF, 0xFF, 0xFF)),
+   LV_STYLE_CONST_TEXT_ALIGN(LV_TEXT_ALIGN_CENTER),
+   LV_STYLE_CONST_PAD_TOP(2),
 
-static void timeout(lv_timer_t *t) {
-	if ((LedRead(LED_GREEN) == 0) && (batteryVoltage > CUTOFF_VOLTAGE_LOWER_HYST)) {
-		lv_obj_del(msg);
-		msg = NULL;
-		return;
-	}
+   LV_STYLE_CONST_BORDER_WIDTH(1),
+   LV_STYLE_CONST_BORDER_COLOR(LV_COLOR_MAKE16(0xFF, 0xFF, 0xFF)),
+   LV_STYLE_CONST_BORDER_OPA(96),
 
-	bool suspend = settingsIsOptionBitSet(BIT_POWEROFF_SUSPEND);
+   LV_STYLE_CONST_BG_COLOR(0x000000),
+   LV_STYLE_CONST_BG_OPA(128),
 
-	powerOffFinalStage(suspend, false);
-}
+   LV_STYLE_CONST_RADIUS(4),
 
-void uiPowerOff() {
-	if (msg) {
-		return;
-	}
+   LV_STYLE_PROP_INV,
+};
 
-	msg = lv_label_create(lv_scr_act());
+const lv_style_const_prop_t notify_props[] = {
+   LV_STYLE_CONST_TEXT_FONT(&lv_font_24),
+   LV_STYLE_CONST_TEXT_COLOR(LV_COLOR_MAKE16(0xFF, 0xFF, 0xFF)),
+   LV_STYLE_CONST_TEXT_ALIGN(LV_TEXT_ALIGN_CENTER),
+   LV_STYLE_CONST_PAD_TOP(5),
 
-	lv_label_set_text(msg, "QRT 73");
-	lv_obj_set_width(msg, 100);
-	lv_obj_set_height(msg, 32);
-	lv_obj_center(msg);
-	lv_obj_add_style(msg, &notify_style, 0);
+   LV_STYLE_CONST_BORDER_WIDTH(1),
+   LV_STYLE_CONST_BORDER_COLOR(LV_COLOR_MAKE16(0xFF, 0xFF, 0xFF)),
+   LV_STYLE_CONST_BORDER_OPA(96),
 
-	lv_timer_t *timer = lv_timer_create(timeout, 500, NULL);
-	lv_timer_set_repeat_count(timer, 1);
-}
+   LV_STYLE_CONST_BG_COLOR(0x000000),
+   LV_STYLE_CONST_BG_OPA(128),
+
+   LV_STYLE_CONST_RADIUS(4),
+
+   LV_STYLE_PROP_INV,
+};
+
+LV_STYLE_CONST_INIT(bottom_item_style, bottom_item_props);
+LV_STYLE_CONST_INIT(notify_style, notify_props);

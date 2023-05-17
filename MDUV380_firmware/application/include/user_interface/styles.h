@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *                         Oleg Belousov, R1CBU
  *
@@ -27,39 +27,12 @@
  *
  */
 
+#ifndef INCLUDE_USER_INTERFACE_STYLES_H_
+#define INCLUDE_USER_INTERFACE_STYLES_H_
+
 #include <lvgl.h>
 
-#include "user_interface/menuSystem.h"
-#include "user_interface/styles.h"
-#include "interfaces/batteryAndPowerManagement.h"
+extern const lv_style_t	bottom_item_style;
+extern const lv_style_t	notify_style;
 
-static lv_obj_t	*msg = NULL;
-
-static void timeout(lv_timer_t *t) {
-	if ((LedRead(LED_GREEN) == 0) && (batteryVoltage > CUTOFF_VOLTAGE_LOWER_HYST)) {
-		lv_obj_del(msg);
-		msg = NULL;
-		return;
-	}
-
-	bool suspend = settingsIsOptionBitSet(BIT_POWEROFF_SUSPEND);
-
-	powerOffFinalStage(suspend, false);
-}
-
-void uiPowerOff() {
-	if (msg) {
-		return;
-	}
-
-	msg = lv_label_create(lv_scr_act());
-
-	lv_label_set_text(msg, "QRT 73");
-	lv_obj_set_width(msg, 100);
-	lv_obj_set_height(msg, 32);
-	lv_obj_center(msg);
-	lv_obj_add_style(msg, &notify_style, 0);
-
-	lv_timer_t *timer = lv_timer_create(timeout, 500, NULL);
-	lv_timer_set_repeat_count(timer, 1);
-}
+#endif /* INCLUDE_USER_INTERFACE_STYLES_H_ */

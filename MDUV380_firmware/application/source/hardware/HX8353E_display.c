@@ -62,6 +62,7 @@ uint16_t *screenBuf = screenBufData;
 
 int16_t displaySetPixel(int16_t x, int16_t y, bool color)
 {
+#if 0
 	int16_t i = (y * DISPLAY_SIZE_X) + x;
 
 	if (i >= (DISPLAY_SIZE_X * DISPLAY_SIZE_Y))
@@ -70,7 +71,7 @@ int16_t displaySetPixel(int16_t x, int16_t y, bool color)
 	}
 
 	screenBuf[i] = color ? foreground_color : background_color;
-
+#endif
 	return 0;
 }
 
@@ -212,7 +213,9 @@ int displayPrintCore(int16_t xPos, int16_t yPos, const char *szMsg, ucFont_t fon
 				uint8_t rowData = currentCharData[x + ((y / 8) * charWidthPixels)];
 				if ((rowData>>(y % 8) & 0x01))
 				{
+#if 0
 					screenBuf[xp + ((yPos + y) * DISPLAY_SIZE_X) + charPixelOffset] =  isInverted ? background_color : foreground_color;
+#endif
 				}
 
 			}
@@ -224,15 +227,18 @@ int displayPrintCore(int16_t xPos, int16_t yPos, const char *szMsg, ucFont_t fon
 
 void displayClearBuf(void)
 {
+#if 0
 	// may be able to do this using DMA
 	for(int i = 0; i < DISPLAY_SIZE_X * DISPLAY_SIZE_Y; i++)
 	{
 		screenBuf[i] = background_color;
 	}
+#endif
 }
 
 void displayClearRows(int16_t startRow, int16_t endRow, bool isInverted)
 {
+#if 0
 	// Boundaries
 	if (((startRow < 0) || (endRow < 0)) || ((startRow > DISPLAY_NUMBER_OF_ROWS) || (endRow > DISPLAY_NUMBER_OF_ROWS)) || (startRow == endRow))
 	{
@@ -253,7 +259,7 @@ void displayClearRows(int16_t startRow, int16_t endRow, bool isInverted)
 	{
 		screenBuf[i] = fillColour;
 	}
-
+#endif
 }
 
 void displayPrintCentered(uint16_t y, const char *text, ucFont_t fontSize)
@@ -939,6 +945,7 @@ void displayDrawRect(int16_t x, int16_t y, int16_t w, int16_t h, bool color)
  */
 void displayFillRect(int16_t x, int16_t y, int16_t width, int16_t height, bool isInverted)
 {
+#if 0
 	uint32_t lineStartOffset;
 
 	for(int yp = 0; yp < height; yp++)
@@ -949,6 +956,7 @@ void displayFillRect(int16_t x, int16_t y, int16_t width, int16_t height, bool i
 			screenBuf[lineStartOffset + x + xp] = isInverted ? background_color : foreground_color;
 		}
 	}
+#endif
 }
 
 /*
@@ -1266,6 +1274,7 @@ void displaySetDisplayPowerMode(bool wake)
 
 void displayConvertGD77ImageData(uint8_t *dataBuf)
 {
+#if 0
 	const uint32_t startOffset = (32 * DISPLAY_SIZE_X) + (DISPLAY_SIZE_X - 128) / 2;
 	for(int y = 0; y < 8; y++ )
 	{
@@ -1284,4 +1293,5 @@ void displayConvertGD77ImageData(uint8_t *dataBuf)
 	{
 		screenBuf[i] = background_color;
 	}
+#endif
 }
