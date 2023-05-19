@@ -4,6 +4,7 @@
  * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *                         Colin Durbridge, G4EML
+ *                         Oleg Belousov, R1CBU
  *
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions
@@ -28,6 +29,9 @@
  * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
+
+#include <lvgl.h>
+
 #include "io/keyboard.h"
 #include "interfaces/pit.h"
 #include "functions/settings.h"
@@ -35,49 +39,20 @@
 #include "interfaces/adc.h"
 #include "io/buttons.h"
 
-// Keyboard Keys
-typedef struct
-{
+typedef struct {
 	GPIO_TypeDef  *GPIOPort;
 	uint16_t       GPIOPin;
 	uint16_t       Key;
 } KeyboardKeySetting_t;
 
-static char oldKeyboardCode;
-static uint32_t keyDebounceScancode;
-static int keyDebounceCounter;
-static uint8_t keyState;
-static char keypadAlphaKey;
-static int keypadAlphaIndex;
 volatile bool keypadAlphaEnable;
 volatile bool keypadLocked = false;
 static bool rotaryDebounceDone = true;
 
-
-/*
-static const uint32_t keyMap[] = {
-		KEY_1, KEY_2, KEY_3, KEY_GREEN,
-		KEY_4, KEY_5, KEY_6, KEY_UP,
-		KEY_7, KEY_8, KEY_9, KEY_DOWN,
-		KEY_STAR, KEY_0, KEY_HASH, KEY_RED,
-};
- */
-volatile rotaryData_t rotaryData =
-{
+volatile rotaryData_t rotaryData = {
 		.Count = 0,
 		.Direction = 0
 };
-
-enum KEY_STATE
-{
-	KEY_IDLE = 0,
-	KEY_DEBOUNCE,
-	KEY_PRESS,
-	KEY_WAITLONG,
-	KEY_REPEAT,
-	KEY_WAIT_RELEASED
-};
-
 
 static const char keypadAlphaMap[11][31] = {
 		"0 ",
@@ -95,126 +70,166 @@ static const char keypadAlphaMap[11][31] = {
 
 #define KEYBOARD_KEYS_PER_ROW  8U
 
-static const struct
-{
+static lv_indev_drv_t	keyboard_indev_drv;
+static lv_indev_t		*keyboard_indev;
+static lv_group_t		*keyboard_group;
+static uint16_t			keyboard_prev_keycode = 0;
+
+static lv_indev_drv_t	rotary_indev_drv;
+static lv_indev_t		*rotary_indev;
+
+static const struct {
 	GPIO_TypeDef         *GPIOCtrlPort;
 	uint16_t              GPIOCtrlPin;
 	KeyboardKeySetting_t  Rows[KEYBOARD_KEYS_PER_ROW];
 } KeyboardMatrix[] =
-#if defined(PLATFORM_MDUV380)
 {
 		{
 				KEYPAD_ROW0_GPIO_Port,
 				KEYPAD_ROW0_Pin,
 				{
-						{ LCD_D0_GPIO_Port, LCD_D0_Pin, KEY_1     },
-						{ LCD_D1_GPIO_Port, LCD_D1_Pin, KEY_2     },
-						{ LCD_D2_GPIO_Port, LCD_D2_Pin, KEY_3     },
-						{ LCD_D3_GPIO_Port, LCD_D3_Pin, KEY_4     },
-						{ LCD_D4_GPIO_Port, LCD_D4_Pin, KEY_5     },
-						{ LCD_D5_GPIO_Port, LCD_D5_Pin, KEY_6     },
-						{ LCD_D6_GPIO_Port, LCD_D6_Pin, KEY_0     },
-						{ LCD_D7_GPIO_Port, LCD_D7_Pin, KEY_STAR  }
+						{ LCD_D0_GPIO_Port, LCD_D0_Pin, '1'     },
+						{ LCD_D1_GPIO_Port, LCD_D1_Pin, '2'     },
+						{ LCD_D2_GPIO_Port, LCD_D2_Pin, '3'     },
+						{ LCD_D3_GPIO_Port, LCD_D3_Pin, '4'     },
+						{ LCD_D4_GPIO_Port, LCD_D4_Pin, '5'     },
+						{ LCD_D5_GPIO_Port, LCD_D5_Pin, '6'     },
+						{ LCD_D6_GPIO_Port, LCD_D6_Pin, '0'     },
+						{ LCD_D7_GPIO_Port, LCD_D7_Pin, '*'  	}
 				}
 		},
 		{
 				KEYPAD_ROW1_GPIO_Port,
 				KEYPAD_ROW1_Pin,
 				{
-						{ LCD_D0_GPIO_Port, LCD_D0_Pin, KEY_GREEN },
-						{ LCD_D1_GPIO_Port, LCD_D1_Pin, KEY_FRONT_UP    },
-						{ LCD_D2_GPIO_Port, LCD_D2_Pin, KEY_FRONT_DOWN  },
-						{ LCD_D3_GPIO_Port, LCD_D3_Pin, KEY_7     },
-						{ LCD_D4_GPIO_Port, LCD_D4_Pin, KEY_8     },
-						{ LCD_D5_GPIO_Port, LCD_D5_Pin, KEY_9     },
-						{ LCD_D6_GPIO_Port, LCD_D6_Pin, KEY_HASH  },
-						{ LCD_D7_GPIO_Port, LCD_D7_Pin, KEY_RED   }
+						{ LCD_D0_GPIO_Port, LCD_D0_Pin, LV_KEY_ENTER	},
+						{ LCD_D1_GPIO_Port, LCD_D1_Pin, LV_KEY_UP    	},
+						{ LCD_D2_GPIO_Port, LCD_D2_Pin, LV_KEY_DOWN  	},
+						{ LCD_D3_GPIO_Port, LCD_D3_Pin, '7'     		},
+						{ LCD_D4_GPIO_Port, LCD_D4_Pin, '8'     		},
+						{ LCD_D5_GPIO_Port, LCD_D5_Pin, '9'     		},
+						{ LCD_D6_GPIO_Port, LCD_D6_Pin, '#'  			},
+						{ LCD_D7_GPIO_Port, LCD_D7_Pin, LV_KEY_ESC   	}
 				}
 		},
 		{
 				KEYPAD_ROW2_GPIO_Port,
 				KEYPAD_ROW2_Pin,
 				{
-						{ LCD_D0_GPIO_Port, LCD_D0_Pin, KEY_NONE },
+						{ LCD_D0_GPIO_Port, LCD_D0_Pin, KEY_NONE 	},
 						{ LCD_D1_GPIO_Port, LCD_D1_Pin, KEY_NONE    },
-						{ LCD_D2_GPIO_Port, LCD_D2_Pin, KEY_NONE  },
-						{ LCD_D3_GPIO_Port, LCD_D3_Pin, KEY_NONE     },
-						{ LCD_D4_GPIO_Port, LCD_D4_Pin, KEY_NONE     },
-						{ LCD_D5_GPIO_Port, LCD_D5_Pin, KEY_NONE     },
-						{ LCD_D6_GPIO_Port, LCD_D6_Pin, KEY_NONE  },
-						{ LCD_D7_GPIO_Port, LCD_D7_Pin, KEY_NONE   }
+						{ LCD_D2_GPIO_Port, LCD_D2_Pin, KEY_NONE  	},
+						{ LCD_D3_GPIO_Port, LCD_D3_Pin, KEY_NONE    },
+						{ LCD_D4_GPIO_Port, LCD_D4_Pin, KEY_NONE    },
+						{ LCD_D5_GPIO_Port, LCD_D5_Pin, KEY_NONE    },
+						{ LCD_D6_GPIO_Port, LCD_D6_Pin, KEY_NONE  	},
+						{ LCD_D7_GPIO_Port, LCD_D7_Pin, KEY_NONE   	}
 				}
 		}
 };
-#elif defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
-{
-		{
-				KEYPAD_ROW0_GPIO_Port,
-				KEYPAD_ROW0_Pin,
-				{
-						{ LCD_D0_GPIO_Port, LCD_D0_Pin, KEY_1     },
-						{ LCD_D1_GPIO_Port, LCD_D1_Pin, KEY_4     },
-						{ LCD_D2_GPIO_Port, LCD_D2_Pin, KEY_7     },
-						{ LCD_D3_GPIO_Port, LCD_D3_Pin, KEY_STAR    },
-						{ LCD_D4_GPIO_Port, LCD_D4_Pin, KEY_FRONT_UP     },
-						{ LCD_D5_GPIO_Port, LCD_D5_Pin, KEY_RIGHT     },
-						{ LCD_D6_GPIO_Port, LCD_D6_Pin, KEY_LEFT     },
-						{ LCD_D7_GPIO_Port, LCD_D7_Pin, KEY_NONE  }
-				}
-		},
-		{
-				KEYPAD_ROW1_GPIO_Port,
-				KEYPAD_ROW1_Pin,
-				{
-						{ LCD_D0_GPIO_Port, LCD_D0_Pin, KEY_2 },
-						{ LCD_D1_GPIO_Port, LCD_D1_Pin, KEY_5    },
-						{ LCD_D2_GPIO_Port, LCD_D2_Pin, KEY_8  },
-						{ LCD_D3_GPIO_Port, LCD_D3_Pin, KEY_0     },
-						{ LCD_D4_GPIO_Port, LCD_D4_Pin, KEY_FRONT_DOWN     },
-						{ LCD_D5_GPIO_Port, LCD_D5_Pin, KEY_RED     },
-						{ LCD_D6_GPIO_Port, LCD_D6_Pin, KEY_GREEN  },
-						{ LCD_D7_GPIO_Port, LCD_D7_Pin, KEY_NONE   }
-				}
-		},
-		{
-				KEYPAD_ROW2_GPIO_Port,
-				KEYPAD_ROW2_Pin,
-				{
-						{ LCD_D0_GPIO_Port, LCD_D0_Pin, KEY_3 },
-						{ LCD_D1_GPIO_Port, LCD_D1_Pin, KEY_6    },
-						{ LCD_D2_GPIO_Port, LCD_D2_Pin, KEY_9  },
-						{ LCD_D3_GPIO_Port, LCD_D3_Pin, KEY_HASH     },
-						{ LCD_D4_GPIO_Port, LCD_D4_Pin, KEY_NONE     },
-						{ LCD_D5_GPIO_Port, LCD_D5_Pin, KEY_NONE     },
-						{ LCD_D6_GPIO_Port, LCD_D6_Pin, KEY_NONE  },
-						{ LCD_D7_GPIO_Port, LCD_D7_Pin, KEY_NONE   }
-				}
+
+static void keyboard_read_cb(lv_indev_drv_t *drv, lv_indev_data_t *data) {
+	uint16_t keycode = 0;
+
+	GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+	GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+	GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+
+	GPIO_InitStruct.Pin = LCD_D0_Pin | LCD_D1_Pin | LCD_D2_Pin | LCD_D3_Pin;
+	HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+	GPIO_InitStruct.Pin = LCD_D4_Pin | LCD_D5_Pin | LCD_D6_Pin | LCD_D7_Pin;
+	HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+
+	for (size_t i = 0; i < (sizeof(KeyboardMatrix) / sizeof(KeyboardMatrix[0])); i++) {
+		/* Set the Row Pin as Output */
+
+		GPIO_InitStruct.Pin = KeyboardMatrix[i].GPIOCtrlPin;
+		GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+		GPIO_InitStruct.Pull = GPIO_NOPULL;
+		GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+		HAL_GPIO_Init(KeyboardMatrix[i].GPIOCtrlPort, &GPIO_InitStruct);
+
+		/* Set the row pin high to select that row of keys */
+
+		HAL_GPIO_WritePin(KeyboardMatrix[i].GPIOCtrlPort, KeyboardMatrix[i].GPIOCtrlPin, GPIO_PIN_SET);
+
+		for (volatile int xx = 0; xx < 100; xx++); /* arbitrary settling delay */
+
+		for (size_t k = 0; k < KEYBOARD_KEYS_PER_ROW; k++) {
+			if (HAL_GPIO_ReadPin(KeyboardMatrix[i].Rows[k].GPIOPort, KeyboardMatrix[i].Rows[k].GPIOPin) == GPIO_PIN_SET) {
+				keycode = KeyboardMatrix[i].Rows[k].Key;
+				break;
+			}
 		}
-};
-#endif
 
+		/* set the row pin back to floating. This prevents conflicts between multiple key presses. */
 
-void keyboardInit(void)
-{
-	//gpioInitKeyboard();
+		GPIO_InitStruct.Pin = KeyboardMatrix[i].GPIOCtrlPin;
+		GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+		GPIO_InitStruct.Pull = GPIO_NOPULL;
+		GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+		HAL_GPIO_Init(KeyboardMatrix[i].GPIOCtrlPort, &GPIO_InitStruct);
 
-	oldKeyboardCode = 0;
-	keyDebounceScancode = 0;
-	keyDebounceCounter = 0;
-	keypadAlphaEnable = false;
-	keypadAlphaIndex = 0;
-	keypadAlphaKey = 0;
-	keyState = KEY_IDLE;
-	keypadLocked = false;
+		/* Stop on first down key (we don't support multiple key presses). */
+
+		if (keycode != 0) {
+			break;
+		}
+	}
+
+	if (keycode != 0) {
+		keyboard_prev_keycode = keycode;
+		data->key = keycode;
+		data->state = LV_INDEV_STATE_PRESSED;
+	} else {
+		data->key = keyboard_prev_keycode;
+		data->state = LV_INDEV_STATE_RELEASED;
+	}
 }
 
-void keyboardReset(void)
-{
-	oldKeyboardCode = 0;
-	keypadAlphaEnable = false;
-	keypadAlphaIndex = 0;
-	keypadAlphaKey = 0;
-	keyState = KEY_WAIT_RELEASED;
+static void rotary_read_cb(lv_indev_drv_t *drv, lv_indev_data_t *data) {
+	if (rotaryData.Direction < 0) {
+		data->key = LV_KEY_LEFT;
+		data->state = LV_INDEV_STATE_PRESSED;
+		rotaryData.Direction = 0;
+	} else if (rotaryData.Direction > 0) {
+		data->key = LV_KEY_RIGHT;
+		data->state = LV_INDEV_STATE_PRESSED;
+		rotaryData.Direction = 0;
+	} else {
+		data->state = LV_INDEV_STATE_RELEASED;
+	}
+}
+
+void keyboardInit(void) {
+	keyboard_group = lv_group_create();
+	lv_group_set_default(keyboard_group);
+
+	/* * */
+
+	lv_indev_drv_init(&keyboard_indev_drv);
+
+	keyboard_indev_drv.type = LV_INDEV_TYPE_KEYPAD;
+	keyboard_indev_drv.read_cb = keyboard_read_cb;
+
+	keyboard_indev = lv_indev_drv_register(&keyboard_indev_drv);
+	lv_indev_set_group(keyboard_indev, keyboard_group);
+
+	/* * */
+
+	lv_indev_drv_init(&rotary_indev_drv);
+
+	rotary_indev_drv.type = LV_INDEV_TYPE_KEYPAD;
+	rotary_indev_drv.read_cb = rotary_read_cb;
+
+	rotary_indev = lv_indev_drv_register(&rotary_indev_drv);
+	lv_indev_set_group(rotary_indev, keyboard_group);
+}
+
+void keyboardReset(void) {
 }
 
 bool keyboardKeyIsDTMFKey(char key)
@@ -233,21 +248,15 @@ bool keyboardKeyIsDTMFKey(char key)
 	return false;
 }
 
-
-void rotaryEncoderISR(void)
-{
-	if(rotaryDebounceDone)
-	{
+void rotaryEncoderISR(void) {
+	if (rotaryDebounceDone) {
 		int pinA = HAL_GPIO_ReadPin(ROTARY_SW_A_GPIO_Port, ROTARY_SW_A_Pin);
 		int pinB = HAL_GPIO_ReadPin(ROTARY_SW_B_GPIO_Port, ROTARY_SW_B_Pin);
 
-		if(pinB == pinA)
-		{
-		rotaryData.Direction = -1;
-		}
-		else
-		{
-		rotaryData.Direction = 1;
+		if (pinB == pinA) {
+			rotaryData.Direction = -1;
+		} else {
+			rotaryData.Direction = 1;
 		}
 
 		rotaryData.Count += rotaryData.Direction;
@@ -256,273 +265,9 @@ void rotaryEncoderISR(void)
 	}
 }
 
-void keyboardRotaryDebounceCallback(void)
-{
+void keyboardRotaryDebounceCallback(void) {
 	rotaryDebounceDone=true;
 }
 
-
-void keyboardCheckKeyEvent(keyboardCode_t *keys, int *event)
-{
-	uint32_t scancode = 0;
-	char keycode = 0;
-	bool validKey;
-	int newAlphaKey;
-	uint32_t tmp_timer_keypad;
-	uint32_t keypadTimerLong = nonVolatileSettings.keypadTimerLong * 100;
-	uint32_t keypadTimerRepeat = nonVolatileSettings.keypadTimerRepeat * 100;
-
-	*event = EVENT_KEY_NONE;
-	keys->event = 0;
-	keys->key = KEY_NONE;
-
-	if (rotaryData.Direction != 0)
-	{
-		keys->key = (rotaryData.Direction == 1) ? KEY_ROTARY_INCREMENT : KEY_ROTARY_DECREMENT;
-		keys->event = KEY_MOD_UP | KEY_MOD_PRESS; // Hack send both Up and Down events because the menus use KEY_MOD_PRESS but the VFO uses KEY_MOD_UP
-		*event = EVENT_KEY_CHANGE;
-		rotaryData.Direction = 0;
-		return;
-	}
-	else
-	{
-		GPIO_InitTypeDef GPIO_InitStruct = {0};
-
-		GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-		GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-		GPIO_InitStruct.Pull = GPIO_PULLDOWN;
-
-		GPIO_InitStruct.Pin = LCD_D0_Pin | LCD_D1_Pin | LCD_D2_Pin | LCD_D3_Pin;
-		HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
-
-		GPIO_InitStruct.Pin = LCD_D4_Pin | LCD_D5_Pin | LCD_D6_Pin | LCD_D7_Pin;
-		HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
-
-
-		for (size_t i = 0; i < (sizeof(KeyboardMatrix) / sizeof(KeyboardMatrix[0])); i++)
-		{
-
-			//Set the Row Pin as Output
-			GPIO_InitStruct.Pin = KeyboardMatrix[i].GPIOCtrlPin;
-			GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-			GPIO_InitStruct.Pull = GPIO_NOPULL;
-			GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-			HAL_GPIO_Init(KeyboardMatrix[i].GPIOCtrlPort, &GPIO_InitStruct);
-
-			//Set the row pin high to select that row of keys
-			HAL_GPIO_WritePin(KeyboardMatrix[i].GPIOCtrlPort, KeyboardMatrix[i].GPIOCtrlPin, GPIO_PIN_SET);
-
-			for(volatile int xx = 0; xx < 100; xx++); // arbitrary settling delay
-
-			for (size_t k = 0; k < KEYBOARD_KEYS_PER_ROW; k++)
-			{
-				if(HAL_GPIO_ReadPin(KeyboardMatrix[i].Rows[k].GPIOPort, KeyboardMatrix[i].Rows[k].GPIOPin) == GPIO_PIN_SET)
-				{
-					keycode = KeyboardMatrix[i].Rows[k].Key;
-					break;
-				}
-			}
-
-			//set the row pin back to floating. This prevents conflicts between multiple key presses.
-			GPIO_InitStruct.Pin = KeyboardMatrix[i].GPIOCtrlPin;
-			GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-			GPIO_InitStruct.Pull = GPIO_NOPULL;
-			GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-			HAL_GPIO_Init(KeyboardMatrix[i].GPIOCtrlPort, &GPIO_InitStruct);
-
-
-			// Stop on first down key (we don't support multiple key presses).
-			if (keycode != 0)
-			{
-				break;
-			}
-		}
-
-		scancode = keycode;
-	}
-
-	validKey = true;
-
-	if (keyState > KEY_DEBOUNCE && !validKey)
-	{
-		keyState = KEY_WAIT_RELEASED;
-	}
-
-	switch (keyState)
-	{
-		case KEY_IDLE:
-			if (keycode != 0)
-			{
-				keyState = KEY_DEBOUNCE;
-				keyDebounceCounter = 0;
-				keyDebounceScancode = scancode;
-				oldKeyboardCode = 0;
-			}
-			taskENTER_CRITICAL();
-			tmp_timer_keypad = timer_keypad_timeout;
-			taskEXIT_CRITICAL();
-
-			if (tmp_timer_keypad == 0 && keypadAlphaKey != 0)
-			{
-				keys->key = keypadAlphaMap[keypadAlphaKey - 1][keypadAlphaIndex];
-				keys->event = KEY_MOD_PRESS;
-				*event = EVENT_KEY_CHANGE;
-				keypadAlphaKey = 0;
-			}
-			break;
-		case KEY_DEBOUNCE:
-			keyDebounceCounter++;
-			if (keyDebounceCounter > KEY_DEBOUNCE_COUNTER)
-			{
-				if (keyDebounceScancode == scancode)
-				{
-					oldKeyboardCode = keycode;
-					keyState = KEY_PRESS;
-				}
-				else
-				{
-					keyState = KEY_WAIT_RELEASED;
-				}
-			}
-			break;
-		case KEY_PRESS:
-			keys->key = keycode;
-			keys->event = KEY_MOD_DOWN | KEY_MOD_PRESS;
-			*event = EVENT_KEY_CHANGE;
-
-			taskENTER_CRITICAL();
-			timer_keypad = keypadTimerLong;
-			timer_keypad_timeout = 1000;
-			taskEXIT_CRITICAL();
-			keyState = KEY_WAITLONG;
-
-			if (keypadAlphaEnable == true)
-			{
-				newAlphaKey = 0;
-				if ((keycode >= '0') && (keycode <= '9'))
-				{
-					newAlphaKey = (keycode - '0') + 1;
-				}
-				else if (keycode == KEY_STAR)
-				{
-					newAlphaKey = 11;
-				}
-
-				if (keypadAlphaKey == 0)
-				{
-					if (newAlphaKey != 0)
-					{
-						keypadAlphaKey = newAlphaKey;
-						keypadAlphaIndex = 0;
-					}
-				}
-				else
-				{
-					if (newAlphaKey == keypadAlphaKey)
-					{
-						keypadAlphaIndex++;
-						if (keypadAlphaMap[keypadAlphaKey - 1][keypadAlphaIndex] == 0)
-						{
-							keypadAlphaIndex = 0;
-						}
-					}
-				}
-
-				if (keypadAlphaKey != 0)
-				{
-					if (newAlphaKey == keypadAlphaKey)
-					{
-						keys->key =	keypadAlphaMap[keypadAlphaKey - 1][keypadAlphaIndex];
-						keys->event = KEY_MOD_PREVIEW;
-					}
-					else
-					{
-						keys->key = keypadAlphaMap[keypadAlphaKey - 1][keypadAlphaIndex];
-						keys->event = KEY_MOD_PRESS;
-						*event = EVENT_KEY_CHANGE;
-						keypadAlphaKey = newAlphaKey;
-						keypadAlphaIndex = -1;
-						keyState = KEY_PRESS;
-					}
-				}
-			}
-			break;
-		case KEY_WAITLONG:
-			if (keycode == 0)
-			{
-				keys->key = oldKeyboardCode;
-				keys->event = KEY_MOD_UP;
-				*event = EVENT_KEY_CHANGE;
-				keyState = KEY_IDLE;
-			}
-			else
-			{
-				taskENTER_CRITICAL();
-				tmp_timer_keypad = timer_keypad;
-				taskEXIT_CRITICAL();
-
-				if (tmp_timer_keypad == 0)
-				{
-					taskENTER_CRITICAL();
-					timer_keypad = keypadTimerRepeat;
-					taskEXIT_CRITICAL();
-
-					keys->key = keycode;
-					keys->event = KEY_MOD_LONG | KEY_MOD_DOWN;
-					*event = EVENT_KEY_CHANGE;
-					keyState = KEY_REPEAT;
-				}
-			}
-			break;
-		case KEY_REPEAT:
-			if (keycode == 0)
-			{
-				keys->key = oldKeyboardCode;
-				keys->event = KEY_MOD_LONG | KEY_MOD_UP;
-				*event = EVENT_KEY_CHANGE;
-
-				keyState = KEY_IDLE;
-			}
-			else
-			{
-				taskENTER_CRITICAL();
-				tmp_timer_keypad = timer_keypad;
-				taskEXIT_CRITICAL();
-
-				keys->key = keycode;
-				keys->event = KEY_MOD_LONG;
-				*event = EVENT_KEY_CHANGE;
-
-				if (tmp_timer_keypad == 0)
-				{
-					taskENTER_CRITICAL();
-					timer_keypad = keypadTimerRepeat;
-					taskEXIT_CRITICAL();
-
-					if ((keys->key == KEY_LEFT) || (keys->key == KEY_RIGHT)
-							|| (keys->key == KEY_UP) || (keys->key == KEY_DOWN) || (keys->key == KEY_FRONT_DOWN) || (keys->key == KEY_FRONT_UP))
-					{
-						keys->event = (KEY_MOD_LONG | KEY_MOD_PRESS);
-					}
-				}
-			}
-			break;
-		case KEY_WAIT_RELEASED:
-			if (scancode == 0)
-			{
-				keyState = KEY_IDLE;
-			}
-			break;
-	}
+void keyboardCheckKeyEvent(keyboardCode_t *keys, int *event) {
 }
-
-/*
-void buttonsFrontPanelDump(void)
-{
-	uint16_t keys = buttonsFrontPanelRead();
-
-	char buffer[17];
-	snprintf(buffer, sizeof(buffer), "K: 0x%03X %ld", keys, rotaryData.Count);
-	displayPrintCentered(40, buffer, FONT_SIZE_3);
-}
- */

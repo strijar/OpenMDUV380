@@ -285,7 +285,14 @@ static void settingsUpdateAudioAlert(void)
 	}
 }
 
-extern const lv_img_dsc_t wallpaper;
+extern const lv_img_dsc_t 	wallpaper;
+static lv_obj_t 			*label;
+
+static void key_cb(lv_event_t * e) {
+	uint32_t key = *((uint32_t*) lv_event_get_param(e));
+
+	lv_label_set_text_fmt(label, "%i", key);
+}
 
 void applicationMainTask(void)
 {
@@ -324,12 +331,12 @@ void applicationMainTask(void)
 
 	lv_init();
 
+	displayInit();
+	gpioInitDisplay();
+
 	buttonsInit();
 	keyboardInit();
 	rotaryEncoderISR();
-
-	displayInit();
-	gpioInitDisplay();
 
 	lv_disp_set_bg_color(lv_disp_get_default(), lv_color_black());
 	lv_disp_set_bg_opa(lv_disp_get_default(), LV_OPA_COVER);
@@ -343,7 +350,7 @@ void applicationMainTask(void)
 
 	lv_obj_set_style_bg_img_src(main_obj, &wallpaper, LV_PART_MAIN);
 
-	lv_obj_t * label = lv_label_create(main_obj);
+	label = lv_label_create(main_obj);
 
 	lv_label_set_text(label, "Menu");
 	lv_obj_set_pos(label, 2, 128 - 20 - 2);
@@ -358,6 +365,8 @@ void applicationMainTask(void)
 	lv_obj_set_size(label, 160/3, 20);
 
 	lv_obj_add_style(label, &bottom_item_style, 0);
+	lv_obj_add_event_cb(label, key_cb, LV_EVENT_KEY, NULL);
+	lv_group_add_obj(lv_group_get_default(), label);
 
 
 #if 0
@@ -369,6 +378,7 @@ void applicationMainTask(void)
 
 	/* * */
 
+#if 0
 	buttonsCheckButtonsEvent(&buttons, &button_event, false);
 
 	if (buttons & BUTTON_SK2) {
@@ -378,6 +388,9 @@ void applicationMainTask(void)
 	} else {
 		wasRestoringDefaultsettings = settingsLoadSettings();
 	}
+#else
+	wasRestoringDefaultsettings = settingsLoadSettings();
+#endif
 
 	radioPowerOn();
 	uiDataGlobal.dmrDisabled = !codecIsAvailable();
@@ -396,11 +409,13 @@ void applicationMainTask(void)
 	dmrIDCacheInit();
 	voicePromptsCacheInit();
 
+#if 0
 	keyboardCheckKeyEvent(&keys, &key_event);
 
 	if (wasRestoringDefaultsettings || KEYCHECK_DOWN(keys, KEY_HASH)) {
 		enableVoicePromptsIfLoaded(KEYCHECK_DOWN(keys, KEY_HASH));
 	}
+#endif
 
 	wasRestoringDefaultsettings = settingsIsOptionBitSet(BIT_SETTINGS_UPDATED);
 	voxSetParameters(nonVolatileSettings.voxThreshold, nonVolatileSettings.voxTailUnits);
@@ -422,7 +437,6 @@ void applicationMainTask(void)
 	while (true) {
 		uint32_t now = ticksGetMillis();
 
-		mainIsRunning = true;
 		keyOrButtonChanged = false;
 
 		lv_timer_handler();
@@ -430,49 +444,6 @@ void applicationMainTask(void)
 
 		handleTimerCallbacks();
 		batteryUpdate();
-
-		/* * */
-
-		keyboardCheckKeyEvent(&keys, &key_event);
-		buttonsCheckButtonsEvent(&buttons, &button_event, (keys.key != 0));
-
-		if (buttons & BUTTON_SK1) {
-			bool clearSK1 = false;
-
-			if (keys.key == KEY_GREEN) {
-				/* Translate keyboard SK1+GREEN to ORANGE button events */
-
-				buttons |= BUTTON_ORANGE;
-				button_event = EVENT_BUTTON_CHANGE;
-				clearSK1 = true;
-
-				if ((keys.event & (KEY_MOD_PRESS | KEY_MOD_LONG)) == (KEY_MOD_PRESS | KEY_MOD_LONG)) {
-					buttons |= BUTTON_ORANGE_EXTRA_LONG_DOWN;
-				} else if ((keys.event & (KEY_MOD_DOWN | KEY_MOD_LONG)) == (KEY_MOD_DOWN | KEY_MOD_LONG)) {
-					buttons |= BUTTON_ORANGE_LONG_DOWN;
-				} else if ((keys.event & (KEY_MOD_UP | KEY_MOD_LONG)) == KEY_MOD_UP) {
-					buttons |= BUTTON_ORANGE_SHORT_UP;
-				} else if (keys.event & KEY_MOD_UP) {
-					buttons = EVENT_BUTTON_NONE;
-				}
-
-				keys.event = EVENT_KEY_NONE;
-				keys.key = 0;
-			}
-
-			if (clearSK1) {
-				buttons &= ~(BUTTON_SK1 | BUTTON_SK1_SHORT_UP | BUTTON_SK1_LONG_DOWN | BUTTON_SK1_EXTRA_LONG_DOWN);
-
-				if (buttons == BUTTON_NONE) {
-					button_event = EVENT_BUTTON_NONE;
-				}
-			}
-		}
-
-		if (((key_event != EVENT_KEY_NONE) && (keys.key != 0)) || (button_event != EVENT_BUTTON_NONE) || (rotary_event != EVENT_ROTARY_NONE)) {
-			keyOrButtonChanged = true;
-			lv_label_set_text_fmt(label, "%i", keys.key);
-		}
 
 		/* * */
 
