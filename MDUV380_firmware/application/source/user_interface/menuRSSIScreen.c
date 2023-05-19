@@ -226,7 +226,7 @@ static void handleEvent(uiEvent_t *ev)
 	{
 		bool wasPlaying = false;
 
-		if (BUTTONCHECK_SHORTUP(ev, BUTTON_SK1) && (ev->keys.key == 0))
+		if (BUTTONCHECK_SHORTUP(ev, BUTTON_SK1_OLD) && (ev->keys.key == 0))
 		{
 			// Stop playback or update signal strength
 			if ((wasPlaying = voicePromptsIsPlaying()) == false)
@@ -250,7 +250,7 @@ static void handleEvent(uiEvent_t *ev)
 		menuSystemPopPreviousMenu();
 		return;
 	}
-	else if (KEYCHECK_SHORTUP_NUMBER(ev->keys)  && (BUTTONCHECK_DOWN(ev, BUTTON_SK2)))
+	else if (KEYCHECK_SHORTUP_NUMBER(ev->keys)  && (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD)))
 	{
 		saveQuickkeyMenuIndex(ev->keys.key, menuSystemGetCurrentMenuNumber(), 0, 0);
 		return;

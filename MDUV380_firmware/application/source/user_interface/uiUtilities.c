@@ -2663,7 +2663,7 @@ void acceptPrivateCall(uint32_t id, int timeslot)
 
 bool rebuildVoicePromptOnExtraLongSK1(uiEvent_t *ev)
 {
-	if (BUTTONCHECK_EXTRALONGDOWN(ev, BUTTON_SK1) && (BUTTONCHECK_DOWN(ev, BUTTON_SK2) == 0) && (BUTTONCHECK_SHORTUP(ev, BUTTON_SK2) == 0) && (ev->keys.key == 0))
+	if (BUTTONCHECK_EXTRALONGDOWN(ev, BUTTON_SK1_OLD) && (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD) == 0) && (BUTTONCHECK_SHORTUP(ev, BUTTON_SK2_OLD) == 0) && (ev->keys.key == 0))
 	{
 		// SK2 is still held down, but SK1 just get released.
 		if (uiDataGlobal.reverseRepeaterChannel || uiDataGlobal.reverseRepeaterVFO)
@@ -2725,7 +2725,7 @@ bool rebuildVoicePromptOnExtraLongSK1(uiEvent_t *ev)
 
 bool repeatVoicePromptOnSK1(uiEvent_t *ev)
 {
-	if (BUTTONCHECK_SHORTUP(ev, BUTTON_SK1) && (BUTTONCHECK_DOWN(ev, BUTTON_SK2) == 0) && (ev->keys.key == 0))
+	if (BUTTONCHECK_SHORTUP(ev, BUTTON_SK1_OLD) && (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD) == 0) && (ev->keys.key == 0))
 	{
 		if (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_LEVEL_1)
 		{
@@ -2765,9 +2765,9 @@ bool handleMonitorMode(uiEvent_t *ev)
 	if (monitorModeData.isEnabled)
 	{
 #if defined(PLATFORM_GD77S)
-		if ((BUTTONCHECK_DOWN(ev, BUTTON_SK1) == 0) || (BUTTONCHECK_DOWN(ev, BUTTON_SK2) == 0) || BUTTONCHECK_DOWN(ev, BUTTON_ORANGE) || (ev->events & ROTARY_EVENT))
+		if ((BUTTONCHECK_DOWN(ev, BUTTON_SK1_OLD) == 0) || (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD) == 0) || BUTTONCHECK_DOWN(ev, BUTTON_ORANGE) || (ev->events & ROTARY_EVENT))
 #else
-		if ((BUTTONCHECK_DOWN(ev, BUTTON_SK2) == 0) || (ev->keys.key != 0) || BUTTONCHECK_DOWN(ev, BUTTON_SK1)
+		if ((BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD) == 0) || (ev->keys.key != 0) || BUTTONCHECK_DOWN(ev, BUTTON_SK1_OLD)
 #if !defined(PLATFORM_RD5R)
 				|| BUTTONCHECK_DOWN(ev, BUTTON_ORANGE)
 #endif
@@ -2817,9 +2817,9 @@ bool handleMonitorMode(uiEvent_t *ev)
 	else
 	{
 #if defined(PLATFORM_GD77S)
-		if (BUTTONCHECK_LONGDOWN(ev, BUTTON_SK1) && BUTTONCHECK_LONGDOWN(ev, BUTTON_SK2)
+		if (BUTTONCHECK_LONGDOWN(ev, BUTTON_SK1_OLD) && BUTTONCHECK_LONGDOWN(ev, BUTTON_SK2_OLD)
 #else
-		if (BUTTONCHECK_EXTRALONGDOWN(ev, BUTTON_SK2) && (BUTTONCHECK_DOWN(ev, BUTTON_SK1) == 0) && (BUTTONCHECK_SHORTUP(ev, BUTTON_SK1) == 0)
+		if (BUTTONCHECK_EXTRALONGDOWN(ev, BUTTON_SK2_OLD) && (BUTTONCHECK_DOWN(ev, BUTTON_SK1_OLD) == 0) && (BUTTONCHECK_SHORTUP(ev, BUTTON_SK1_OLD) == 0)
 #endif
 				&& (trxGetMode() != RADIO_MODE_NONE)
 				&& (((uiDataGlobal.Scan.toneActive == false) &&

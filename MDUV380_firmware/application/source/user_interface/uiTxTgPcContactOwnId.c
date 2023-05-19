@@ -329,7 +329,7 @@ static void handleEvent(uiEvent_t *ev)
 	uint32_t tmpID;
 
 	// DTMF sequence is playing, stop it.
-	if (dtmfSequenceIsKeying() && ((ev->keys.key != 0) || BUTTONCHECK_DOWN(ev, BUTTON_PTT)
+	if (dtmfSequenceIsKeying() && ((ev->keys.key != 0) || BUTTONCHECK_DOWN(ev, BUTTON_PTT_OLD)
 #if ! defined(PLATFORM_RD5R)
 													|| BUTTONCHECK_DOWN(ev, BUTTON_ORANGE)
 #endif
@@ -342,7 +342,7 @@ static void handleEvent(uiEvent_t *ev)
 
 	if ((nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_LEVEL_1) && (ev->events & BUTTON_EVENT))
 	{
-		if (BUTTONCHECK_SHORTUP(ev, BUTTON_SK1))
+		if (BUTTONCHECK_SHORTUP(ev, BUTTON_SK1_OLD))
 		{
 			if (!voicePromptsIsPlaying())
 			{
@@ -448,7 +448,7 @@ static void handleEvent(uiEvent_t *ev)
 						setTxDMRID(uiDataGlobal.userDMRId);
 					}
 
-					if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+					if (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 					{
 						// make the change to DMR ID permanent if Function + Green is pressed
 						codeplugSetUserDMRID(trxDMRID);
@@ -478,13 +478,13 @@ static void handleEvent(uiEvent_t *ev)
 
 		}
 	}
-	else if (KEYCHECK_PRESS(ev->keys, KEY_HASH) && (inAnalog && (menuDataGlobal.currentItemIndex == ENTRY_DTMF) ? BUTTONCHECK_DOWN(ev, BUTTON_SK2) : true))
+	else if (KEYCHECK_PRESS(ev->keys, KEY_HASH) && (inAnalog && (menuDataGlobal.currentItemIndex == ENTRY_DTMF) ? BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD) : true))
 	{
 		pcIdx = 0;
 
 		menuNumericalExitStatus |= MENU_STATUS_INPUT_TYPE;
 
-		if ((inAnalog == false) && ((BUTTONCHECK_DOWN(ev, BUTTON_SK2) != 0) && (menuDataGlobal.currentItemIndex == ENTRY_SELECT_CONTACT)))
+		if ((inAnalog == false) && ((BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD) != 0) && (menuDataGlobal.currentItemIndex == ENTRY_SELECT_CONTACT)))
 		{
 			snprintf(digits, 8, "%u", trxDMRID);
 			menuDataGlobal.currentItemIndex = ENTRY_USER_DMR_ID;
@@ -610,7 +610,7 @@ static void handleEvent(uiEvent_t *ev)
 					}
 				}
 			} // Delete a digit
-			else if (KEYCHECK_PRESS(ev->keys, KEY_LEFT) && (inAnalog ? BUTTONCHECK_DOWN(ev, BUTTON_SK2) : true))
+			else if (KEYCHECK_PRESS(ev->keys, KEY_LEFT) && (inAnalog ? BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD) : true))
 			{
 				if ((sLen = strlen(digits)) > 0)
 				{

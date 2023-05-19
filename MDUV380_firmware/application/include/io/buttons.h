@@ -34,16 +34,37 @@
 extern volatile bool   PTTLocked;
 #endif
 
+typedef enum {
+	BUTTON_PTT = 0,
+	BUTTON_SK1,
+	BUTTON_SK2,
+	BUTTON_MAX
+} button_t;
+
+typedef enum {
+	BUTTON_PRESS = 0,
+	BUTTON_RELEASE,
+	BUTTON_LONG,
+	BUTTON_LONG_RELEASE
+} button_state_t;
+
+typedef struct {
+	button_t		button;
+	button_state_t	state;
+} event_button_t;
+
+extern uint32_t			EVENT_BUTTON;
+
 #define BUTTON_NONE                    0x00000000
-#define BUTTON_PTT                     0x00000001
-#define BUTTON_SK1                     0x00000002
-#define BUTTON_SK1_SHORT_UP            0x00000004
-#define BUTTON_SK1_LONG_DOWN           0x00000008
-#define BUTTON_SK1_EXTRA_LONG_DOWN     0x00000010
-#define BUTTON_SK2                     0x00000020
-#define BUTTON_SK2_SHORT_UP            0x00000040
-#define BUTTON_SK2_LONG_DOWN           0x00000080
-#define BUTTON_SK2_EXTRA_LONG_DOWN     0x00000100
+#define BUTTON_PTT_OLD                 0x00000001
+#define BUTTON_SK1_OLD                 0x00000002
+#define BUTTON_SK1_OLD_SHORT_UP        0x00000004
+#define BUTTON_SK1_OLD_LONG_DOWN       0x00000008
+#define BUTTON_SK1_OLD_EXTRA_LONG_DOWN 0x00000010
+#define BUTTON_SK2_OLD                 0x00000020
+#define BUTTON_SK2_OLD_SHORT_UP        0x00000040
+#define BUTTON_SK2_OLD_LONG_DOWN       0x00000080
+#define BUTTON_SK2_OLD_EXTRA_LONG_DOWN 0x00000100
 #if ! defined(PLATFORM_RD5R)
 #define BUTTON_ORANGE                  0x00000200
 #define BUTTON_ORANGE_SHORT_UP         0x00000400
@@ -58,6 +79,9 @@ extern volatile bool   PTTLocked;
 extern volatile bool PTTLocked;
 
 void buttonsInit(void);
+void buttonsRead();
+button_state_t buttonsState(button_t button);
+
 #if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380)  || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
 void buttonsCheckButtonsEvent(uint32_t *buttons, int *event, bool keyIsDown);
 #else

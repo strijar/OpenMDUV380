@@ -836,14 +836,14 @@ static void handleEvent(uiEvent_t *ev)
 
 					alarmTime = currentActiveSatellite->predictions.passes[currentActiveSatellite->predictions.selectedPassNumber].satelliteAOS - ALARM_OFFSET_SECS;
 
-					if (!(BUTTONCHECK_DOWN(ev, BUTTON_SK2) && (currentActiveSatellite->predictions.isVisible || uiDataGlobal.dateTimeSecs >= alarmTime)))
+					if (!(BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD) && (currentActiveSatellite->predictions.isVisible || uiDataGlobal.dateTimeSecs >= alarmTime)))
 					{
 						displayMode = SATELLITE_SCREEN_SELECTED_SATELLITE_POLAR;//SATELLITE_SCREEN_SELECTED_SATELLITE;
 						updateScreen(ev, true, true);
 					}
 				}
 
-				if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+				if (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 				{
 					//if (displayMode != SATELLITE_SCREEN_SELECTED_SATELLITE_PREDICTION)
 					{
@@ -867,7 +867,7 @@ static void handleEvent(uiEvent_t *ev)
 
 
 			case KEY_RIGHT:
-				if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+				if (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 				{
 					if (increasePowerLevel(false))
 					{
@@ -908,7 +908,7 @@ static void handleEvent(uiEvent_t *ev)
 				break;
 
 			case KEY_LEFT:
-				if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+				if (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 				{
 					if (decreasePowerLevel())
 					{
@@ -958,7 +958,7 @@ static void handleEvent(uiEvent_t *ev)
 				}
 				else
 				{
-					if (!BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+					if (!BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 					{
 						displayMode--;
 						if (displayMode == SATELLITE_SCREEN_ALL_PREDICTIONS_LIST)
@@ -990,7 +990,7 @@ static void handleEvent(uiEvent_t *ev)
 				}
 				else
 				{
-					if (!BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+					if (!BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 					{
 						displayMode++;
 						if (displayMode == NUM_SATELLITE_SCREEN_ITEMS)
@@ -1041,10 +1041,10 @@ static void handleEvent(uiEvent_t *ev)
 				*/
 		}
 	}
-	else if (KEYCHECK_LONGDOWN(ev->keys, KEY_RIGHT) && BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+	else if (KEYCHECK_LONGDOWN(ev->keys, KEY_RIGHT) && BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 	{
 		// Long press allows the 5W+ power setting to be selected immediately
-		if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+		if (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 		{
 			if (increasePowerLevel(true))
 			{
@@ -1066,7 +1066,7 @@ static void handleEvent(uiEvent_t *ev)
 
 	if (ev->events & BUTTON_EVENT)
 	{
-		if (BUTTONCHECK_DOWN(ev, BUTTON_SK1))
+		if (BUTTONCHECK_DOWN(ev, BUTTON_SK1_OLD))
 		{
 			if (voicePromptsIsPlaying())
 			{
@@ -1089,7 +1089,7 @@ static void handleEvent(uiEvent_t *ev)
 	}
 
 
-	if (KEYCHECK_SHORTUP_NUMBER(ev->keys) && (BUTTONCHECK_DOWN(ev, BUTTON_SK2)))
+	if (KEYCHECK_SHORTUP_NUMBER(ev->keys) && (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD)))
 	{
 		saveQuickkeyMenuIndex(ev->keys.key, menuSystemGetCurrentMenuNumber(), displayMode, 0);
 		return;

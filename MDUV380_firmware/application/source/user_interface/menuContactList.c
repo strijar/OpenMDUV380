@@ -290,7 +290,7 @@ static void handleEvent(uiEvent_t *ev)
 	}
 
 	// DTMF sequence is playing, stop it.
-	if (dtmfSequenceIsKeying() && ((ev->keys.key != 0) || BUTTONCHECK_DOWN(ev, BUTTON_PTT)
+	if (dtmfSequenceIsKeying() && ((ev->keys.key != 0) || BUTTONCHECK_DOWN(ev, BUTTON_PTT_OLD)
 #if ! defined(PLATFORM_RD5R)
 													|| BUTTONCHECK_DOWN(ev, BUTTON_ORANGE)
 #endif
@@ -400,7 +400,7 @@ static void handleEvent(uiEvent_t *ev)
 			}
 
 			if ((contactListType == MENU_CONTACT_LIST_CONTACT_DIGITAL) &&
-					(KEYCHECK_SHORTUP_NUMBER(ev->keys) && (BUTTONCHECK_DOWN(ev, BUTTON_SK2))))
+					(KEYCHECK_SHORTUP_NUMBER(ev->keys) && (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))))
 			{
 				saveQuickkeyContactIndex(ev->keys.key, (uint16_t)contactListContactData.NOT_IN_CODEPLUGDATA_indexNumber);
 				return;
@@ -525,7 +525,7 @@ static void handleSubMenuEvent(uiEvent_t *ev)
 	}
 
 	// DTMF sequence is playing, stop it.
-	if (uiDataGlobal.DTMFContactList.isKeying && ((ev->keys.key != 0) || BUTTONCHECK_DOWN(ev, BUTTON_PTT)
+	if (uiDataGlobal.DTMFContactList.isKeying && ((ev->keys.key != 0) || BUTTONCHECK_DOWN(ev, BUTTON_PTT_OLD)
 #if ! defined(PLATFORM_RD5R)
 													|| BUTTONCHECK_DOWN(ev, BUTTON_ORANGE)
 #endif
@@ -610,7 +610,7 @@ static void handleSubMenuEvent(uiEvent_t *ev)
 	}
 
 	if ((menuDataGlobal.currentItemIndex == CONTACT_LIST_QUICK_MENU_SELECT) && (contactListType == MENU_CONTACT_LIST_CONTACT_DIGITAL) &&
-			(KEYCHECK_SHORTUP_NUMBER(ev->keys) && (BUTTONCHECK_DOWN(ev, BUTTON_SK2))))
+			(KEYCHECK_SHORTUP_NUMBER(ev->keys) && (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))))
 	{
 		saveQuickkeyContactIndex(ev->keys.key, (uint16_t)contactListContactData.NOT_IN_CODEPLUGDATA_indexNumber);
 		return;

@@ -352,7 +352,7 @@ static void handleEvent(uiEvent_t *ev)
 		}
 	}
 
-	if ((menuDataGlobal.menuOptionsTimeout > 0) && (!BUTTONCHECK_DOWN(ev, BUTTON_SK2)))
+	if ((menuDataGlobal.menuOptionsTimeout > 0) && (!BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD)))
 	{
 		menuDataGlobal.menuOptionsTimeout--;
 		if (menuDataGlobal.menuOptionsTimeout == 0)
@@ -413,7 +413,7 @@ static void handleEvent(uiEvent_t *ev)
 			menuSystemPopPreviousMenu();
 			return;
 		}
-		else if (KEYCHECK_SHORTUP_NUMBER(ev->keys) && BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+		else if (KEYCHECK_SHORTUP_NUMBER(ev->keys) && BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 		{
 				menuDataGlobal.menuOptionsSetQuickkey = ev->keys.key;
 				isDirty = true;

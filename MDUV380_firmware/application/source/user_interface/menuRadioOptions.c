@@ -285,7 +285,7 @@ static void handleEvent(uiEvent_t *ev)
 		}
 	}
 
-	if ((menuDataGlobal.menuOptionsTimeout > 0) && (!BUTTONCHECK_DOWN(ev, BUTTON_SK2)))
+	if ((menuDataGlobal.menuOptionsTimeout > 0) && (!BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD)))
 	{
 		menuDataGlobal.menuOptionsTimeout--;
 		if (menuDataGlobal.menuOptionsTimeout == 0)
@@ -343,7 +343,7 @@ static void handleEvent(uiEvent_t *ev)
 			menuSystemPopPreviousMenu();
 			return;
 		}
-		else if (KEYCHECK_SHORTUP_NUMBER(ev->keys) && BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+		else if (KEYCHECK_SHORTUP_NUMBER(ev->keys) && BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 		{
 				menuDataGlobal.menuOptionsSetQuickkey = ev->keys.key;
 				isDirty = true;
@@ -434,7 +434,7 @@ static void handleEvent(uiEvent_t *ev)
 
 						// Not the real max value of 4096, but trxUpdate_PA_DAC_Drive() will auto limit it to 4096
 						// and it makes the logic easier and there is no functional difference
-						newVal = SAFE_MIN((newVal + (BUTTONCHECK_DOWN(ev, BUTTON_SK2) ? 10 : 100)), 4100);
+						newVal = SAFE_MIN((newVal + (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD) ? 10 : 100)), 4100);
 
 						settingsSet(nonVolatileSettings.userPower, newVal);
 						trxUpdate_PA_DAC_Drive();
@@ -528,7 +528,7 @@ static void handleEvent(uiEvent_t *ev)
 
 						// Not the real max value of 4096, but trxUpdate_PA_DAC_Drive() will auto limit it to 4096
 						// and it makes the logic easier and there is no functional difference
-						newVal = SAFE_MAX((newVal - (BUTTONCHECK_DOWN(ev, BUTTON_SK2) ? 10 : 100)), 0);
+						newVal = SAFE_MAX((newVal - (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD) ? 10 : 100)), 0);
 
 						settingsSet(nonVolatileSettings.userPower, newVal);
 						trxUpdate_PA_DAC_Drive();

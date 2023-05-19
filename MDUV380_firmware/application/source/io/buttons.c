@@ -29,9 +29,15 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <lvgl.h>
 #include "interfaces/adc.h"
 #include "io/buttons.h"
 #include "main.h"
+
+uint32_t 				EVENT_BUTTON;
+
+static button_state_t	buttons_state[BUTTON_MAX] = { BUTTON_RELEASE, BUTTON_RELEASE, BUTTON_RELEASE };
+static lv_timer_t		*button_timer[BUTTON_MAX] = { NULL, NULL, NULL};
 
 static uint32_t prevButtonState;
 static uint32_t mbuttons;
@@ -49,10 +55,109 @@ typedef enum
 	MBUTTON_MAX
 } MBUTTON_t;
 
-void buttonsInit(void)
-{
-	mbuttons = BUTTON_NONE;
-	prevButtonState = BUTTON_NONE;
+static void send_button_event(button_t button, button_state_t state) {
+	buttons_state[button] = state;
+
+	event_button_t *event = lv_mem_alloc(sizeof(event_button_t));
+
+	event->button = button;
+	event->state = state;
+
+	lv_event_send(lv_scr_act(), EVENT_BUTTON, event);
+}
+
+void press_timeout(lv_timer_t * timer) {
+	button_t button = (button_t) timer->user_data;
+
+	send_button_event(button, BUTTON_LONG);
+	button_timer[button] = NULL;
+}
+
+static void check_button(button_t button, bool on) {
+	if (on) {
+		switch (buttons_state[button]) {
+			case BUTTON_RELEASE:
+			case BUTTON_LONG_RELEASE:
+				send_button_event(button, BUTTON_PRESS);
+
+				if (button_timer[button]) {
+					lv_timer_del(button_timer[button]);
+				}
+
+				button_timer[button] = lv_timer_create(press_timeout, 1000, (void *) button);
+				lv_timer_set_repeat_count(button_timer[button], 1);
+				break;
+
+			default:
+				break;
+		}
+	} else {
+		switch (buttons_state[button]) {
+			case BUTTON_PRESS:
+				send_button_event(button, BUTTON_RELEASE);
+
+				if (button_timer[button]) {
+					lv_timer_del(button_timer[button]);
+					button_timer[button] = NULL;
+				}
+				break;
+
+			case BUTTON_LONG:
+				send_button_event(button, BUTTON_LONG_RELEASE);
+				break;
+
+			default:
+				break;
+		}
+	}
+}
+
+void buttonsRead() {
+	GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+	GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+	GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+
+	GPIO_InitStruct.Pin = LCD_D6_Pin | LCD_D7_Pin;
+	HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+
+	/* Set ROW2 (K3) in OUTPUT mode, as keyboard code sets it to floating (avoiding Multiple key press combination problems). */
+
+	GPIO_InitStruct.Pin = KEYPAD_ROW2_Pin;
+	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+	GPIO_InitStruct.Pull = GPIO_NOPULL;
+	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+	HAL_GPIO_Init(KEYPAD_ROW2_GPIO_Port, &GPIO_InitStruct);
+
+	/* set the row pin high to select that row of keys */
+
+	HAL_GPIO_WritePin(KEYPAD_ROW2_GPIO_Port, KEYPAD_ROW2_Pin, GPIO_PIN_SET);
+
+	for (volatile int xx = 0; xx < 100; xx++) {} /* arbitrary settling delay */
+
+	check_button(BUTTON_SK1, HAL_GPIO_ReadPin(LCD_D7_GPIO_Port, LCD_D7_Pin) == GPIO_PIN_SET);
+	check_button(BUTTON_SK2, HAL_GPIO_ReadPin(LCD_D6_GPIO_Port, LCD_D6_Pin) == GPIO_PIN_SET);
+
+	/* set the row2 pin back to floating. This prevents conflicts between multiple key presses. */
+
+	GPIO_InitStruct.Pin = KEYPAD_ROW2_Pin;
+	GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+	GPIO_InitStruct.Pull = GPIO_NOPULL;
+	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+	HAL_GPIO_Init(KEYPAD_ROW2_GPIO_Port, &GPIO_InitStruct);
+
+	bool ptt = ((HAL_GPIO_ReadPin(PTT_GPIO_Port, PTT_Pin) == GPIO_PIN_RESET) || (HAL_GPIO_ReadPin(PTT_EXTERNAL_GPIO_Port, PTT_EXTERNAL_Pin) == GPIO_PIN_RESET));
+
+	check_button(BUTTON_PTT, ptt);
+}
+
+void buttonsInit(void) {
+	EVENT_BUTTON = lv_event_register_id();
+}
+
+button_state_t buttonsState(button_t button) {
+	return buttons_state[button];
 }
 
 static bool isMButtonPressed(MBUTTON_t mbutton)
@@ -107,11 +212,11 @@ static void checkMButtonState(uint32_t *buttons, MBUTTON_t mbutton, uint32_t but
 	}
 }
 
-static uint32_t buttonsRead()
+static uint32_t buttonsReadOld()
 {
 	GPIO_InitTypeDef GPIO_InitStruct = {0};
 	uint32_t result = BUTTON_NONE;
-
+#if 0
 	GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
 	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
 	GPIO_InitStruct.Pull = GPIO_PULLDOWN;
@@ -141,22 +246,22 @@ static uint32_t buttonsRead()
 #endif
 	{
 #if defined(PLATFORM_MD380)
-		result |= BUTTON_SK2;
-		checkMButtonState(&result, MBUTTON_SK2, BUTTON_SK2);
+		result |= BUTTON_SK2_OLD;
+		checkMButtonState(&result, MBUTTON_SK2, BUTTON_SK2_OLD);
 #else
-		result |= BUTTON_SK1;
-		checkMButtonState(&result, MBUTTON_SK1, BUTTON_SK1);
+		result |= BUTTON_SK1_OLD;
+		checkMButtonState(&result, MBUTTON_SK1, BUTTON_SK1_OLD);
 #endif
 	}
 
 	if (HAL_GPIO_ReadPin(LCD_D6_GPIO_Port, LCD_D6_Pin) == GPIO_PIN_SET)
 	{
 #if defined(PLATFORM_MD380)
-		result |= BUTTON_SK1;
-		checkMButtonState(&result, MBUTTON_SK1, BUTTON_SK1);
+		result |= BUTTON_SK1_OLD;
+		checkMButtonState(&result, MBUTTON_SK1, BUTTON_SK1_OLD);
 #else
-		result |= BUTTON_SK2;
-		checkMButtonState(&result, MBUTTON_SK2, BUTTON_SK2);
+		result |= BUTTON_SK2_OLD;
+		checkMButtonState(&result, MBUTTON_SK2, BUTTON_SK2_OLD);
 #endif
 	}
 
@@ -170,9 +275,9 @@ static uint32_t buttonsRead()
 	if ((HAL_GPIO_ReadPin(PTT_GPIO_Port, PTT_Pin) == GPIO_PIN_RESET) ||
 			(HAL_GPIO_ReadPin(PTT_EXTERNAL_GPIO_Port, PTT_EXTERNAL_Pin) == GPIO_PIN_RESET))
 	{
-		result |= BUTTON_PTT;
+		result |= BUTTON_PTT_OLD;
 	}
-
+#endif
 	return result;
 }
 
@@ -254,7 +359,7 @@ static void checkMButtons(uint32_t *buttons, MBUTTON_t mbutton, uint32_t buttonI
 
 void buttonsCheckButtonsEvent(uint32_t *buttons, int *event, bool keyIsDown)
 {
-	*buttons = buttonsRead();
+	*buttons = buttonsReadOld();
 
 	// Handles buttons states
 	if ((*buttons != BUTTON_NONE) || (mbuttons & BUTTON_WAIT_NEW_STATE))
@@ -265,8 +370,8 @@ void buttonsCheckButtonsEvent(uint32_t *buttons, int *event, bool keyIsDown)
 			mbuttons |= BUTTON_WAIT_NEW_STATE;
 
 			// Clear stored states
-			setMButtonsStateAndClearLong(buttons, MBUTTON_SK1, BUTTON_SK1);
-			setMButtonsStateAndClearLong(buttons, MBUTTON_SK2, BUTTON_SK2);
+			setMButtonsStateAndClearLong(buttons, MBUTTON_SK1, BUTTON_SK1_OLD);
+			setMButtonsStateAndClearLong(buttons, MBUTTON_SK2, BUTTON_SK2_OLD);
 #if ! (defined(PLATFORM_RD5R) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017))
 			setMButtonsStateAndClearLong(buttons, MBUTTON_ORANGE, BUTTON_ORANGE);
 #endif
@@ -285,8 +390,8 @@ void buttonsCheckButtonsEvent(uint32_t *buttons, int *event, bool keyIsDown)
 					mbuttons &= ~BUTTON_WAIT_NEW_STATE;
 
 					// Clear stored states
-					setMButtonsStateAndClearLong(buttons, MBUTTON_SK1, BUTTON_SK1);
-					setMButtonsStateAndClearLong(buttons, MBUTTON_SK2, BUTTON_SK2);
+					setMButtonsStateAndClearLong(buttons, MBUTTON_SK1, BUTTON_SK1_OLD);
+					setMButtonsStateAndClearLong(buttons, MBUTTON_SK2, BUTTON_SK2_OLD);
 #if ! (defined(PLATFORM_RD5R) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017))
 					setMButtonsStateAndClearLong(buttons, MBUTTON_ORANGE, BUTTON_ORANGE);
 #endif
@@ -305,8 +410,8 @@ void buttonsCheckButtonsEvent(uint32_t *buttons, int *event, bool keyIsDown)
 #if ! (defined(PLATFORM_RD5R) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017))
 	checkMButtons(buttons, MBUTTON_ORANGE, BUTTON_ORANGE, BUTTON_ORANGE_SHORT_UP, BUTTON_ORANGE_LONG_DOWN, BUTTON_ORANGE_EXTRA_LONG_DOWN);
 #endif // ! PLATFORM_RD5R
-	checkMButtons(buttons, MBUTTON_SK1, BUTTON_SK1, BUTTON_SK1_SHORT_UP, BUTTON_SK1_LONG_DOWN, BUTTON_SK1_EXTRA_LONG_DOWN);
-	checkMButtons(buttons, MBUTTON_SK2, BUTTON_SK2, BUTTON_SK2_SHORT_UP, BUTTON_SK2_LONG_DOWN, BUTTON_SK2_EXTRA_LONG_DOWN);
+	checkMButtons(buttons, MBUTTON_SK1, BUTTON_SK1_OLD, BUTTON_SK1_OLD_SHORT_UP, BUTTON_SK1_OLD_LONG_DOWN, BUTTON_SK1_OLD_EXTRA_LONG_DOWN);
+	checkMButtons(buttons, MBUTTON_SK2, BUTTON_SK2_OLD, BUTTON_SK2_OLD_SHORT_UP, BUTTON_SK2_OLD_LONG_DOWN, BUTTON_SK2_OLD_EXTRA_LONG_DOWN);
 
 	if (prevButtonState != *buttons)
 	{

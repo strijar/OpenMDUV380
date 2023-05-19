@@ -398,7 +398,7 @@ static void handleEvent(uiEvent_t *ev)
 					switch(menuDataGlobal.currentItemIndex)
 					{
 						case CONTACT_DETAILS_NAME:
-							moveCursorRightInString(contactName, &namePos, 16, BUTTONCHECK_DOWN(ev, BUTTON_SK2));
+							moveCursorRightInString(contactName, &namePos, 16, BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD));
 							updateCursor(true);
 							allowedToSpeakUpdate = (strlen(contactName) == 0);
 							break;
@@ -443,7 +443,7 @@ static void handleEvent(uiEvent_t *ev)
 					switch(menuDataGlobal.currentItemIndex)
 					{
 						case CONTACT_DETAILS_NAME:
-							moveCursorLeftInString(contactName, &namePos, BUTTONCHECK_DOWN(ev, BUTTON_SK2));
+							moveCursorLeftInString(contactName, &namePos, BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD));
 							updateCursor(true);
 							allowedToSpeakUpdate = (strlen(contactName) == 0);
 							break;

@@ -594,7 +594,7 @@ int menuGetKeypadKeyValue(uiEvent_t *ev, bool digitsOnly)
 	{
 		if (KEYCHECK_PRESS(ev->keys, keypadKeys[i]))
 		{
-			if (BUTTONCHECK_DOWN(ev, BUTTON_SK1))
+			if (BUTTONCHECK_DOWN(ev, BUTTON_SK1_OLD))
 			{
 				if (i == 10)
 				{

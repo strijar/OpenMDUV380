@@ -294,6 +294,24 @@ static void key_cb(lv_event_t * e) {
 	lv_label_set_text_fmt(label, "%i", key);
 }
 
+static void button_cb(lv_event_t * e) {
+	event_button_t *event = lv_event_get_param(e);
+
+	switch (event->state) {
+		case BUTTON_PRESS:
+			LedWrite(LED_GREEN, 1);
+			break;
+
+		case BUTTON_LONG:
+			LedWrite(LED_RED, 1);
+			break;
+
+		default:
+			LedWrite(LED_GREEN, 0);
+			LedWrite(LED_RED, 0);
+	}
+}
+
 void applicationMainTask(void)
 {
 	keyboardCode_t	keys;
@@ -348,6 +366,8 @@ void applicationMainTask(void)
 
 	lv_obj_t *main_obj = lv_obj_create(NULL);
 
+	lv_obj_add_event_cb(main_obj, button_cb, EVENT_BUTTON, NULL);
+
 	lv_obj_set_style_bg_img_src(main_obj, &wallpaper, LV_PART_MAIN);
 
 	label = lv_label_create(main_obj);
@@ -381,7 +401,7 @@ void applicationMainTask(void)
 #if 0
 	buttonsCheckButtonsEvent(&buttons, &button_event, false);
 
-	if (buttons & BUTTON_SK2) {
+	if (buttons & BUTTON_SK2_OLD) {
 		wasRestoringDefaultsettings = true;
 		settingsRestoreDefaultSettings();
 		settingsLoadSettings();
@@ -444,6 +464,7 @@ void applicationMainTask(void)
 
 		handleTimerCallbacks();
 		batteryUpdate();
+		buttonsRead();
 
 		/* * */
 
@@ -501,7 +522,7 @@ void applicationMainTask(void)
 #if 0
 	buttonsCheckButtonsEvent(&buttons, &button_event, false);
 
-	if (buttons & BUTTON_SK2)
+	if (buttons & BUTTON_SK2_OLD)
 	{
 		wasRestoringDefaultsettings = true;
 		settingsRestoreDefaultSettings();
@@ -588,7 +609,7 @@ void applicationMainTask(void)
 		buttonsCheckButtonsEvent(&buttons, &button_event, (keys.key != 0)); // Read button state and event
 
 		// hack to allow SK1 + Up / Down to be Left / Right
-		if (buttons & BUTTON_SK1)
+		if (buttons & BUTTON_SK1_OLD)
 		{
 			bool clearSK1 = false;
 /*
@@ -635,7 +656,7 @@ void applicationMainTask(void)
 			if (clearSK1)
 			{
 				// Clear all SK1 flags
-				buttons &= ~(BUTTON_SK1 | BUTTON_SK1_SHORT_UP | BUTTON_SK1_LONG_DOWN | BUTTON_SK1_EXTRA_LONG_DOWN);
+				buttons &= ~(BUTTON_SK1_OLD | BUTTON_SK1_SHORT_UP | BUTTON_SK1_LONG_DOWN | BUTTON_SK1_EXTRA_LONG_DOWN);
 
 				if (buttons == BUTTON_NONE)
 				{
@@ -683,15 +704,15 @@ void applicationMainTask(void)
 			}
 			else
 			{
-				if (!trxTransmissionEnabled && voxIsTriggered() && ((buttons & BUTTON_PTT) == 0))
+				if (!trxTransmissionEnabled && voxIsTriggered() && ((buttons & BUTTON_PTT_OLD) == 0))
 				{
 					button_event = EVENT_BUTTON_CHANGE;
-					buttons |= BUTTON_PTT;
+					buttons |= BUTTON_PTT_OLD;
 				}
 				else if (trxTransmissionEnabled && ((voxIsTriggered() == false) || (keys.event & KEY_MOD_PRESS)))
 				{
 					button_event = EVENT_BUTTON_CHANGE;
-					buttons &= ~BUTTON_PTT;
+					buttons &= ~BUTTON_PTT_OLD;
 				}
 				else if (trxTransmissionEnabled && voxIsTriggered())
 				{
@@ -700,21 +721,21 @@ void applicationMainTask(void)
 					{
 						voxReset();
 						button_event = EVENT_BUTTON_CHANGE;
-						buttons &= ~BUTTON_PTT;
+						buttons &= ~BUTTON_PTT_OLD;
 					}
 					else
 					{
-						buttons |= BUTTON_PTT;
+						buttons |= BUTTON_PTT_OLD;
 					}
 				}
 			}
 		}
 
 		// If the settings update message is still on screen, don't permit to start xmitting.
-		if (updateMessageOnScreen && (buttons & BUTTON_PTT))
+		if (updateMessageOnScreen && (buttons & BUTTON_PTT_OLD))
 		{
 			button_event = EVENT_BUTTON_CHANGE;
-			buttons &= ~BUTTON_PTT;
+			buttons &= ~BUTTON_PTT_OLD;
 		}
 
 		if (headerRowIsDirty == true)
@@ -746,7 +767,7 @@ void applicationMainTask(void)
 
 		if (keypadLocked || PTTLocked)
 		{
-			if (keypadLocked && ((buttons & BUTTON_PTT) == 0))
+			if (keypadLocked && ((buttons & BUTTON_PTT_OLD) == 0))
 			{
 				if (key_event == EVENT_KEY_CHANGE)
 				{
@@ -779,7 +800,7 @@ void applicationMainTask(void)
 				}
 
 				// Lockout ORANGE AND BLUE (BLACK stay active regardless lock status, useful to trigger backlight)
-				if ((button_event == EVENT_BUTTON_CHANGE) && ((buttons & BUTTON_ORANGE) || (buttons & BUTTON_SK2)))
+				if ((button_event == EVENT_BUTTON_CHANGE) && ((buttons & BUTTON_ORANGE) || (buttons & BUTTON_SK2_OLD)))
 				{
 					if ((PTTToggledDown == false) && (menuSystemGetCurrentMenuNumber() != UI_LOCK_SCREEN))
 					{
@@ -796,7 +817,7 @@ void applicationMainTask(void)
 			}
 			else if (PTTLocked)
 			{
-				if ((buttons & BUTTON_PTT) && (button_event == EVENT_BUTTON_CHANGE))
+				if ((buttons & BUTTON_PTT_OLD) && (button_event == EVENT_BUTTON_CHANGE))
 				{
 					// PTT button is pressed, but a message box is currently displayed, and PC allowance is set to PTT,
 					// hence it's probably a private call accept, so let the PTT button being handled later in the code
@@ -811,10 +832,10 @@ void applicationMainTask(void)
 
 						button_event = EVENT_BUTTON_NONE;
 						// Clear PTT button
-						buttons &= ~BUTTON_PTT;
+						buttons &= ~BUTTON_PTT_OLD;
 					}
 				}
-				else if ((buttons & BUTTON_SK2) && KEYCHECK_DOWN(keys, KEY_STAR))
+				else if ((buttons & BUTTON_SK2_OLD) && KEYCHECK_DOWN(keys, KEY_STAR))
 				{
 					if (menuSystemGetCurrentMenuNumber() != UI_LOCK_SCREEN)
 					{
@@ -827,7 +848,7 @@ void applicationMainTask(void)
 		int trxMode = trxGetMode();
 
 		// Long press RED
-		if ((key_event == EVENT_KEY_CHANGE) && ((buttons & BUTTON_PTT) == 0) && (keys.key != 0))
+		if ((key_event == EVENT_KEY_CHANGE) && ((buttons & BUTTON_PTT_OLD) == 0) && (keys.key != 0))
 		{
 			int currentMenu = menuSystemGetCurrentMenuNumber();
 
@@ -860,7 +881,7 @@ void applicationMainTask(void)
 #if ! defined(PLATFORM_RD5R)
 						(buttons & BUTTON_ORANGE) ||
 #endif
-						((trxMode != RADIO_MODE_ANALOG) && (buttons & BUTTON_SK2)))) ||
+						((trxMode != RADIO_MODE_ANALOG) && (buttons & BUTTON_SK2_OLD)))) ||
 						((keys.key != 0) && (keys.event & KEY_MOD_UP) &&
 								(((trxMode == RADIO_MODE_ANALOG) && keyboardKeyIsDTMFKey(keys.key)) == false) &&
 								(((trxMode == RADIO_MODE_DIGITAL) && menuTxScreenDisplaysLastHeard() && ((keys.key == KEY_UP) || (keys.key == KEY_DOWN))) == false))))
@@ -877,7 +898,7 @@ void applicationMainTask(void)
 		{
 			if (button_event == EVENT_BUTTON_CHANGE)
 			{
-				if (buttons & BUTTON_PTT)
+				if (buttons & BUTTON_PTT_OLD)
 				{
 					if (PTTToggledDown == false)
 					{
@@ -894,9 +915,9 @@ void applicationMainTask(void)
 				}
 			}
 
-			if (PTTToggledDown && ((buttons & BUTTON_PTT) == 0))
+			if (PTTToggledDown && ((buttons & BUTTON_PTT_OLD) == 0))
 			{
-				buttons |= BUTTON_PTT;
+				buttons |= BUTTON_PTT_OLD;
 			}
 		}
 		else
@@ -972,7 +993,7 @@ void applicationMainTask(void)
 			// Toggle backlight
 			if (nonVolatileSettings.backlightMode == BACKLIGHT_MODE_MANUAL)
 			{
-				if (buttons == BUTTON_SK1) // SK1 alone
+				if (buttons == BUTTON_SK1_OLD) // SK1 alone
 				{
 					displayEnableBacklight(! displayIsBacklightLit(), nonVolatileSettings.displayBacklightPercentageOff);
 				}
@@ -981,7 +1002,7 @@ void applicationMainTask(void)
 			{
 				displayLightTrigger(true);
 			}
-			if ((buttons & BUTTON_PTT) != 0)
+			if ((buttons & BUTTON_PTT_OLD) != 0)
 			{
 				int currentMenu = menuSystemGetCurrentMenuNumber();
 
@@ -1045,7 +1066,7 @@ void applicationMainTask(void)
 						else
 						{
 							button_event = EVENT_BUTTON_NONE;
-							buttons &= ~BUTTON_PTT;
+							buttons &= ~BUTTON_PTT_OLD;
 						}
 					}
 				}
@@ -1056,7 +1077,7 @@ void applicationMainTask(void)
 		function_event = NO_EVENT;
 		keyFunction = NO_EVENT;
 		int currentMenu = menuSystemGetCurrentMenuNumber();
-		if (KEYCHECK_SHORTUP_NUMBER(keys) && (buttons & BUTTON_SK2) && ((currentMenu == UI_VFO_MODE) || (currentMenu == UI_CHANNEL_MODE)))
+		if (KEYCHECK_SHORTUP_NUMBER(keys) && (buttons & BUTTON_SK2_OLD) && ((currentMenu == UI_VFO_MODE) || (currentMenu == UI_CHANNEL_MODE)))
 		{
 			keyFunction = codeplugGetQuickkeyFunctionID(keys.key);
 			int menuFunction = QUICKKEY_MENUID(keyFunction);
@@ -1216,7 +1237,7 @@ void applicationMainTask(void)
 
 
 		// Clear the Quickkey slot on SK2 + longdown 0..9 KEY
-		if (KEYCHECK_LONGDOWN_NUMBER(ev.keys) && BUTTONCHECK_DOWN(&ev, BUTTON_SK2))
+		if (KEYCHECK_LONGDOWN_NUMBER(ev.keys) && BUTTONCHECK_DOWN(&ev, BUTTON_SK2_OLD))
 		{
 			// Only allow quick keys to be cleared on the 2 main screens
 			if (currentMenu == UI_CHANNEL_MODE || currentMenu == UI_VFO_MODE)
@@ -1270,7 +1291,7 @@ void applicationMainTask(void)
 			{
 				if ((menuSystemGetCurrentMenuNumber() != UI_SPLASH_SCREEN) &&
 						((((key_event == EVENT_KEY_CHANGE) || (button_event == EVENT_BUTTON_CHANGE))
-								&& ((buttons & BUTTON_PTT) == 0) && (ev.keys.key != 0))
+								&& ((buttons & BUTTON_PTT_OLD) == 0) && (ev.keys.key != 0))
 								|| (function_event == FUNCTION_EVENT)))
 				{
 					keyBeepHandler(&ev, PTTToggledDown);

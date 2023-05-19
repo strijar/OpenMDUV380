@@ -801,7 +801,7 @@ static void handleEvent(uiEvent_t *ev)
 	{
 		// Key pressed during scanning
 
-		if (BUTTONCHECK_DOWN(ev, BUTTON_SK2) == 0)
+		if (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD) == 0)
 		{
 			// if we are scanning and down key is pressed then enter current channel into nuisance delete array.
 			if((uiDataGlobal.Scan.state == SCAN_PAUSED) && (ev->keys.key == KEY_STAR))
@@ -830,7 +830,7 @@ static void handleEvent(uiEvent_t *ev)
 		}
 		// stop the scan on any button except UP without Shift (allows scan to be manually continued)
 		// or SK2 on its own (allows Backlight to be triggered)
-		if (((ev->keys.key == KEY_FRONT_UP) && BUTTONCHECK_DOWN(ev, BUTTON_SK2) == 0) == false)
+		if (((ev->keys.key == KEY_FRONT_UP) && BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD) == 0) == false)
 		{
 			scanStop(true);
 			keyboardReset();
@@ -877,7 +877,7 @@ static void handleEvent(uiEvent_t *ev)
 		uint32_t tg = (LinkHead->talkGroupOrPcId & 0xFFFFFF);
 
 		// If Blue button is pressed during reception it sets the Tx TG to the incoming TG
-		if (uiDataGlobal.isDisplayingQSOData && BUTTONCHECK_SHORTUP(ev, BUTTON_SK2) && (trxGetMode() == RADIO_MODE_DIGITAL) &&
+		if (uiDataGlobal.isDisplayingQSOData && BUTTONCHECK_SHORTUP(ev, BUTTON_SK2_OLD) && (trxGetMode() == RADIO_MODE_DIGITAL) &&
 				((trxTalkGroupOrPcId != tg) ||
 						((dmrMonitorCapturedTS != -1) && (dmrMonitorCapturedTS != trxGetDMRTimeSlot())) ||
 						(trxGetDMRColourCode() != currentChannelData->txColor)))
@@ -909,7 +909,7 @@ static void handleEvent(uiEvent_t *ev)
 		}
 
 		// Display channel settings (RX/TX/etc) while SK1 is pressed
-		if ((uiDataGlobal.displayChannelSettings == false) && BUTTONCHECK_DOWN(ev, BUTTON_SK1))
+		if ((uiDataGlobal.displayChannelSettings == false) && BUTTONCHECK_DOWN(ev, BUTTON_SK1_OLD))
 		{
 			if (uiDataGlobal.Scan.active == false)
 			{
@@ -922,7 +922,7 @@ static void handleEvent(uiEvent_t *ev)
 			return;
 
 		}
-		else if ((uiDataGlobal.displayChannelSettings == true) && (BUTTONCHECK_DOWN(ev, BUTTON_SK1) == 0))
+		else if ((uiDataGlobal.displayChannelSettings == true) && (BUTTONCHECK_DOWN(ev, BUTTON_SK1_OLD) == 0))
 		{
 			uiDataGlobal.displayChannelSettings = false;
 			uiDataGlobal.displayQSOState = uiDataGlobal.displayQSOStatePrev;
@@ -942,9 +942,9 @@ static void handleEvent(uiEvent_t *ev)
 		}
 
 #if !defined(PLATFORM_RD5R)
-		if (BUTTONCHECK_SHORTUP(ev, BUTTON_ORANGE) && (BUTTONCHECK_DOWN(ev, BUTTON_SK1) == 0))
+		if (BUTTONCHECK_SHORTUP(ev, BUTTON_ORANGE) && (BUTTONCHECK_DOWN(ev, BUTTON_SK1_OLD) == 0))
 		{
-			if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+			if (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 			{
 				announceItem(PROMPT_SEQUENCE_BATTERY, AUDIO_PROMPT_MODE_VOICE_LEVEL_1);
 			}
@@ -1021,7 +1021,7 @@ static void handleEvent(uiEvent_t *ev)
 				uiDataGlobal.displayQSOState = QSO_DISPLAY_DEFAULT_SCREEN;
 				uiChannelModeUpdateScreen(0);
 			}
-			else if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+			else if (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 			{
 				menuSystemPushNewMenu(MENU_CHANNEL_DETAILS);
 			}
@@ -1033,7 +1033,7 @@ static void handleEvent(uiEvent_t *ev)
 		}
 		else if (KEYCHECK_SHORTUP(ev->keys, KEY_HASH))
 		{
-			if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+			if (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 			{
 				// Assignment for SK2 + #
 				menuSystemPushNewMenu(MENU_CONTACT_QUICKLIST);
@@ -1046,7 +1046,7 @@ static void handleEvent(uiEvent_t *ev)
 		}
 		else if (KEYCHECK_SHORTUP(ev->keys, KEY_RED))
 		{
-			if (BUTTONCHECK_DOWN(ev, BUTTON_SK2) && (uiDataGlobal.tgBeforePcMode != 0))
+			if (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD) && (uiDataGlobal.tgBeforePcMode != 0))
 			{
 				settingsSet(nonVolatileSettings.overrideTG, uiDataGlobal.tgBeforePcMode);
 				menuPrivateCallClear();
@@ -1082,9 +1082,9 @@ static void handleEvent(uiEvent_t *ev)
 		}
 #endif
 #if defined(PLATFORM_RD5R)
-		else if (KEYCHECK_LONGDOWN(ev->keys, KEY_VFO_MR) && (BUTTONCHECK_DOWN(ev, BUTTON_SK1) == 0))
+		else if (KEYCHECK_LONGDOWN(ev->keys, KEY_VFO_MR) && (BUTTONCHECK_DOWN(ev, BUTTON_SK1_) == 0))
 		{
-			if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+			if (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 			{
 				announceItem(PROMPT_SEQUENCE_BATTERY, AUDIO_PROMPT_MODE_VOICE_LEVEL_1);
 			}
@@ -1102,7 +1102,7 @@ static void handleEvent(uiEvent_t *ev)
 			return;
 		}
 #endif
-		else if (KEYCHECK_LONGDOWN(ev->keys, KEY_FRONT_UP) && BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+		else if (KEYCHECK_LONGDOWN(ev->keys, KEY_FRONT_UP) && BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 		{
 			// Long press allows the 5W+ power setting to be selected immediately
 			if (increasePowerLevel(true))
@@ -1118,7 +1118,7 @@ static void handleEvent(uiEvent_t *ev)
 			}
 			else
 			{
-				if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+				if (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 				{
 					if (increasePowerLevel(false))
 					{
@@ -1177,7 +1177,7 @@ static void handleEvent(uiEvent_t *ev)
 		}
 		else if (KEYCHECK_SHORTUP(ev->keys, KEY_FRONT_DOWN))
 		{
-			if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+			if (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 			{
 				if (decreasePowerLevel())
 				{
@@ -1247,7 +1247,7 @@ static void handleEvent(uiEvent_t *ev)
 		}
 		else if (KEYCHECK_SHORTUP(ev->keys, KEY_STAR))
 		{
-			if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))  // Toggle Channel Mode
+			if (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))  // Toggle Channel Mode
 			{
 				if (trxGetMode() == RADIO_MODE_ANALOG)
 				{
@@ -1312,7 +1312,7 @@ static void handleEvent(uiEvent_t *ev)
 				}
 			}
 		}
-		else if (KEYCHECK_LONGDOWN(ev->keys, KEY_STAR) && (BUTTONCHECK_DOWN(ev, BUTTON_SK2) == 0))
+		else if (KEYCHECK_LONGDOWN(ev->keys, KEY_STAR) && (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD) == 0))
 		{
 			if (trxGetMode() == RADIO_MODE_DIGITAL)
 			{
@@ -1363,7 +1363,7 @@ static void handleEvent(uiEvent_t *ev)
 			handleUpKey(ev);
 			return;
 		}
-		else if (KEYCHECK_LONGDOWN(ev->keys, KEY_FRONT_UP) && (BUTTONCHECK_DOWN(ev, BUTTON_SK2) == 0))
+		else if (KEYCHECK_LONGDOWN(ev->keys, KEY_FRONT_UP) && (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD) == 0))
 		{
 			if (uiDataGlobal.Scan.active == false)
 			{
@@ -1375,7 +1375,7 @@ static void handleEvent(uiEvent_t *ev)
 		{
 			int keyval = menuGetKeypadKeyValue(ev, true);
 
-			if ((keyval < 10) && (!BUTTONCHECK_DOWN(ev, BUTTON_SK2)))
+			if ((keyval < 10) && (!BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD)))
 			{
 				directChannelNumber = (directChannelNumber * 10) + keyval;
 				if (CODEPLUG_ZONE_IS_ALLCHANNELS(currentZone))
@@ -1463,7 +1463,7 @@ static void selectPrevNextZone(bool nextZone)
 
 static void handleUpKey(uiEvent_t *ev)
 {
-	if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+	if (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 	{
 		selectPrevNextZone(true);
 		menuSystemPopAllAndDisplaySpecificRootMenu(UI_CHANNEL_MODE, false);
@@ -1552,7 +1552,7 @@ static void handleUpKey(uiEvent_t *ev)
 
 static void handleDownKey(uiEvent_t *ev)
 {
-	if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+	if (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 	{
 		selectPrevNextZone(false);
 		menuSystemPopAllAndDisplaySpecificRootMenu(UI_CHANNEL_MODE, false);
@@ -1860,7 +1860,7 @@ static void handleQuickMenuEvent(uiEvent_t *ev)
 	bool isDirty = false;
 	bool executingQuickKey = false;
 
-	if ((menuDataGlobal.menuOptionsTimeout > 0) && (!BUTTONCHECK_DOWN(ev, BUTTON_SK2)))
+	if ((menuDataGlobal.menuOptionsTimeout > 0) && (!BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD)))
 	{
 		menuDataGlobal.menuOptionsTimeout--;
 		if (menuDataGlobal.menuOptionsTimeout == 0)
@@ -2013,7 +2013,7 @@ static void handleQuickMenuEvent(uiEvent_t *ev)
 			menuSystemPopPreviousMenu();
 			return;
 		}
-		else if (KEYCHECK_SHORTUP_NUMBER(ev->keys) && BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+		else if (KEYCHECK_SHORTUP_NUMBER(ev->keys) && BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 		{
 			isDirty = true;
 			menuDataGlobal.menuOptionsSetQuickkey = ev->keys.key;
@@ -2877,7 +2877,7 @@ static void handleEventForGD77S(uiEvent_t *ev)
 
 	if (ev->events & BUTTON_EVENT)
 	{
-		if (dtmfSequenceIsKeying() && (ev->buttons & (BUTTON_SK1 | BUTTON_SK2 | BUTTON_ORANGE)))
+		if (dtmfSequenceIsKeying() && (ev->buttons & (BUTTON_SK1_ | BUTTON_SK2_OLD | BUTTON_ORANGE)))
 		{
 			dtmfSequenceStop();
 		}
@@ -2989,7 +2989,7 @@ static void handleEventForGD77S(uiEvent_t *ev)
 				voicePromptsPlay();
 			}
 		}
-		else if (BUTTONCHECK_LONGDOWN(ev, BUTTON_SK1) && (monitorModeData.isEnabled == false) && (uiDataGlobal.DTMFContactList.isKeying == false))
+		else if (BUTTONCHECK_LONGDOWN(ev, BUTTON_SK1_) && (monitorModeData.isEnabled == false) && (uiDataGlobal.DTMFContactList.isKeying == false))
 		{
 			if (GD77SParameters.channelOutOfBounds == false)
 			{
@@ -2998,7 +2998,7 @@ static void handleEventForGD77S(uiEvent_t *ev)
 				voicePromptsPlay();
 			}
 		}
-		else if (BUTTONCHECK_SHORTUP(ev, BUTTON_SK1) && (uiDataGlobal.DTMFContactList.isKeying == false))
+		else if (BUTTONCHECK_SHORTUP(ev, BUTTON_SK1_) && (uiDataGlobal.DTMFContactList.isKeying == false))
 		{
 			switch (GD77SParameters.uiMode)
 			{
@@ -3146,12 +3146,12 @@ static void handleEventForGD77S(uiEvent_t *ev)
 					break;
 			}
 		}
-		else if (BUTTONCHECK_LONGDOWN(ev, BUTTON_SK2) && (monitorModeData.isEnabled == false) && (uiDataGlobal.DTMFContactList.isKeying == false))
+		else if (BUTTONCHECK_LONGDOWN(ev, BUTTON_SK2_OLD) && (monitorModeData.isEnabled == false) && (uiDataGlobal.DTMFContactList.isKeying == false))
 		{
 			uint32_t tg = (LinkHead->talkGroupOrPcId & 0xFFFFFF);
 
 			// If Blue button is long pressed during reception it sets the Tx TG to the incoming TG
-			if (uiDataGlobal.isDisplayingQSOData && BUTTONCHECK_DOWN(ev, BUTTON_SK2) && (trxGetMode() == RADIO_MODE_DIGITAL) &&
+			if (uiDataGlobal.isDisplayingQSOData && BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD) && (trxGetMode() == RADIO_MODE_DIGITAL) &&
 					((trxTalkGroupOrPcId != tg) ||
 							((dmrMonitorCapturedTS != -1) && (dmrMonitorCapturedTS != trxGetDMRTimeSlot())) ||
 							(trxGetDMRColourCode() != currentChannelData->rxColor)))
@@ -3188,7 +3188,7 @@ static void handleEventForGD77S(uiEvent_t *ev)
 				return;
 			}
 		}
-		else if (BUTTONCHECK_SHORTUP(ev, BUTTON_SK2) && (uiDataGlobal.DTMFContactList.isKeying == false))
+		else if (BUTTONCHECK_SHORTUP(ev, BUTTON_SK2_OLD) && (uiDataGlobal.DTMFContactList.isKeying == false))
 		{
 			switch (GD77SParameters.uiMode)
 			{

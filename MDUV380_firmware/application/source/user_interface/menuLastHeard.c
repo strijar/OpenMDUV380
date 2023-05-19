@@ -216,7 +216,7 @@ void menuLastHeardHandleEvent(uiEvent_t *ev)
 
 	if (uiDataGlobal.lastHeardCount > 0)
 	{
-		if (KEYCHECK_SHORTUP(ev->keys, KEY_DOWN) && (BUTTONCHECK_DOWN(ev, BUTTON_SK2) == 0))
+		if (KEYCHECK_SHORTUP(ev->keys, KEY_DOWN) && (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD) == 0))
 		{
 			if (menuDataGlobal.currentItemIndex < (uiDataGlobal.lastHeardCount - 1))
 			{
@@ -238,7 +238,7 @@ void menuLastHeardHandleEvent(uiEvent_t *ev)
 				menuLastHeardExitCode |= MENU_STATUS_LIST_TYPE;
 			}
 		}
-		else if (KEYCHECK_SHORTUP(ev->keys, KEY_DOWN) && BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+		else if (KEYCHECK_SHORTUP(ev->keys, KEY_DOWN) && BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 		{
 			isDirty = true;
 			menuDataGlobal.currentItemIndex = (uiDataGlobal.lastHeardCount - 1);
@@ -249,7 +249,7 @@ void menuLastHeardHandleEvent(uiEvent_t *ev)
 				menuLastHeardExitCode |= MENU_STATUS_LIST_TYPE;
 			}
 		}
-		else if (KEYCHECK_SHORTUP(ev->keys, KEY_UP) && (BUTTONCHECK_DOWN(ev, BUTTON_SK2) == 0))
+		else if (KEYCHECK_SHORTUP(ev->keys, KEY_UP) && (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD) == 0))
 		{
 			if (menuDataGlobal.currentItemIndex > 0)
 			{
@@ -267,7 +267,7 @@ void menuLastHeardHandleEvent(uiEvent_t *ev)
 				menuLastHeardExitCode |= MENU_STATUS_LIST_TYPE;
 			}
 		}
-		else if (KEYCHECK_SHORTUP(ev->keys, KEY_UP) && BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+		else if (KEYCHECK_SHORTUP(ev->keys, KEY_UP) && BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 		{
 			menuDataGlobal.currentItemIndex = 0;
 			isDirty = true;
@@ -289,7 +289,7 @@ void menuLastHeardHandleEvent(uiEvent_t *ev)
 			menuSystemPopAllAndDisplayRootMenu();
 			return;
 		}
-		else if (KEYCHECK_LONGDOWN(ev->keys, KEY_HASH) && (BUTTONCHECK_DOWN(ev, (BUTTON_SK1 | BUTTON_SK2)) == 0)) // Clear LH list
+		else if (KEYCHECK_LONGDOWN(ev->keys, KEY_HASH) && (BUTTONCHECK_DOWN(ev, (BUTTON_SK1_OLD | BUTTON_SK2_OLD)) == 0)) // Clear LH list
 		{
 			if (currentMenu == MENU_LAST_HEARD) // Only allowed within LH menu
 			{
@@ -309,19 +309,19 @@ void menuLastHeardHandleEvent(uiEvent_t *ev)
 			menuSystemPopPreviousMenu();
 			return;
 		}
-		else if (KEYCHECK_SHORTUP_NUMBER(ev->keys) && (BUTTONCHECK_DOWN(ev, BUTTON_SK2)))
+		else if (KEYCHECK_SHORTUP_NUMBER(ev->keys) && (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD)))
 		{
 			saveQuickkeyMenuIndex(ev->keys.key, menuSystemGetCurrentMenuNumber(), 0, 0);
 			return;
 		}
 
 		// Toggles LH simple/details view on SK2 long press
-		if (!displayLHDetails && BUTTONCHECK_LONGDOWN(ev, BUTTON_SK2))
+		if (!displayLHDetails && BUTTONCHECK_LONGDOWN(ev, BUTTON_SK2_OLD))
 		{
 			isDirty = true;
 			displayLHDetails = true;
 		}
-		else if (displayLHDetails && (BUTTONCHECK_DOWN(ev, BUTTON_SK2) == 0))
+		else if (displayLHDetails && (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD) == 0))
 		{
 			isDirty = true;
 			displayLHDetails = false;

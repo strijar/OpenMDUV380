@@ -641,7 +641,7 @@ static void handleEvent(uiEvent_t *ev)
 	struct_codeplugRxGroup_t rxGroupBuf;
 	//bool isDirty = false;
 
-	if ((menuDataGlobal.menuOptionsTimeout > 0) && (!BUTTONCHECK_DOWN(ev, BUTTON_SK2)))
+	if ((menuDataGlobal.menuOptionsTimeout > 0) && (!BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD)))
 	{
 		menuDataGlobal.menuOptionsTimeout--;
 		if (menuDataGlobal.menuOptionsTimeout == 0)
@@ -669,7 +669,7 @@ static void handleEvent(uiEvent_t *ev)
 
 	if (ev->events & BUTTON_EVENT)
 	{
-		if (BUTTONCHECK_SHORTUP(ev, BUTTON_SK1))
+		if (BUTTONCHECK_SHORTUP(ev, BUTTON_SK1_OLD))
 		{
 			if (menuDataGlobal.currentItemIndex == CH_DETAILS_RXCSS)
 			{
@@ -745,7 +745,7 @@ static void handleEvent(uiEvent_t *ev)
 
 		if ((uiDataGlobal.FreqEnter.index < 8))
 		{
-			if (!BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+			if (!BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 			{
 				int keyval = menuGetKeypadKeyValue(ev, true);
 
@@ -837,7 +837,7 @@ static void handleEvent(uiEvent_t *ev)
 			menuSystemPopPreviousMenu();
 			return;
 		}
-		else if (KEYCHECK_SHORTUP_NUMBER(ev->keys) && BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+		else if (KEYCHECK_SHORTUP_NUMBER(ev->keys) && BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 		{
 			menuDataGlobal.menuOptionsSetQuickkey = ev->keys.key;
 			updateScreen(false, false);
@@ -871,7 +871,7 @@ static void handleEvent(uiEvent_t *ev)
 				case CH_DETAILS_NAME:
 					if (uiDataGlobal.currentSelectedChannelNumber != CH_DETAILS_VFO_CHANNEL)
 					{
-						moveCursorRightInString(channelName, &namePos, 16, BUTTONCHECK_DOWN(ev, BUTTON_SK2));
+						moveCursorRightInString(channelName, &namePos, 16, BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD));
 						updateCursor(true);
 						allowedToSpeakUpdate = (strlen(channelName) == 0);
 					}
@@ -1053,7 +1053,7 @@ static void handleEvent(uiEvent_t *ev)
 				case CH_DETAILS_NAME:
 					if (uiDataGlobal.currentSelectedChannelNumber != CH_DETAILS_VFO_CHANNEL)
 					{
-						moveCursorLeftInString(channelName, &namePos, BUTTONCHECK_DOWN(ev, BUTTON_SK2));
+						moveCursorLeftInString(channelName, &namePos, BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD));
 						updateCursor(true);
 						allowedToSpeakUpdate = (strlen(channelName) == 0);
 					}
@@ -1220,7 +1220,7 @@ static void handleEvent(uiEvent_t *ev)
 
 			updateScreen(false, allowedToSpeakUpdate);
 		}
-		else if (!BUTTONCHECK_DOWN(ev, BUTTON_SK2) && (menuDataGlobal.currentItemIndex == CH_DETAILS_NAME) && (uiDataGlobal.currentSelectedChannelNumber != CH_DETAILS_VFO_CHANNEL))
+		else if (!BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD) && (menuDataGlobal.currentItemIndex == CH_DETAILS_NAME) && (uiDataGlobal.currentSelectedChannelNumber != CH_DETAILS_VFO_CHANNEL))
 		{
 			// vk3kyy - Commented this out, as BUTTON_SK2 is now changed in the enclosing if, as this was needed so that QuicKeys worked (see also next comment below)
 			//if (!BUTTONCHECK_DOWN(ev, BUTTON_SK2))
@@ -1292,7 +1292,7 @@ static void handleEvent(uiEvent_t *ev)
 
 static void cssIncrementFromEvent(uiEvent_t *ev, uint16_t *tone, uint8_t *index, CodeplugCSSTypes_t *type)
 {
-	if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+	if (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 	{
 		switch (*type)
 		{
@@ -1347,7 +1347,7 @@ static void cssIncrementFromEvent(uiEvent_t *ev, uint16_t *tone, uint8_t *index,
 
 static void cssDecrementFromEvent(uiEvent_t *ev, uint16_t *tone, uint8_t *index, CodeplugCSSTypes_t *type)
 {
-	if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+	if (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 	{
 		switch (*type)
 		{
@@ -1412,7 +1412,7 @@ static void saveChanges(uiEvent_t *ev)
 	// uiDataGlobal.currentSelectedChannelNumber is -1 when in VFO mode
 	// But the VFO is stored in the nonVolatile settings, and not saved back to the codeplug
 	// Also don't store this back to the codeplug unless the Function key (Blue / SK2 ) is pressed at the same time.
-	if (!(ev->events & FUNCTION_EVENT) && ((uiDataGlobal.currentSelectedChannelNumber != CH_DETAILS_VFO_CHANNEL) && BUTTONCHECK_DOWN(ev, BUTTON_SK2)))
+	if (!(ev->events & FUNCTION_EVENT) && ((uiDataGlobal.currentSelectedChannelNumber != CH_DETAILS_VFO_CHANNEL) && BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD)))
 	{
 		codeplugChannelSaveDataForIndex(uiDataGlobal.currentSelectedChannelNumber, currentChannelData);
 	}

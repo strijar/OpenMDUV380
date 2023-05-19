@@ -826,12 +826,12 @@ static void handleEvent(uiEvent_t *ev)
 			return;
 		}
 
-		if ((pureBatteryLevel == false) && BUTTONCHECK_EXTRALONGDOWN(ev, BUTTON_SK2))
+		if ((pureBatteryLevel == false) && BUTTONCHECK_EXTRALONGDOWN(ev, BUTTON_SK2_OLD))
 		{
 			pureBatteryLevel = true;
 			updateScreen(ev, true);
 		}
-		else if (pureBatteryLevel && (BUTTONCHECK_EXTRALONGDOWN(ev, BUTTON_SK2) == 0))
+		else if (pureBatteryLevel && (BUTTONCHECK_EXTRALONGDOWN(ev, BUTTON_SK2_OLD) == 0))
 		{
 			pureBatteryLevel = false;
 			updateScreen(ev, true);
@@ -933,7 +933,7 @@ static void handleEvent(uiEvent_t *ev)
 									// alarm
 									uiDataGlobal.SatelliteAndAlarmData.alarmTime = newTime;
 
-									if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+									if (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 									{
 										uiDataGlobal.SatelliteAndAlarmData.alarmType = ALARM_TYPE_CLOCK;
 										powerOffFinalStage(true, false);
@@ -980,7 +980,7 @@ static void handleEvent(uiEvent_t *ev)
 					{
 						char buf[2] = { 0, 0 };
 
-						if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+						if (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 						{
 							latLonIsWesternHemisphere = true;
 							buf[0] = LanguageGetSymbol(latLonIsWesternHemisphere ? SYMBOLS_WEST : SYMBOLS_EAST);
@@ -1012,7 +1012,7 @@ static void handleEvent(uiEvent_t *ev)
 					{
 						char buf[2] = { 0, 0 };
 
-						if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+						if (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 						{
 							latLonIsWesternHemisphere = false;
 							buf[0] = LanguageGetSymbol(latLonIsWesternHemisphere ? SYMBOLS_WEST : SYMBOLS_EAST);
@@ -1314,7 +1314,7 @@ static void handleEvent(uiEvent_t *ev)
 	}
 
 
-	if (KEYCHECK_SHORTUP_NUMBER(ev->keys) && (BUTTONCHECK_DOWN(ev, BUTTON_SK2)))
+	if (KEYCHECK_SHORTUP_NUMBER(ev->keys) && (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD)))
 	{
 		saveQuickkeyMenuIndex(ev->keys.key, menuSystemGetCurrentMenuNumber(), displayMode, 0);
 		return;

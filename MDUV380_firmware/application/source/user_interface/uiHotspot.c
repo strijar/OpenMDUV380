@@ -488,7 +488,7 @@ static bool handleEvent(uiEvent_t *ev)
 	if (ev->events & BUTTON_EVENT)
 	{
 		// Display HS FW version
-		if ((displayFWVersion == false) && (ev->buttons == BUTTON_SK1))
+		if ((displayFWVersion == false) && (ev->buttons == BUTTON_SK1_OLD))
 		{
 			uint8_t prevRxCmd = hotspotCurrentRxCommandState;
 
@@ -497,7 +497,7 @@ static bool handleEvent(uiEvent_t *ev)
 			hotspotCurrentRxCommandState = prevRxCmd;
 			return true;
 		}
-		else if (displayFWVersion && ((ev->buttons & BUTTON_SK1) == 0))
+		else if (displayFWVersion && ((ev->buttons & BUTTON_SK1_OLD) == 0))
 		{
 			displayFWVersion = false;
 			uiHotspotUpdateScreen(hotspotCurrentRxCommandState);

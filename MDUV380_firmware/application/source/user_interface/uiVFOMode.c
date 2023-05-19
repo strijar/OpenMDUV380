@@ -279,7 +279,7 @@ menuStatus_t uiVFOMode(uiEvent_t *ev, bool isFirstRun)
 				if (uiDataGlobal.Scan.toneActive)
 				{
 					// Left key (alone) reverse tone scan direction
-					if ((ev->events & KEY_EVENT) && (BUTTONCHECK_DOWN(ev, BUTTON_SK2) == 0))
+					if ((ev->events & KEY_EVENT) && (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD) == 0))
 					{
 						if (KEYCHECK_SHORTUP(ev->keys, KEY_FRONT_DOWN))
 						{
@@ -789,7 +789,7 @@ static void handleEvent(uiEvent_t *ev)
 {
 	if (uiDataGlobal.Scan.active && (ev->events & KEY_EVENT))
 	{
-		if (BUTTONCHECK_DOWN(ev, BUTTON_SK2) == 0)
+		if (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD) == 0)
 		{
 			// Right key sets the current frequency as a 'nuisance' frequency.
 			if((uiDataGlobal.Scan.state == SCAN_PAUSED) && (ev->keys.key == KEY_STAR) &&
@@ -818,7 +818,7 @@ static void handleEvent(uiEvent_t *ev)
 
 		// Stop the scan on any key except UP without SK2 (allows scan to be manually continued)
 		// or SK2 on its own (allows Backlight to be triggered)
-		if ((((ev->keys.key == KEY_FRONT_UP) && (BUTTONCHECK_DOWN(ev, BUTTON_SK2) == 0) && (screenOperationMode[nonVolatileSettings.currentVFONumber] == VFO_SCREEN_OPERATION_SCAN)) == false) &&
+		if ((((ev->keys.key == KEY_FRONT_UP) && (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD) == 0) && (screenOperationMode[nonVolatileSettings.currentVFONumber] == VFO_SCREEN_OPERATION_SCAN)) == false) &&
 			((((ev->keys.key == KEY_ROTARY_INCREMENT) || (ev->keys.key == KEY_ROTARY_DECREMENT) || (ev->keys.key == KEY_FRONT_UP) || (ev->keys.key == KEY_FRONT_DOWN)) &&
 						(screenOperationMode[nonVolatileSettings.currentVFONumber] == VFO_SCREEN_OPERATION_SWEEP)) == false))
 		{
@@ -876,7 +876,7 @@ static void handleEvent(uiEvent_t *ev)
 		uint32_t tg = (LinkHead->talkGroupOrPcId & 0xFFFFFF);
 
 		// If Blue button is pressed during reception it sets the Tx TG to the incoming TG
-		if (uiDataGlobal.isDisplayingQSOData && BUTTONCHECK_SHORTUP(ev, BUTTON_SK2) && (trxGetMode() == RADIO_MODE_DIGITAL) &&
+		if (uiDataGlobal.isDisplayingQSOData && BUTTONCHECK_SHORTUP(ev, BUTTON_SK2_OLD) && (trxGetMode() == RADIO_MODE_DIGITAL) &&
 				((trxTalkGroupOrPcId != tg) ||
 						((dmrMonitorCapturedTS != -1) && (dmrMonitorCapturedTS != trxGetDMRTimeSlot())) ||
 						(trxGetDMRColourCode() != currentChannelData->txColor)))
@@ -907,7 +907,7 @@ static void handleEvent(uiEvent_t *ev)
 			return;
 		}
 
-		if ((uiVFOModeSweepScanning(true) == false) && (uiDataGlobal.reverseRepeaterVFO == false) && (BUTTONCHECK_DOWN(ev, BUTTON_SK1) && BUTTONCHECK_DOWN(ev, BUTTON_SK2)))
+		if ((uiVFOModeSweepScanning(true) == false) && (uiDataGlobal.reverseRepeaterVFO == false) && (BUTTONCHECK_DOWN(ev, BUTTON_SK1_OLD) && BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD)))
 		{
 			trxSetFrequency(currentChannelData->txFreq, currentChannelData->rxFreq, DMR_MODE_DMO);// Swap Tx and Rx freqs but force DMR Active
 			uiDataGlobal.reverseRepeaterVFO = true;
@@ -915,7 +915,7 @@ static void handleEvent(uiEvent_t *ev)
 			uiVFOModeUpdateScreen(0);
 			return;
 		}
-		else if ((uiDataGlobal.reverseRepeaterVFO == true) && (BUTTONCHECK_DOWN(ev, BUTTON_SK2) == 0))
+		else if ((uiDataGlobal.reverseRepeaterVFO == true) && (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD) == 0))
 		{
 			trxSetFrequency(currentChannelData->rxFreq, currentChannelData->txFreq, DMR_MODE_AUTO);
 			uiDataGlobal.reverseRepeaterVFO = false;
@@ -930,7 +930,7 @@ static void handleEvent(uiEvent_t *ev)
 			return;
 		}
 		// Display channel settings (CTCSS, Squelch) while SK1 is pressed
-		else if ((uiDataGlobal.displayChannelSettings == false) && BUTTONCHECK_DOWN(ev, BUTTON_SK1))
+		else if ((uiDataGlobal.displayChannelSettings == false) && BUTTONCHECK_DOWN(ev, BUTTON_SK1_OLD))
 		{
 			if (uiVFOModeSweepScanning(true) == false) // Inactive while sweeping
 			{
@@ -943,7 +943,7 @@ static void handleEvent(uiEvent_t *ev)
 			}
 			return;
 		}
-		else if ((uiDataGlobal.displayChannelSettings == true) && BUTTONCHECK_DOWN(ev, BUTTON_SK1) == 0)
+		else if ((uiDataGlobal.displayChannelSettings == true) && BUTTONCHECK_DOWN(ev, BUTTON_SK1_OLD) == 0)
 		{
 			uiDataGlobal.displayChannelSettings = false;
 			uiDataGlobal.displayQSOState = uiDataGlobal.displayQSOStatePrev;
@@ -972,7 +972,7 @@ static void handleEvent(uiEvent_t *ev)
 #if !defined(PLATFORM_RD5R)
 		if (BUTTONCHECK_SHORTUP(ev, BUTTON_ORANGE))
 		{
-			if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+			if (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 			{
 				announceItem(PROMPT_SEQUENCE_BATTERY, AUDIO_PROMPT_MODE_VOICE_LEVEL_1);
 			}
@@ -998,7 +998,7 @@ static void handleEvent(uiEvent_t *ev)
 
 		if (KEYCHECK_SHORTUP(ev->keys, KEY_GREEN))
 		{
-			if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+			if (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 			{
 				menuSystemPushNewMenu(MENU_CHANNEL_DETAILS);
 				freqEnterReset();
@@ -1051,7 +1051,7 @@ static void handleEvent(uiEvent_t *ev)
 			}
 			else if (KEYCHECK_SHORTUP(ev->keys, KEY_HASH))
 			{
-				if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+				if (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 				{
 					menuSystemPushNewMenu(MENU_CONTACT_QUICKLIST);
 				}
@@ -1065,7 +1065,7 @@ static void handleEvent(uiEvent_t *ev)
 			{
 				if (uiVFOModeSweepScanning(true) == false)
 				{
-					if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+					if (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 					{
 						if (trxGetMode() == RADIO_MODE_ANALOG)
 						{
@@ -1154,7 +1154,7 @@ static void handleEvent(uiEvent_t *ev)
 			}
 			else if(uiVFOModeSweepScanning(true) &&  // Reset Sweep noise floor or Sweep Gain
 					((KEYCHECK_SHORTUP(ev->keys, KEY_DOWN) || KEYCHECK_SHORTUP(ev->keys, KEY_UP) || KEYCHECK_SHORTUP(ev->keys, KEY_ROTARY_INCREMENT) || KEYCHECK_SHORTUP(ev->keys, KEY_ROTARY_DECREMENT)) &&
-							BUTTONCHECK_DOWN(ev, BUTTON_SK1)))
+							BUTTONCHECK_DOWN(ev, BUTTON_SK1_OLD)))
 			{
 				vfoSweepRssiNoiseFloor = VFO_SWEEP_RSSI_NOISE_FLOOR_DEFAULT;
 				vfoSweepGain = VFO_SWEEP_GAIN_DEFAULT;
@@ -1164,7 +1164,7 @@ static void handleEvent(uiEvent_t *ev)
 			else if (KEYCHECK_SHORTUP(ev->keys,KEY_ROTARY_DECREMENT))
 			{
 
-				if (BUTTONCHECK_DOWN(ev, BUTTON_SK2) && uiVFOModeSweepScanning(true))
+				if (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD) && uiVFOModeSweepScanning(true))
 				{
 					setSweepIncDecSetting(SWEEP_SETTING_STEP, false);
 					headerRowIsDirty = true;
@@ -1187,7 +1187,7 @@ static void handleEvent(uiEvent_t *ev)
 			}
 			else if (KEYCHECK_SHORTUP(ev->keys,KEY_ROTARY_INCREMENT))
 			{
-				if (BUTTONCHECK_DOWN(ev, BUTTON_SK2) && uiVFOModeSweepScanning(true))
+				if (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD) && uiVFOModeSweepScanning(true))
 				{
 					setSweepIncDecSetting(SWEEP_SETTING_STEP, true);
 					headerRowIsDirty = true;
@@ -1197,7 +1197,7 @@ static void handleEvent(uiEvent_t *ev)
 					handleUpKey(ev);
 				}
 			}
-			else if ((KEYCHECK_LONGDOWN(ev->keys, KEY_FRONT_UP) && (BUTTONCHECK_DOWN(ev, BUTTON_SK2) == 0)))
+			else if ((KEYCHECK_LONGDOWN(ev->keys, KEY_FRONT_UP) && (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD) == 0)))
 			{
 				if ((screenOperationMode[nonVolatileSettings.currentVFONumber] != VFO_SCREEN_OPERATION_SCAN) &&
 						(screenOperationMode[nonVolatileSettings.currentVFONumber] != VFO_SCREEN_OPERATION_DUAL_SCAN) &&
@@ -1274,7 +1274,7 @@ static void handleEvent(uiEvent_t *ev)
 			}
 			else if (KEYCHECK_SHORTUP(ev->keys, KEY_RED))
 			{
-				if (BUTTONCHECK_DOWN(ev, BUTTON_SK2) && (uiDataGlobal.tgBeforePcMode != 0))
+				if (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD) && (uiDataGlobal.tgBeforePcMode != 0))
 				{
 					settingsSet(nonVolatileSettings.overrideTG, uiDataGlobal.tgBeforePcMode);
 					updateTrxID();
@@ -1307,9 +1307,9 @@ static void handleEvent(uiEvent_t *ev)
 			}
 #endif
 #if defined(PLATFORM_RD5R)
-			else if (KEYCHECK_LONGDOWN(ev->keys, KEY_VFO_MR) && (BUTTONCHECK_DOWN(ev, BUTTON_SK1) == 0))
+			else if (KEYCHECK_LONGDOWN(ev->keys, KEY_VFO_MR) && (BUTTONCHECK_DOWN(ev, BUTTON_SK1_OLD) == 0))
 			{
-				if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+				if (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 				{
 					announceItem(PROMPT_SEQUENCE_BATTERY, AUDIO_PROMPT_MODE_VOICE_LEVEL_1);
 				}
@@ -1327,7 +1327,7 @@ static void handleEvent(uiEvent_t *ev)
 				return;
 			}
 #endif
-			else if (KEYCHECK_LONGDOWN(ev->keys, KEY_FRONT_UP) && BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+			else if (KEYCHECK_LONGDOWN(ev->keys, KEY_FRONT_UP) && BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 			{
 				// Long press allows the 5W+ power setting to be selected immediately
 				if (increasePowerLevel(true))
@@ -1341,7 +1341,7 @@ static void handleEvent(uiEvent_t *ev)
 				if (uiVFOModeSweepScanning(true))
 				{
 					// Sweep BW
-					if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+					if (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 					{
 						setSweepIncDecSetting(SWEEP_SETTING_RSSI, true);
 						return;
@@ -1354,7 +1354,7 @@ static void handleEvent(uiEvent_t *ev)
 				}
 				else
 				{
-					if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+					if (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 					{
 						if (increasePowerLevel(false))
 						{
@@ -1428,7 +1428,7 @@ static void handleEvent(uiEvent_t *ev)
 				if (uiVFOModeSweepScanning(true))
 				{
 					// Sweep BW
-					if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+					if (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 					{
 						setSweepIncDecSetting(SWEEP_SETTING_RSSI, false);
 					}
@@ -1440,7 +1440,7 @@ static void handleEvent(uiEvent_t *ev)
 				}
 				else
 				{
-					if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+					if (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 					{
 						if (decreasePowerLevel())
 						{
@@ -1586,7 +1586,7 @@ static void handleEvent(uiEvent_t *ev)
 					// Not first '0' digit in frequencies: we don't support < 100 MHz
 					((((uiDataGlobal.FreqEnter.index == 0) && (keyval == 0)) == false) &&
 							(((screenOperationMode[nonVolatileSettings.currentVFONumber] == VFO_SCREEN_OPERATION_SCAN) && (uiDataGlobal.FreqEnter.index == 6) && (keyval == 0)) == false)) &&
-							(BUTTONCHECK_DOWN(ev, BUTTON_SK2) == 0))
+							(BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD) == 0))
 			{
 				voicePromptsInit();
 				voicePromptsAppendPrompt(PROMPT_0 +  keyval);
@@ -1685,7 +1685,7 @@ static void handleEvent(uiEvent_t *ev)
 static void handleUpKey(uiEvent_t *ev)
 {
 	uiDataGlobal.displayQSOState = QSO_DISPLAY_DEFAULT_SCREEN;
-	if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+	if (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 	{
 		// Don't permit to switch from RX/TX while scanning
 		if ((screenOperationMode[nonVolatileSettings.currentVFONumber] != VFO_SCREEN_OPERATION_SCAN) &&
@@ -1728,7 +1728,7 @@ static void handleUpKey(uiEvent_t *ev)
 static void handleDownKey(uiEvent_t *ev)
 {
 	uiDataGlobal.displayQSOState = QSO_DISPLAY_DEFAULT_SCREEN;
-	if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+	if (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 	{
 		// Don't permit to switch from RX/TX while scanning
 		if (screenOperationMode[nonVolatileSettings.currentVFONumber] == VFO_SCREEN_OPERATION_NORMAL)
@@ -2364,7 +2364,7 @@ static void handleQuickMenuEvent(uiEvent_t *ev)
 	bool isDirty = false;
 	bool executingQuickKey = false;
 
-	if ((menuDataGlobal.menuOptionsTimeout > 0) && (!BUTTONCHECK_DOWN(ev, BUTTON_SK2)))
+	if ((menuDataGlobal.menuOptionsTimeout > 0) && (!BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD)))
 	{
 		menuDataGlobal.menuOptionsTimeout--;
 		if (menuDataGlobal.menuOptionsTimeout == 0)
@@ -2619,7 +2619,7 @@ static void handleQuickMenuEvent(uiEvent_t *ev)
 			return;
 		}
 #endif
-		else if (KEYCHECK_SHORTUP_NUMBER(ev->keys) && BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+		else if (KEYCHECK_SHORTUP_NUMBER(ev->keys) && BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 		{
 			isDirty = true;
 			menuDataGlobal.menuOptionsSetQuickkey = ev->keys.key;

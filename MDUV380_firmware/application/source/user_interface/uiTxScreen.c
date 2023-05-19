@@ -154,7 +154,7 @@ menuStatus_t menuTxScreen(uiEvent_t *ev, bool isFirstRun)
 
 			if (xmitErrorTimer == 0)
 			{
-				ev->buttons &= ~BUTTON_PTT; // prevent screen lockout if the operator keeps pressing the PTT button.
+				ev->buttons &= ~BUTTON_PTT_OLD; // prevent screen lockout if the operator keeps pressing the PTT button.
 			}
 			else
 			{
@@ -256,7 +256,7 @@ menuStatus_t menuTxScreen(uiEvent_t *ev, bool isFirstRun)
 			}
 
 			keepScreenShownOnError = false;
-			ev->buttons &= ~BUTTON_PTT; // prevent screen lockout if the operator keeps pressing the PTT button.
+			ev->buttons &= ~BUTTON_PTT_OLD; // prevent screen lockout if the operator keeps pressing the PTT button.
 		}
 
 		// Once the PTT key has been released, it is forbidden to re-key before the whole TX chain
@@ -264,21 +264,21 @@ menuStatus_t menuTxScreen(uiEvent_t *ev, bool isFirstRun)
 		// That's important in DMR mode, otherwise quickly press/release the PTT key will left
 		// the system in an unexpected state (RED led on, displayed TXScreen, but PA off).
 		// It doesn't have any impact on FM mode.
-		if (((ev->buttons & BUTTON_PTT) == 0) && (pttWasReleased == false))
+		if (((ev->buttons & BUTTON_PTT_OLD) == 0) && (pttWasReleased == false))
 		{
 			pttWasReleased = true;
 		}
 
-		if ((ev->buttons & BUTTON_PTT) && pttWasReleased)
+		if ((ev->buttons & BUTTON_PTT_OLD) && pttWasReleased)
 		{
-			ev->buttons &= ~BUTTON_PTT;
+			ev->buttons &= ~BUTTON_PTT_OLD;
 		}
 		//
 
 
 		// Got an event, or
 		if (ev->hasEvent || // PTT released, Timeout triggered,
-				( (((ev->buttons & BUTTON_PTT) == 0) || ((currentChannelData->tot != 0) && (timeInSeconds == 0))) ||
+				( (((ev->buttons & BUTTON_PTT_OLD) == 0) || ((currentChannelData->tot != 0) && (timeInSeconds == 0))) ||
 						// or waiting for DMR ending (meanwhile, updating every 100ms)
 						((trxTransmissionEnabled == false) && ((ev->time - m) > 100))))
 		{
@@ -334,7 +334,7 @@ static void updateScreen(void)
 static void handleEvent(uiEvent_t *ev)
 {
 	// Xmiting ends (normal or timeouted)
-	if (((ev->buttons & BUTTON_PTT) == 0)
+	if (((ev->buttons & BUTTON_PTT_OLD) == 0)
 			|| ((currentChannelData->tot != 0) && (timeInSeconds == 0)))
 	{
 		if (trxTransmissionEnabled)
@@ -413,10 +413,10 @@ static void handleEvent(uiEvent_t *ev)
 	}
 
 	// Key action while xmitting (ANALOG), Tone triggering
-	if (!isTransmittingTone && ((ev->buttons & BUTTON_PTT) != 0) && trxTransmissionEnabled && (trxGetMode() == RADIO_MODE_ANALOG))
+	if (!isTransmittingTone && ((ev->buttons & BUTTON_PTT_OLD) != 0) && trxTransmissionEnabled && (trxGetMode() == RADIO_MODE_ANALOG))
 	{
 		int keyval = menuGetKeypadKeyValue(ev, false);
-		if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+		if (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD))
 		{
 			if (menuSystemGetPreviousMenuNumber() == MENU_SATELLITE)
 			{
@@ -446,7 +446,7 @@ static void handleEvent(uiEvent_t *ev)
 	}
 
 	// Stop xmitting Tone
-	if (isTransmittingTone && (BUTTONCHECK_DOWN(ev, BUTTON_SK2) == 0) && ((ev->keys.key == 0) || (ev->keys.event & KEY_MOD_UP)))
+	if (isTransmittingTone && (BUTTONCHECK_DOWN(ev, BUTTON_SK2_OLD) == 0) && ((ev->keys.key == 0) || (ev->keys.event & KEY_MOD_UP)))
 	{
 		if (menuSystemGetPreviousMenuNumber() == MENU_SATELLITE)
 		{
@@ -465,7 +465,7 @@ static void handleEvent(uiEvent_t *ev)
 	}
 
 #if !defined(PLATFORM_GD77S)
-	if ((trxGetMode() == RADIO_MODE_DIGITAL) && BUTTONCHECK_SHORTUP(ev, BUTTON_SK1) && (trxTransmissionEnabled == true))
+	if ((trxGetMode() == RADIO_MODE_DIGITAL) && BUTTONCHECK_SHORTUP(ev, BUTTON_SK1_OLD) && (trxTransmissionEnabled == true))
 	{
 		isShowingLastHeard = !isShowingLastHeard;
 		if (isShowingLastHeard)
