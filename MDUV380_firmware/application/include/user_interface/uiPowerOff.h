@@ -27,16 +27,10 @@
  *
  */
 
-#ifndef INCLUDE_USER_INTERFACE_STYLES_H_
-#define INCLUDE_USER_INTERFACE_STYLES_H_
 
-#include <lvgl.h>
+#ifndef INCLUDE_USER_INTERFACE_UIPOWEROFF_H_
+#define INCLUDE_USER_INTERFACE_UIPOWEROFF_H_
 
-extern const lv_img_dsc_t	wallpaper;
+void uiPowerOff();
 
-extern const lv_style_t		bottom_item_style;
-extern const lv_style_t		notify_style;
-
-extern const lv_style_t		splash_item_style;
-
-#endif /* INCLUDE_USER_INTERFACE_STYLES_H_ */
+#endif /* INCLUDE_USER_INTERFACE_UIPOWEROFF_H_ */

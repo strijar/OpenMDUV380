@@ -34,6 +34,7 @@
 #include "user_interface/uiLocalisation.h"
 #include "user_interface/menuSystem.h"
 #include "user_interface/uiUtilities.h"
+#include "user_interface/uiPowerOff.h"
 #include "hardware/HR-C6000.h"
 #include "usb/usb_com.h"
 #include "functions/ticks.h"

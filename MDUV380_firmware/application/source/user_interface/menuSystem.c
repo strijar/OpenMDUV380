@@ -133,8 +133,8 @@ static menuFunctionData_t menuFunctions[] =
 		{ uiCPS,                    0 },
 		{ menuNumericalEntry,       0 },
 		{ menuTxScreen,             0 },
-		{ uiSplashScreen,           0 },
-		{ uiPowerOff,               0 },
+		{ NULL,           			0 },	/* Was Splash */
+		{ NULL,               		0 },	/* Was Poweroff	*/
 		{ uiVFOMode,                0 },
 		{ uiChannelMode,            0 },
 		{ menuLockScreen,           0 },

@@ -1307,7 +1307,9 @@ void codeplugGetBootScreenData(char *line1, char *line2, uint8_t *displayType)
 	EEPROM_Read(CODEPLUG_ADDR_BOOT_LINE2, (uint8_t *)line2, (SCREEN_LINE_BUFFER_SIZE - 1));
 	codeplugUtilConvertBufToString(line2, line2, (SCREEN_LINE_BUFFER_SIZE - 1));
 
-	EEPROM_Read(CODEPLUG_ADDR_BOOT_INTRO_SCREEN, displayType, 1);// read the display type
+	if (displayType != NULL) {
+		EEPROM_Read(CODEPLUG_ADDR_BOOT_INTRO_SCREEN, displayType, 1);// read the display type
+	}
 }
 
 

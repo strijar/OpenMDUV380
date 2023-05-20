@@ -27,16 +27,9 @@
  *
  */
 
-#ifndef INCLUDE_USER_INTERFACE_STYLES_H_
-#define INCLUDE_USER_INTERFACE_STYLES_H_
+#ifndef INCLUDE_USER_INTERFACE_UISPLASHSCREEN_H_
+#define INCLUDE_USER_INTERFACE_UISPLASHSCREEN_H_
 
-#include <lvgl.h>
+void uiSplashScreen();
 
-extern const lv_img_dsc_t	wallpaper;
-
-extern const lv_style_t		bottom_item_style;
-extern const lv_style_t		notify_style;
-
-extern const lv_style_t		splash_item_style;
-
-#endif /* INCLUDE_USER_INTERFACE_STYLES_H_ */
+#endif /* INCLUDE_USER_INTERFACE_UISPLASHSCREEN_H_ */

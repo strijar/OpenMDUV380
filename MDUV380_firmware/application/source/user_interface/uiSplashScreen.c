@@ -25,32 +25,50 @@
  * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
+
+#include <lvgl.h>
+#include "user_interface/styles.h"
+
+#include "user_interface/uiSplashScreen.h"
 #include "functions/settings.h"
-#include "user_interface/menuSystem.h"
 #include "user_interface/uiUtilities.h"
 #include "functions/codeplug.h"
 #include "user_interface/uiLocalisation.h"
 #include "functions/ticks.h"
 
-static void updateScreen(void);
-static void handleEvent(uiEvent_t *ev);
-static void exitSplashScreen(void);
+void uiSplashScreen() {
+	lv_obj_t *main_obj = lv_obj_create(NULL);
 
-#if ! defined(PLATFORM_GD77S)
-static bool validatePinCodeCallback(void);
-static void pincodeAudioAlert(void);
-#endif
+	lv_obj_set_style_bg_img_src(main_obj, &wallpaper, LV_PART_MAIN);
 
-const uint32_t SILENT_PROMPT_HOLD_DURATION_MILLISECONDS = 2000;
-static uint32_t initialEventTime;
+	lv_obj_t *obj = lv_label_create(main_obj);
 
-#if ! defined(PLATFORM_GD77S)
-static bool pinHandled = false;
-static int32_t pinCode;
-#endif
+	lv_label_set_text(obj, "OpenMDUV-NG");
+	lv_obj_add_style(obj, &splash_item_style, 0);
+	lv_obj_set_height(obj, 28);
+	lv_obj_set_pos(obj, 2, 2);
 
-menuStatus_t uiSplashScreen(uiEvent_t *ev, bool isFirstRun)
-{
+	/* * */
+
+	char line1[(SCREEN_LINE_BUFFER_SIZE * 2) + 1];
+	char line2[SCREEN_LINE_BUFFER_SIZE];
+
+	codeplugGetBootScreenData(line1, line2, NULL);
+
+	obj = lv_label_create(main_obj);
+
+	lv_label_set_text_fmt(obj, "%s\n%s", line1, line2);
+	lv_obj_add_style(obj, &splash_item_style, 0);
+	lv_obj_set_height(obj, 44);
+	lv_obj_center(obj);
+
+	strcat(line1, " ");
+	strcat(line1, line2);
+	HRC6000SetTalkerAlias(line1);
+
+	lv_scr_load(main_obj);
+
+#if 0
 	uint8_t melodyBuf[512];
 
 	if (isFirstRun)
@@ -122,8 +140,10 @@ menuStatus_t uiSplashScreen(uiEvent_t *ev, bool isFirstRun)
 	}
 
 	return MENU_STATUS_SUCCESS;
+#endif
 }
 
+#if 0
 static void updateScreen(void)
 {
 	char line1[(SCREEN_LINE_BUFFER_SIZE * 2) + 1];
@@ -243,5 +263,7 @@ static void pincodeAudioAlert(void)
 		soundSetMelody(MELODY_ACK_BEEP);
 	}
 }
+
+#endif
 
 #endif
