@@ -316,11 +316,11 @@ static void updateScreen(void)
 	{
 		if (menuSystemGetRootMenuNumber() == UI_VFO_MODE)
 		{
-			uiVFOModeUpdateScreen(timeInSeconds);
+//			uiVFOModeUpdateScreen(timeInSeconds);
 		}
 		else
 		{
-			uiChannelModeUpdateScreen(timeInSeconds);
+//			uiChannelModeUpdateScreen(timeInSeconds);
 		}
 	}
 

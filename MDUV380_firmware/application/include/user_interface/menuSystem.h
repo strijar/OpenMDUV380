@@ -370,9 +370,7 @@ extern const menuItemsList_t 	menuDataMainMenu;
 extern const menuItemsList_t 	menuDataContact;
 extern const menuItemsList_t 	menuDataOptions;
 
-menuStatus_t uiVFOMode(uiEvent_t *event, bool isFirstRun);
 menuStatus_t uiVFOModeQuickMenu(uiEvent_t *event, bool isFirstRun);
-menuStatus_t uiChannelMode(uiEvent_t *event, bool isFirstRun);
 menuStatus_t uiChannelModeQuickMenu(uiEvent_t *event, bool isFirstRun);
 menuStatus_t uiCPS(uiEvent_t *event, bool isFirstRun);
 menuStatus_t menuZoneList(uiEvent_t *event, bool isFirstRun);

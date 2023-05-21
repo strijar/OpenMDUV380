@@ -122,8 +122,8 @@ static menuFunctionData_t menuFunctions[] =
 		{ menuContactListSubMenu,   0 },
 		{ menuContactDetails,       0 },
 		{ menuLanguage,             0 },
-		{ uiChannelModeQuickMenu,   0 },
-		{ uiVFOModeQuickMenu,       0 },
+		{ NULL,   					0 },	/* Was uiChannelModeQuickMenu */
+		{ NULL,       				0 },	/* Was uiVFOModeQuickMenu */
 		{ menuCalibration,          0 },
 		{ menuChannelDetails,       0 },
 		{ menuFirmwareInfoScreen,   0 },
@@ -135,8 +135,8 @@ static menuFunctionData_t menuFunctions[] =
 		{ menuTxScreen,             0 },
 		{ NULL,           			0 },	/* Was Splash */
 		{ NULL,               		0 },	/* Was Poweroff	*/
-		{ uiVFOMode,                0 },
-		{ uiChannelMode,            0 },
+		{ NULL,                		0 },	/* Was VFOMode */
+		{ NULL,            			0 },	/* Was ChannelMode */
 		{ menuLockScreen,           0 },
 		{ menuPrivateCall,          0 },
 		{ menuContactDetails,       0 }, // Contact New
@@ -459,11 +459,6 @@ void menuSystemInit(void)
 
 void menuSystemLanguageHasChanged(void)
 {
-	// Force full update of menuChannelMode() on next call (if isFirstRun arg. is true)
-	if (menuSystemGetRootMenuNumber() == UI_CHANNEL_MODE)
-	{
-		uiChannelModeColdStart();
-	}
 }
 
 const menuItemNewData_t mainMenuItems[] =

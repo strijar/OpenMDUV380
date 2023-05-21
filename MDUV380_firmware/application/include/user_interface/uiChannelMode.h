@@ -27,65 +27,9 @@
  *
  */
 
-#include <lvgl.h>
-#include "user_interface/styles.h"
+#ifndef INCLUDE_USER_INTERFACE_UICHANNELMODE_H_
+#define INCLUDE_USER_INTERFACE_UICHANNELMODE_H_
 
-#include "user_interface/uiSplashScreen.h"
-#include "user_interface/uiChannelMode.h"
-#include "user_interface/uiVFOMode.h"
-#include "functions/settings.h"
-#include "user_interface/uiUtilities.h"
-#include "functions/codeplug.h"
-#include "user_interface/uiLocalisation.h"
-#include "functions/ticks.h"
+void uiChannelMode();
 
-static void timeout(lv_timer_t *t) {
-	switch (nonVolatileSettings.initialMenuNumber) {
-		case UI_CHANNEL_MODE:
-			uiChannelMode();
-			break;
-
-		case UI_VFO_MODE:
-			uiVFOMode();
-			break;
-
-		default:
-			break;
-	}
-}
-
-void uiSplashScreen() {
-	lv_obj_t *main_obj = lv_obj_create(NULL);
-
-	lv_obj_set_style_bg_img_src(main_obj, &wallpaper, LV_PART_MAIN);
-
-	lv_obj_t *obj = lv_label_create(main_obj);
-
-	lv_label_set_text(obj, "OpenMDUV-NG");
-	lv_obj_add_style(obj, &splash_item_style, 0);
-	lv_obj_set_height(obj, 28);
-	lv_obj_set_pos(obj, 2, 2);
-
-	/* * */
-
-	char line1[(SCREEN_LINE_BUFFER_SIZE * 2) + 1];
-	char line2[SCREEN_LINE_BUFFER_SIZE];
-
-	codeplugGetBootScreenData(line1, line2, NULL);
-
-	obj = lv_label_create(main_obj);
-
-	lv_label_set_text_fmt(obj, "%s\n%s", line1, line2);
-	lv_obj_add_style(obj, &splash_item_style, 0);
-	lv_obj_set_height(obj, 44);
-	lv_obj_center(obj);
-
-	strcat(line1, " ");
-	strcat(line1, line2);
-	HRC6000SetTalkerAlias(line1);
-
-	lv_scr_load_anim(main_obj, LV_SCR_LOAD_ANIM_FADE_IN, 250, 0, true);
-
-	lv_timer_t *timer = lv_timer_create(timeout, 3000, NULL);
-	lv_timer_set_repeat_count(timer, 1);
-}
+#endif /* INCLUDE_USER_INTERFACE_UICHANNELMODE_H_ */

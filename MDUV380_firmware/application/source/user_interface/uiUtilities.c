@@ -2477,7 +2477,7 @@ void announceItemWithInit(bool init, voicePromptItem_t item, audioPromptThreshol
 		}
 
 		announceChannelNameOrVFOFrequency(voicePromptWasPlaying, (voicePromptSequenceState != PROMPT_SEQUENCE_VFO_FREQ_UPDATE));
-		if (uiVFOModeFrequencyScanningIsActiveAndEnabled(&lFreq, &hFreq))
+//		if (uiVFOModeFrequencyScanningIsActiveAndEnabled(&lFreq, &hFreq))
 		{
 			voicePromptsAppendPrompt(PROMPT_SCAN_MODE);
 			voicePromptsAppendLanguageString(&currentLanguage->low);
@@ -2737,11 +2737,12 @@ bool repeatVoicePromptOnSK1(uiEvent_t *ev)
 				if (!voicePromptsIsPlaying())
 				{
 					// The following updates the VP buffer, in VFO mode only, and if frequency scanning mode is active
+#if 0
 					if (uiVFOModeFrequencyScanningIsActiveAndEnabled(NULL, NULL) && (voicePromptsDoesItContainPrompt(PROMPT_SCAN_MODE) == false))
 					{
 						voicePromptsAppendPrompt(PROMPT_SCAN_MODE);
 					}
-
+#endif
 					voicePromptsPlay();
 				}
 				else

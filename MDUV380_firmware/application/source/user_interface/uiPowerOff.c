@@ -29,30 +29,50 @@
 
 #include <lvgl.h>
 
+#include "user_interface/uiSplashScreen.h"
+#include "user_interface/uiChannelMode.h"
+#include "user_interface/uiVFOMode.h"
 #include "user_interface/menuSystem.h"
 #include "user_interface/styles.h"
 #include "interfaces/batteryAndPowerManagement.h"
 
-static lv_obj_t	*msg = NULL;
+static bool active = false;
 
 static void timeout(lv_timer_t *t) {
 	if ((LedRead(LED_GREEN) == 0) && (batteryVoltage > CUTOFF_VOLTAGE_LOWER_HYST)) {
-		lv_obj_del(msg);
-		msg = NULL;
-		return;
+		switch (nonVolatileSettings.initialMenuNumber) {
+			case UI_CHANNEL_MODE:
+				uiChannelMode();
+				break;
+
+			case UI_VFO_MODE:
+				uiVFOMode();
+				break;
+
+			default:
+				break;
+		}
+
+		active = false;
+	} else {
+		bool suspend = settingsIsOptionBitSet(BIT_POWEROFF_SUSPEND);
+
+		powerOffFinalStage(suspend, false);
 	}
-
-	bool suspend = settingsIsOptionBitSet(BIT_POWEROFF_SUSPEND);
-
-	powerOffFinalStage(suspend, false);
 }
 
 void uiPowerOff() {
-	if (msg) {
+	if (active) {
 		return;
 	}
 
-	msg = lv_label_create(lv_scr_act());
+	active = true;
+
+	lv_obj_t *main_obj = lv_obj_create(NULL);
+
+	lv_obj_set_style_bg_img_src(main_obj, &wallpaper, LV_PART_MAIN);
+
+	lv_obj_t *msg = lv_label_create(main_obj);
 
 	lv_label_set_text(msg, "QRT 73");
 	lv_obj_set_width(msg, 100);
@@ -60,6 +80,8 @@ void uiPowerOff() {
 	lv_obj_center(msg);
 	lv_obj_add_style(msg, &notify_style, 0);
 
-	lv_timer_t *timer = lv_timer_create(timeout, 500, NULL);
+	lv_timer_t *timer = lv_timer_create(timeout, 250 + 1000, NULL);
 	lv_timer_set_repeat_count(timer, 1);
+
+	lv_scr_load_anim(main_obj, LV_SCR_LOAD_ANIM_FADE_IN, 250, 0, true);
 }

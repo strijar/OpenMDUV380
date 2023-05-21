@@ -287,33 +287,10 @@ static void settingsUpdateAudioAlert(void)
 	}
 }
 
-/*
-static lv_obj_t 			*label;
-
-static void key_cb(lv_event_t * e) {
-	uint32_t key = *((uint32_t*) lv_event_get_param(e));
-
-	lv_label_set_text_fmt(label, "%i", key);
+static void start_timeout(lv_timer_t *t) {
+	uiSplashScreen();
+	displayEnableBacklight(true, 50);
 }
-
-static void button_cb(lv_event_t * e) {
-	event_button_t *event = lv_event_get_param(e);
-
-	switch (event->state) {
-		case BUTTON_PRESS:
-			LedWrite(LED_GREEN, 1);
-			break;
-
-		case BUTTON_LONG:
-			LedWrite(LED_RED, 1);
-			break;
-
-		default:
-			LedWrite(LED_GREEN, 0);
-			LedWrite(LED_RED, 0);
-	}
-}
-*/
 
 void applicationMainTask(void) {
 	int				function_event = 0;
@@ -442,8 +419,10 @@ void applicationMainTask(void) {
 		displayEnableBacklight(true, 100);
 	}
 
-	uiSplashScreen();
-	displayEnableBacklight(true, 50);
+	lv_obj_set_style_bg_opa(lv_scr_act(), LV_OPA_0, 0);
+
+	lv_timer_t *timer = lv_timer_create(start_timeout, 50, NULL);
+	lv_timer_set_repeat_count(timer, 1);
 
 	while (true) {
 		uint32_t now = ticksGetMillis();
