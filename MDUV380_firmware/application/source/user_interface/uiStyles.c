@@ -29,38 +29,39 @@
 
 #include "user_interface/styles.h"
 
-const lv_style_const_prop_t bottom_item_props[] = {
-   LV_STYLE_CONST_TEXT_FONT(&lv_font_18),
+const lv_style_const_prop_t main_props[] = {
    LV_STYLE_CONST_TEXT_COLOR(LV_COLOR_MAKE16(0xFF, 0xFF, 0xFF)),
-   LV_STYLE_CONST_TEXT_ALIGN(LV_TEXT_ALIGN_CENTER),
-   LV_STYLE_CONST_PAD_TOP(2),
-
-   LV_STYLE_CONST_BORDER_WIDTH(1),
-   LV_STYLE_CONST_BORDER_COLOR(LV_COLOR_MAKE16(0xFF, 0xFF, 0xFF)),
-   LV_STYLE_CONST_BORDER_OPA(96),
 
    LV_STYLE_CONST_BG_COLOR(0x000000),
    LV_STYLE_CONST_BG_OPA(128),
+
+   LV_STYLE_CONST_RADIUS(0),
+
+   LV_STYLE_PROP_INV,
+};
+
+const lv_style_const_prop_t bordered_props[] = {
+   LV_STYLE_CONST_BORDER_WIDTH(1),
+   LV_STYLE_CONST_BORDER_COLOR(LV_COLOR_MAKE16(0xFF, 0xFF, 0xFF)),
+   LV_STYLE_CONST_BORDER_OPA(96),
 
    LV_STYLE_CONST_RADIUS(4),
 
    LV_STYLE_PROP_INV,
 };
 
+const lv_style_const_prop_t bottom_item_props[] = {
+   LV_STYLE_CONST_TEXT_FONT(&lv_font_18),
+   LV_STYLE_CONST_TEXT_ALIGN(LV_TEXT_ALIGN_CENTER),
+   LV_STYLE_CONST_PAD_TOP(2),
+
+   LV_STYLE_PROP_INV,
+};
+
 const lv_style_const_prop_t notify_props[] = {
    LV_STYLE_CONST_TEXT_FONT(&lv_font_24),
-   LV_STYLE_CONST_TEXT_COLOR(LV_COLOR_MAKE16(0xFF, 0xFF, 0xFF)),
    LV_STYLE_CONST_TEXT_ALIGN(LV_TEXT_ALIGN_CENTER),
    LV_STYLE_CONST_PAD_TOP(5),
-
-   LV_STYLE_CONST_BORDER_WIDTH(1),
-   LV_STYLE_CONST_BORDER_COLOR(LV_COLOR_MAKE16(0xFF, 0xFF, 0xFF)),
-   LV_STYLE_CONST_BORDER_OPA(96),
-
-   LV_STYLE_CONST_BG_COLOR(0x000000),
-   LV_STYLE_CONST_BG_OPA(128),
-
-   LV_STYLE_CONST_RADIUS(4),
 
    LV_STYLE_PROP_INV,
 };
@@ -68,23 +69,26 @@ const lv_style_const_prop_t notify_props[] = {
 const lv_style_const_prop_t splash_item_props[] = {
    LV_STYLE_CONST_WIDTH(160 - 4),
    LV_STYLE_CONST_TEXT_FONT(&lv_font_24),
-   LV_STYLE_CONST_TEXT_COLOR(LV_COLOR_MAKE16(0xFF, 0xFF, 0xFF)),
    LV_STYLE_CONST_TEXT_ALIGN(LV_TEXT_ALIGN_CENTER),
    LV_STYLE_CONST_PAD_TOP(2),
 
-   LV_STYLE_CONST_BORDER_WIDTH(1),
-   LV_STYLE_CONST_BORDER_COLOR(LV_COLOR_MAKE16(0xFF, 0xFF, 0xFF)),
-   LV_STYLE_CONST_BORDER_OPA(96),
+   LV_STYLE_PROP_INV,
+};
 
-   LV_STYLE_CONST_BG_COLOR(0x000000),
+const lv_style_const_prop_t header_props[] = {
+   LV_STYLE_CONST_TEXT_COLOR(LV_COLOR_MAKE16(0xFF, 0xFF, 0xFF)),
+
+   LV_STYLE_CONST_BG_COLOR(LV_COLOR_MAKE16(0x00, 0x00, 0x55)),
    LV_STYLE_CONST_BG_OPA(128),
-
-   LV_STYLE_CONST_RADIUS(4),
 
    LV_STYLE_PROP_INV,
 };
+
+LV_STYLE_CONST_INIT(main_style, main_props);
+LV_STYLE_CONST_INIT(bordered_style, bordered_props);
 
 LV_STYLE_CONST_INIT(bottom_item_style, bottom_item_props);
 LV_STYLE_CONST_INIT(notify_style, notify_props);
 
 LV_STYLE_CONST_INIT(splash_item_style, splash_item_props);
+LV_STYLE_CONST_INIT(header_style, header_props);

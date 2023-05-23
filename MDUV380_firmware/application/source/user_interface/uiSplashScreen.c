@@ -62,7 +62,11 @@ void uiSplashScreen() {
 	lv_obj_t *obj = lv_label_create(main_obj);
 
 	lv_label_set_text(obj, "OpenMDUV-NG");
+
+	lv_obj_add_style(obj, &main_style, 0);
+	lv_obj_add_style(obj, &bordered_style, 0);
 	lv_obj_add_style(obj, &splash_item_style, 0);
+
 	lv_obj_set_height(obj, 28);
 	lv_obj_set_pos(obj, 2, 2);
 
@@ -76,7 +80,11 @@ void uiSplashScreen() {
 	obj = lv_label_create(main_obj);
 
 	lv_label_set_text_fmt(obj, "%s\n%s", line1, line2);
+
+	lv_obj_add_style(obj, &main_style, 0);
+	lv_obj_add_style(obj, &bordered_style, 0);
 	lv_obj_add_style(obj, &splash_item_style, 0);
+
 	lv_obj_set_height(obj, 44);
 	lv_obj_center(obj);
 

@@ -78,6 +78,9 @@ void uiPowerOff() {
 	lv_obj_set_width(msg, 100);
 	lv_obj_set_height(msg, 32);
 	lv_obj_center(msg);
+
+	lv_obj_add_style(msg, &main_style, 0);
+	lv_obj_add_style(msg, &bordered_style, 0);
 	lv_obj_add_style(msg, &notify_style, 0);
 
 	lv_timer_t *timer = lv_timer_create(timeout, 250 + 1000, NULL);

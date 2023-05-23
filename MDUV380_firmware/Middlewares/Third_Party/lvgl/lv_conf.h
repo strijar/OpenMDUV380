@@ -400,7 +400,7 @@
 	LV_FONT_DECLARE(lv_font_24)
 
 /*Always set a default font*/
-#define LV_FONT_DEFAULT &lv_font_10
+#define LV_FONT_DEFAULT &lv_font_18
 
 /*Enable handling large font and/or fonts with a lot of characters.
  *The limit depends on the font size, font face and bpp.
@@ -547,7 +547,7 @@
 
 #define LV_USE_LIST       0
 
-#define LV_USE_MENU       0
+#define LV_USE_MENU       1
 
 #define LV_USE_METER      0
 
@@ -598,7 +598,7 @@
  *----------*/
 
 /*A layout similar to Flexbox in CSS.*/
-#define LV_USE_FLEX 0
+#define LV_USE_FLEX 1
 
 /*A layout similar to Grid in CSS.*/
 #define LV_USE_GRID 0

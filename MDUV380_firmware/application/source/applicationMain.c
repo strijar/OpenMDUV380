@@ -335,36 +335,6 @@ void applicationMainTask(void) {
 
 	/* * */
 
-	/*
-	lv_obj_t *main_obj = lv_obj_create(NULL);
-
-	lv_obj_add_event_cb(main_obj, button_cb, EVENT_BUTTON, NULL);
-
-	lv_obj_set_style_bg_img_src(main_obj, &wallpaper, LV_PART_MAIN);
-
-	label = lv_label_create(main_obj);
-
-	lv_label_set_text(label, "Menu");
-	lv_obj_set_pos(label, 2, 128 - 20 - 2);
-	lv_obj_set_size(label, 160/3, 20);
-
-	lv_obj_add_style(label, &bottom_item_style, 0);
-
-	label = lv_label_create(main_obj);
-
-	lv_label_set_text(label, "VFO");
-	lv_obj_set_pos(label, 160 - 160/3 - 2, 128 - 20 - 2);
-	lv_obj_set_size(label, 160/3, 20);
-
-	lv_obj_add_style(label, &bottom_item_style, 0);
-	lv_obj_add_event_cb(label, key_cb, LV_EVENT_KEY, NULL);
-	lv_group_add_obj(lv_group_get_default(), label);
-
-	lv_scr_load(main_obj);
-	*/
-
-	/* * */
-
 #if 0
 	buttonsCheckButtonsEvent(&buttons, &button_event, false);
 

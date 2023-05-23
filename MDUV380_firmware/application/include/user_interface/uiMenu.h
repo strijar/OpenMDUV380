@@ -1,7 +1,5 @@
 /*
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
- *                         Daniel Caujolle-Bert, F1RMB
- *                         Oleg Belousov, R1CBU
+ * Copyright (C) 2023 Oleg Belousov, R1CBU
  *
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions
@@ -27,20 +25,10 @@
  *
  */
 
-#ifndef INCLUDE_USER_INTERFACE_STYLES_H_
-#define INCLUDE_USER_INTERFACE_STYLES_H_
+#ifndef INCLUDE_USER_INTERFACE_UIMENU_H_
+#define INCLUDE_USER_INTERFACE_UIMENU_H_
 
-#include <lvgl.h>
+void uiMenu();
+bool uiMenuWasOpened();
 
-extern const lv_img_dsc_t	wallpaper;
-
-extern const lv_style_t		main_style;
-extern const lv_style_t		bordered_style;
-
-extern const lv_style_t		bottom_item_style;
-extern const lv_style_t		notify_style;
-
-extern const lv_style_t		splash_item_style;
-extern const lv_style_t		header_style;
-
-#endif /* INCLUDE_USER_INTERFACE_STYLES_H_ */
+#endif /* INCLUDE_USER_INTERFACE_UIMENU_H_ */
