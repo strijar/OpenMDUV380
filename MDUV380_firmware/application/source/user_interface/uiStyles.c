@@ -84,6 +84,28 @@ const lv_style_const_prop_t header_props[] = {
    LV_STYLE_PROP_INV,
 };
 
+const lv_style_const_prop_t channel_props[] = {
+   LV_STYLE_CONST_TEXT_COLOR(LV_COLOR_MAKE16(0xFF, 0xFF, 0xFF)),
+   LV_STYLE_CONST_TEXT_FONT(&lv_font_22),
+   LV_STYLE_CONST_TEXT_ALIGN(LV_TEXT_ALIGN_CENTER),
+
+   LV_STYLE_CONST_WIDTH(160),
+   LV_STYLE_CONST_HEIGHT(20),
+
+   LV_STYLE_PROP_INV,
+};
+
+const lv_style_const_prop_t zone_props[] = {
+   LV_STYLE_CONST_TEXT_COLOR(LV_COLOR_MAKE16(0xFF, 0xFF, 0xFF)),
+   LV_STYLE_CONST_TEXT_FONT(&lv_font_18),
+   LV_STYLE_CONST_TEXT_ALIGN(LV_TEXT_ALIGN_CENTER),
+
+   LV_STYLE_CONST_WIDTH(160),
+   LV_STYLE_CONST_HEIGHT(20),
+
+   LV_STYLE_PROP_INV,
+};
+
 LV_STYLE_CONST_INIT(main_style, main_props);
 LV_STYLE_CONST_INIT(bordered_style, bordered_props);
 
@@ -92,3 +114,6 @@ LV_STYLE_CONST_INIT(notify_style, notify_props);
 
 LV_STYLE_CONST_INIT(splash_item_style, splash_item_props);
 LV_STYLE_CONST_INIT(header_style, header_props);
+
+LV_STYLE_CONST_INIT(channel_style, channel_props);
+LV_STYLE_CONST_INIT(zone_style, zone_props);

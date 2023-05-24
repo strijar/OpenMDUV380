@@ -103,8 +103,8 @@ static const struct {
 				KEYPAD_ROW1_Pin,
 				{
 						{ LCD_D0_GPIO_Port, LCD_D0_Pin, LV_KEY_ENTER	},
-						{ LCD_D1_GPIO_Port, LCD_D1_Pin, LV_KEY_PREV    	},
-						{ LCD_D2_GPIO_Port, LCD_D2_Pin, LV_KEY_NEXT  	},
+						{ LCD_D1_GPIO_Port, LCD_D1_Pin, LV_KEY_UP    	},
+						{ LCD_D2_GPIO_Port, LCD_D2_Pin, LV_KEY_DOWN  	},
 						{ LCD_D3_GPIO_Port, LCD_D3_Pin, '7'     		},
 						{ LCD_D4_GPIO_Port, LCD_D4_Pin, '8'     		},
 						{ LCD_D5_GPIO_Port, LCD_D5_Pin, '9'     		},

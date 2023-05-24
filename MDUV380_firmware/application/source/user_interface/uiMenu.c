@@ -32,9 +32,9 @@ static bool			was_opened = false;
 
 static lv_obj_t 	*menu;
 
-static lv_obj_t *create_text(lv_obj_t *parent, const char *icon, const char *txt);
+static lv_obj_t *createText(lv_obj_t *parent, const char *icon, const char *txt);
 
-static void back_event_cb(lv_event_t *e) {
+static void backEventCallback(lv_event_t *e) {
 	lv_obj_t *obj = lv_event_get_target(e);
 	lv_obj_t *menu = lv_event_get_user_data(e);
 
@@ -44,12 +44,20 @@ static void back_event_cb(lv_event_t *e) {
     }
 }
 
-static void key_cb(lv_event_t *e) {
+static void keyCallback(lv_event_t *e) {
 	uint32_t key = lv_event_get_key(e);
 
 	switch (key) {
 		case LV_KEY_ESC:
 			lv_event_send(lv_menu_get_main_header_back_btn(menu), LV_EVENT_CLICKED, NULL);
+			break;
+
+		case LV_KEY_UP:
+			lv_group_focus_prev(lv_group_get_default());
+			break;
+
+		case LV_KEY_DOWN:
+			lv_group_focus_next(lv_group_get_default());
 			break;
 
 		default:
@@ -64,7 +72,7 @@ void uiMenu() {
 	menu = lv_menu_create(lv_scr_act());
 	lv_obj_set_style_pad_all(menu, 0, 0);
 
-	lv_obj_add_event_cb(menu, back_event_cb, LV_EVENT_CLICKED, menu);
+	lv_obj_add_event_cb(menu, backEventCallback, LV_EVENT_CLICKED, menu);
 
 	lv_obj_add_style(lv_menu_get_main_header(menu), &header_style, 0);
 	lv_obj_set_style_bg_img_src(menu, &wallpaper, LV_PART_MAIN);
@@ -79,29 +87,29 @@ void uiMenu() {
 
     section = lv_menu_section_create(root_page);
 
-	lv_obj_add_event_cb(section, key_cb, LV_EVENT_KEY, NULL);
+	lv_obj_add_event_cb(section, keyCallback, LV_EVENT_KEY, NULL);
 	lv_obj_add_style(section, &main_style, LV_PART_MAIN);
 
-    cont = create_text(section, NULL, "Zone");
+    cont = createText(section, NULL, "Zone");
     lv_group_focus_obj(cont);
 
-    cont = create_text(section, NULL, "Contacts");
+    cont = createText(section, NULL, "Contacts");
 
-    cont = create_text(section, NULL, "Channel details");
+    cont = createText(section, NULL, "Channel details");
 
-    cont = create_text(section, NULL, "RSSI");
+    cont = createText(section, NULL, "RSSI");
 
-    cont = create_text(section, NULL, "Firmware info");
+    cont = createText(section, NULL, "Firmware info");
 
-    cont = create_text(section, NULL, "Options");
+    cont = createText(section, NULL, "Options");
 
-    cont = create_text(section, NULL, "Last heard");
+    cont = createText(section, NULL, "Last heard");
 
-    cont = create_text(section, NULL, "Radio info");
+    cont = createText(section, NULL, "Radio info");
 
-    cont = create_text(section, NULL, "Satellite");
+    cont = createText(section, NULL, "Satellite");
 
-    cont = create_text(section, NULL, "GPS");
+    cont = createText(section, NULL, "GPS");
 
     lv_menu_set_page(menu, root_page);
 }
@@ -115,7 +123,7 @@ bool uiMenuWasOpened() {
 	return false;
 }
 
-static lv_obj_t * create_text(lv_obj_t *parent, const char *icon, const char *txt) {
+static lv_obj_t * createText(lv_obj_t *parent, const char *icon, const char *txt) {
     lv_obj_t *obj = lv_menu_cont_create(parent);
 
     lv_obj_set_style_pad_all(obj, 0, 0);
