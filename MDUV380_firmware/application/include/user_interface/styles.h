@@ -43,6 +43,7 @@ extern const lv_style_t		notify_style;
 extern const lv_style_t		splash_item_style;
 extern const lv_style_t		header_style;
 
+extern const lv_style_t		contact_style;
 extern const lv_style_t		channel_style;
 extern const lv_style_t		zone_style;
 

@@ -160,6 +160,10 @@ button_state_t buttonsState(button_t button) {
 	return buttons_state[button];
 }
 
+bool buttonsPressed(button_t button) {
+	return buttons_state[button] == BUTTON_PRESS || buttons_state[button] == BUTTON_LONG;
+}
+
 static bool isMButtonPressed(MBUTTON_t mbutton)
 {
 	return (((mbuttons >> (mbutton * 3)) & MBUTTON_PRESSED) & MBUTTON_PRESSED);

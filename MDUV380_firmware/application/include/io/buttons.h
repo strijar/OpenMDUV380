@@ -81,6 +81,7 @@ extern volatile bool PTTLocked;
 void buttonsInit(void);
 void buttonsRead();
 button_state_t buttonsState(button_t button);
+bool buttonsPressed(button_t button);
 
 #if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380)  || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
 void buttonsCheckButtonsEvent(uint32_t *buttons, int *event, bool keyIsDown);

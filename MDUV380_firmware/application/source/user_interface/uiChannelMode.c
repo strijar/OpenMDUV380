@@ -48,14 +48,19 @@
 static char currentZoneName[SCREEN_LINE_BUFFER_SIZE];
 static int directChannelNumber = 0;
 
+static lv_obj_t	*contact_obj;
 static lv_obj_t	*channel_obj;
 static lv_obj_t	*zone_obj;
 
+static void guiUpdateContact();
 static void guiUpdateChannel();
 static void guiUpdateInfoZone();
+
 static void changeZone(bool next);
 static void changeChannelPrev();
 static void changeChannelNext();
+static void changeContact(bool next);
+static void changeSquelch(int dir);
 static void loadChannelData(bool useChannelDataInMemory, bool loadVoicePromptAnnouncement);
 
 void uiChannelInitializeCurrentZone();
@@ -74,29 +79,35 @@ static void keyCallback(lv_event_t * e) {
 			uiMenu();
 			break;
 
-		case LV_KEY_LEFT:
-			switch (buttonsState(BUTTON_SK2)) {
-				case BUTTON_PRESS:
-				case BUTTON_LONG:
-					changeZone(true);
-					break;
+		case LV_KEY_UP:
+			if (trxGetMode() == RADIO_MODE_DIGITAL) {
+				changeContact(false);
+			} else {
+				changeSquelch(-1);
+			}
+			break;
 
-				default:
-					changeChannelPrev();
-					break;
+		case LV_KEY_DOWN:
+			if (trxGetMode() == RADIO_MODE_DIGITAL) {
+				changeContact(true);
+			} else {
+				changeSquelch(+1);
+			}
+			break;
+
+		case LV_KEY_LEFT:
+			if (buttonsPressed(BUTTON_SK2)) {
+				changeZone(true);
+			} else {
+				changeChannelPrev();
 			}
 			break;
 
 		case LV_KEY_RIGHT:
-			switch (buttonsState(BUTTON_SK2)) {
-				case BUTTON_PRESS:
-				case BUTTON_LONG:
-					changeZone(false);
-					break;
-
-				default:
-					changeChannelNext();
-					break;
+			if (buttonsPressed(BUTTON_SK2)) {
+				changeZone(false);
+			} else {
+				changeChannelNext();
 			}
 			break;
 
@@ -120,6 +131,7 @@ static void buttonCallback(lv_event_t * e) {
 					uiDataGlobal.displayChannelSettings = false;
 					break;
 			}
+			guiUpdateContact();
 			guiUpdateChannel();
 			guiUpdateInfoZone();
 			break;
@@ -183,7 +195,79 @@ static void guiInit() {
 	lv_obj_set_pos(channel_obj, 0, y);
 	lv_obj_add_style(channel_obj, &channel_style, 0);
 
+	/* * */
+
+	y -= 24;
+
+	contact_obj = lv_label_create(main_obj);
+
+	lv_label_set_text(contact_obj, "Channel");
+	lv_obj_set_pos(contact_obj, 0, y);
+	lv_obj_add_style(contact_obj, &contact_style, 0);
+
 	lv_scr_load_anim(main_obj, LV_SCR_LOAD_ANIM_FADE_IN, 250, 0, true);
+}
+
+static void updateTrxID() {
+	if (nonVolatileSettings.overrideTG != 0) {
+		trxTalkGroupOrPcId = nonVolatileSettings.overrideTG;
+	} else {
+		if ((currentRxGroupData.name[0] != 0) && (nonVolatileSettings.currentIndexInTRxGroupList[SETTINGS_CHANNEL_MODE] < currentRxGroupData.NOT_IN_CODEPLUG_numTGsInGroup)) {
+			codeplugContactGetDataForIndex(currentRxGroupData.contacts[nonVolatileSettings.currentIndexInTRxGroupList[SETTINGS_CHANNEL_MODE]], &currentContactData);
+		} else {
+			codeplugContactGetDataForIndex(currentChannelData->contact, &currentContactData);
+		}
+
+		tsSetContactHasBeenOverriden(CHANNEL_CHANNEL, false);
+
+		trxUpdateTsForCurrentChannelWithSpecifiedContact(&currentContactData);
+		trxTalkGroupOrPcId = codeplugContactGetPackedId(&currentContactData);
+	}
+
+	lastHeardClearLastID();
+	menuPrivateCallClear();
+}
+
+static void changeContact(bool next) {
+	if (next) {
+		if (currentRxGroupData.NOT_IN_CODEPLUG_numTGsInGroup > 1) {
+			if (nonVolatileSettings.overrideTG == 0) {
+				settingsIncrement(nonVolatileSettings.currentIndexInTRxGroupList[SETTINGS_CHANNEL_MODE], 1);
+
+				if (nonVolatileSettings.currentIndexInTRxGroupList[SETTINGS_CHANNEL_MODE] > (currentRxGroupData.NOT_IN_CODEPLUG_numTGsInGroup - 1)) {
+					settingsSet(nonVolatileSettings.currentIndexInTRxGroupList[SETTINGS_CHANNEL_MODE], 0);
+				}
+			}
+		}
+	} else {
+		if (currentRxGroupData.NOT_IN_CODEPLUG_numTGsInGroup > 1) {
+			if (nonVolatileSettings.overrideTG == 0) {
+				settingsDecrement(nonVolatileSettings.currentIndexInTRxGroupList[SETTINGS_CHANNEL_MODE], 1);
+
+				if (nonVolatileSettings.currentIndexInTRxGroupList[SETTINGS_CHANNEL_MODE] < 0) {
+					settingsSet(nonVolatileSettings.currentIndexInTRxGroupList[SETTINGS_CHANNEL_MODE],
+							(int16_t) (currentRxGroupData.NOT_IN_CODEPLUG_numTGsInGroup - 1));
+				}
+			}
+		}
+	}
+
+	settingsSet(nonVolatileSettings.overrideTG, 0);
+	menuPrivateCallClear();
+	updateTrxID();
+	guiUpdateContact();
+
+#if 0
+	if (isQSODataAvailableForCurrentTalker()) {
+		(void)addTimerCallback(uiUtilityRenderQSODataAndUpdateScreen, 2000, UI_CHANNEL_MODE, true);
+	}
+#endif
+
+	announceItem(PROMPT_SEQUENCE_CONTACT_TG_OR_PC, PROMPT_THRESHOLD_3);
+}
+
+static void changeSquelch(int dir) {
+
 }
 
 static void changeZone(bool next) {
@@ -212,6 +296,7 @@ static void changeZone(bool next) {
 
 	guiUpdateInfoZone();
 	guiUpdateChannel();
+	guiUpdateContact();
 }
 
 static void changeChannelNext() {
@@ -241,6 +326,7 @@ static void changeChannelNext() {
 	loadChannelData(false, true);
 	guiUpdateInfoZone();
 	guiUpdateChannel();
+	guiUpdateContact();
 }
 
 static void changeChannelPrev() {
@@ -269,6 +355,7 @@ static void changeChannelPrev() {
 	loadChannelData(false, true);
 	guiUpdateInfoZone();
 	guiUpdateChannel();
+	guiUpdateContact();
 }
 
 static void loadChannelData(bool useChannelDataInMemory, bool loadVoicePromptAnnouncement) {
@@ -393,6 +480,31 @@ static void dataInit() {
 	}
 }
 
+static void guiUpdateContact() {
+	char nameBuf[NAME_BUFFER_LEN];
+
+	if (trxGetMode() == RADIO_MODE_DIGITAL) {
+		lv_obj_clear_flag(contact_obj, LV_OBJ_FLAG_HIDDEN);
+
+		if (uiDataGlobal.displayChannelSettings) {
+			uint32_t PCorTG = ((nonVolatileSettings.overrideTG != 0) ? nonVolatileSettings.overrideTG : codeplugContactGetPackedId(&currentContactData));
+
+			lv_label_set_text_fmt(contact_obj, "%s %u", (((PCorTG >> 24) == PC_CALL_FLAG) ? "PC" : "TG"), (PCorTG & 0xFFFFFF));
+		} else {
+			if (nonVolatileSettings.overrideTG != 0) {
+				uiUtilityBuildTgOrPCDisplayName(nameBuf, SCREEN_LINE_BUFFER_SIZE);
+				/* change style */
+				// uiUtilityDisplayInformation(NULL, DISPLAY_INFO_CONTACT_OVERRIDE_FRAME, (trxTransmissionEnabled ? DISPLAY_Y_POS_CONTACT_TX_FRAME : -1));
+			} else {
+				codeplugUtilConvertBufToString(currentContactData.name, nameBuf, 16);
+				lv_label_set_text(contact_obj, nameBuf);
+			}
+		}
+	} else {
+		lv_obj_add_flag(contact_obj, LV_OBJ_FLAG_HIDDEN);
+	}
+}
+
 static void guiUpdateChannel() {
 	char nameBuf[NAME_BUFFER_LEN];
 
@@ -401,23 +513,6 @@ static void guiUpdateChannel() {
 
 		lv_label_set_text(channel_obj, nameBuf);
 		// uiUtilityDisplayInformation(nameBuf, (uiDataGlobal.reverseRepeaterChannel == true)?DISPLAY_INFO_CHANNEL_INVERTED:DISPLAY_INFO_CHANNEL , (trxTransmissionEnabled ? DISPLAY_Y_POS_CHANNEL_SECOND_LINE : -1));
-	}
-
-	if (trxGetMode() == RADIO_MODE_DIGITAL) {
-		if (uiDataGlobal.displayChannelSettings) {
-			uint32_t PCorTG = ((nonVolatileSettings.overrideTG != 0) ? nonVolatileSettings.overrideTG : codeplugContactGetPackedId(&currentContactData));
-
-			lv_label_set_text_fmt(channel_obj, "%s %u", (((PCorTG >> 24) == PC_CALL_FLAG) ? "PC" : "TG"), (PCorTG & 0xFFFFFF));
-		} else {
-			if (nonVolatileSettings.overrideTG != 0) {
-				uiUtilityBuildTgOrPCDisplayName(nameBuf, SCREEN_LINE_BUFFER_SIZE);
-				/* change style */
-				// uiUtilityDisplayInformation(NULL, DISPLAY_INFO_CONTACT_OVERRIDE_FRAME, (trxTransmissionEnabled ? DISPLAY_Y_POS_CONTACT_TX_FRAME : -1));
-			} else {
-				codeplugUtilConvertBufToString(currentContactData.name, nameBuf, 16);
-				lv_label_set_text(channel_obj, nameBuf);
-			}
-		}
 	}
 }
 
@@ -440,7 +535,7 @@ static void guiUpdateInfoZone() {
 			if (directChannelNumber > 0) {
 				lv_label_set_text_fmt(zone_obj, "Goto %d", directChannelNumber);
 			} else {
-				lv_label_set_text_fmt(zone_obj, "All Channels Ch:%d", channelNumber);
+				lv_label_set_text_fmt(zone_obj, "All Ch:%d", channelNumber);
 			}
 		} else {
 			channelNumber = nonVolatileSettings.currentChannelIndexInZone + 1;
@@ -458,6 +553,7 @@ void uiChannelMode() {
 	dataInit();
 	guiInit();
 
-	guiUpdateInfoZone();
+	guiUpdateContact();
 	guiUpdateChannel();
+	guiUpdateInfoZone();
 }
