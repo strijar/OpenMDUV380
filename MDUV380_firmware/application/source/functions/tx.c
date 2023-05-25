@@ -34,27 +34,18 @@
 #include "hardware/HR-C6000.h"
 #include "functions/settings.h"
 #include "functions/sound.h"
-#include "user_interface/uiMsg.h"
-#include "user_interface/menuSystem.h"
 #include "user_interface/uiUtilities.h"
 #include "user_interface/uiLocalisation.h"
-#include "functions/ticks.h"
 #include "interfaces/clockManager.h"
-#include "functions/satellite.h"
 #include "interfaces/gps.h"
 
-uint32_t		xmitErrorTimer = 0;
+uint32_t			xmitErrorTimer = 0;
 
-static bool		startBeepPlayed;
-static bool 	isTransmittingTone = false;
-static bool 	isShowingLastHeard;
-static bool 	keepScreenShownOnError = false;
-static int 		timeInSeconds;
+static bool			startBeepPlayed;
 
-static void*	wait_start_obj = NULL;
-static void*	wait_stop_obj = NULL;
+static lv_timer_t	*timer = NULL;
 
-static void waitStartDMR(void *s, lv_msg_t *m) {
+static void waitStartDMR(lv_timer_t *t) {
 	if (trxTransmissionEnabled && ((HRC6000GetIsWakingState() == WAKING_MODE_NONE) || (HRC6000GetIsWakingState() == WAKING_MODE_AWAKEN))) {
 		if ((nonVolatileSettings.beepOptions & BEEP_TX_START) && (startBeepPlayed == false) && (trxIsTransmitting == true) && (melody_play == NULL)) {
 			startBeepPlayed = true;
@@ -63,12 +54,13 @@ static void waitStartDMR(void *s, lv_msg_t *m) {
 				soundSetMelody(MELODY_DMR_TX_START_BEEP);
 			}
 
-			lv_msg_unsubscribe(wait_start_obj);
+			lv_timer_del(timer);
+			timer = NULL;
 		}
 	}
 }
 
-static void waitStopDMR(void *s, lv_msg_t *m) {
+static void waitStopDMR(lv_timer_t *t) {
 	if (trxIsTransmitting == false) {
 		if ((nonVolatileSettings.beepOptions & BEEP_TX_STOP) && (melody_play == NULL) && (HRC6000GetIsWakingState() != WAKING_MODE_FAILED)) {
 			soundSetMelody(MELODY_DMR_TX_STOP_BEEP);
@@ -83,7 +75,8 @@ static void waitStopDMR(void *s, lv_msg_t *m) {
 		clockManagerSetRunMode(kAPP_PowerModeRun, CLOCK_MANAGER_SPEED_RUN);
 		HRC6000ClearIsWakingState();
 
-		lv_msg_unsubscribe(wait_stop_obj);
+		lv_timer_del(timer);
+		timer = NULL;
 	}
 }
 
@@ -101,10 +94,6 @@ void txTurnOn() {
 	voicePromptsTerminateNoTail();
 	startBeepPlayed = false;
 	uiDataGlobal.Scan.active = false;
-	isTransmittingTone = false;
-	isShowingLastHeard = false;
-	keepScreenShownOnError = false;
-	timeInSeconds = 0;
 	xmitErrorTimer = 0;
 
 	if (trxGetMode() == RADIO_MODE_DIGITAL) {
@@ -112,8 +101,6 @@ void txTurnOn() {
 	}
 
 	/* * */
-
-	timeInSeconds = currentChannelData->tot * 15;
 
 	if (nonVolatileSettings.gps > GPS_MODE_OFF) {
 		gpsDataInputStartStop(false);
@@ -137,14 +124,17 @@ void txTurnOn() {
 			trxSetTX();
 		}
 
-		wait_start_obj = lv_msg_subscribe(UI_MSG_IDLE, waitStartDMR, NULL);
+		if (timer) {
+			lv_timer_del(timer);
+		}
+
+        timer = lv_timer_create(waitStartDMR, 50, NULL);
 	}
 }
 
 void txTurnOff() {
 	if (trxTransmissionEnabled) {
 		trxTransmissionEnabled = false;
-		isTransmittingTone = false;
 
 		if (trxGetMode() == RADIO_MODE_ANALOG) {
 			/* In analog mode. Stop transmitting immediately */
@@ -163,14 +153,11 @@ void txTurnOff() {
 		} else {
 			HRC6000ClearIsWakingState();
 
-			if (isShowingLastHeard) {
-				isShowingLastHeard = false;
-#if 0
-				updateScreen();
-#endif
+			if (timer) {
+				lv_timer_del(timer);
 			}
 
-			wait_stop_obj = lv_msg_subscribe(UI_MSG_IDLE, waitStopDMR, NULL);
+			timer = lv_timer_create(waitStopDMR, 50, NULL);
 		}
 	}
 }
