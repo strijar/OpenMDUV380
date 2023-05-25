@@ -35,6 +35,7 @@
 #include <stdio.h>
 #include <lvgl.h>
 
+#include "user_interface/uiMsg.h"
 #include "interfaces/adc.h"
 #include "interfaces/batteryRAM.h"
 #include "hardware/SPI_Flash.h"
@@ -49,6 +50,7 @@
 #include "user_interface/styles.h"
 #include "user_interface/uiSplashScreen.h"
 #include "user_interface/uiPowerOff.h"
+#include "user_interface/uiMsg.h"
 #include "functions/ticks.h"
 #include "interfaces/batteryAndPowerManagement.h"
 #include "interfaces/gps.h"
@@ -410,6 +412,31 @@ void applicationMainTask(void) {
 
 		/* * */
 
+		hasSignal = false;
+
+		if (trxGetMode()== RADIO_MODE_ANALOG) {
+			hasSignal = trxCheckAnalogSquelch();
+		} else {
+			if (slotState == DMR_STATE_IDLE) {
+				trxReadRSSIAndNoise(false);
+
+				hasSignal = trxCheckDigitalSquelch();
+			} else {
+				if (ticksTimerHasExpired((ticksTimer_t *)&readDMRRSSITimer)) {
+					trxReadRSSIAndNoise(false);
+					ticksTimerStart((ticksTimer_t *)&readDMRRSSITimer, 10000); // hold of for a very long time
+				}
+				hasSignal = true;
+			}
+		}
+
+		if (!trxTransmissionEnabled && (updateLastHeard == true)) {
+			lastHeardListUpdate((uint8_t *)DMR_frame_buffer, false);
+			updateLastHeard = false;
+		}
+
+		/* * */
+
 		apoTick((keyOrButtonChanged || (function_event != NO_EVENT) ||
 				(settingsIsOptionBitSet(BIT_APO_WITH_RF) ? (getAudioAmpStatus() & AUDIO_AMP_MODE_RF) : false)));
 
@@ -448,6 +475,8 @@ void applicationMainTask(void) {
 			lastVolume = latestVolume;
 			HRC6000SetDmrRxGain(latestVolume);
 		}
+
+		lv_msg_send(UI_MSG_IDLE, NULL);
 
 		osDelay(pdMS_TO_TICKS(5));
 		lv_tick_inc(ticksGetMillis() - now);

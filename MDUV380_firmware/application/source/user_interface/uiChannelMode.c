@@ -31,6 +31,7 @@
 #include "user_interface/styles.h"
 #include "user_interface/uiVFOMode.h"
 #include "user_interface/uiMenu.h"
+#include "functions/tx.h"
 
 #include "functions/codeplug.h"
 #include "functions/settings.h"
@@ -45,11 +46,14 @@
 
 #define NAME_BUFFER_LEN   23
 
-static char currentZoneName[SCREEN_LINE_BUFFER_SIZE];
-static int directChannelNumber = 0;
+static char 	currentZoneName[SCREEN_LINE_BUFFER_SIZE];
+static int 		directChannelNumber = 0;
+static bool		displayChannelSettings = false;
 
 static lv_obj_t	*contact_obj;
+static lv_obj_t	*contact_shadow_obj;
 static lv_obj_t	*channel_obj;
+static lv_obj_t	*channel_shadow_obj;
 static lv_obj_t	*zone_obj;
 
 static void guiUpdateContact();
@@ -120,15 +124,28 @@ static void buttonCallback(lv_event_t * e) {
 	event_button_t *event = lv_event_get_param(e);
 
 	switch (event->button) {
-		case BUTTON_SK1:
+		case BUTTON_PTT:
 			switch (event->state) {
 				case BUTTON_PRESS:
-					uiDataGlobal.displayChannelSettings = true;
+					txTurnOn();
 					break;
 
 				case BUTTON_RELEASE:
 				case BUTTON_LONG_RELEASE:
-					uiDataGlobal.displayChannelSettings = false;
+					txTurnOff();
+					break;
+			}
+			break;
+
+		case BUTTON_SK1:
+			switch (event->state) {
+				case BUTTON_PRESS:
+					displayChannelSettings = true;
+					break;
+
+				case BUTTON_RELEASE:
+				case BUTTON_LONG_RELEASE:
+					displayChannelSettings = false;
 					break;
 			}
 			guiUpdateContact();
@@ -148,6 +165,7 @@ static void guiInit() {
 	lv_obj_add_event_cb(main_obj, buttonCallback, EVENT_BUTTON, NULL);
 	lv_obj_add_event_cb(main_obj, keyCallback, LV_EVENT_KEY, NULL);
 	lv_group_add_obj(lv_group_get_default(), main_obj);
+	lv_obj_clear_flag(main_obj, LV_OBJ_FLAG_SCROLLABLE);
 
 	lv_obj_set_style_bg_img_src(main_obj, &wallpaper, LV_PART_MAIN);
 
@@ -181,7 +199,6 @@ static void guiInit() {
 
 	zone_obj = lv_label_create(main_obj);
 
-	lv_label_set_text(zone_obj, "Zone");
 	lv_obj_set_pos(zone_obj, 0, y);
 	lv_obj_add_style(zone_obj, &zone_style, 0);
 
@@ -189,9 +206,13 @@ static void guiInit() {
 
 	y -= 24;
 
+	channel_shadow_obj = lv_label_create(main_obj);
+
+	lv_obj_set_pos(channel_shadow_obj, 2, y + 2);
+	lv_obj_add_style(channel_shadow_obj, &channel_shadow_style, 0);
+
 	channel_obj = lv_label_create(main_obj);
 
-	lv_label_set_text(channel_obj, "Channel");
 	lv_obj_set_pos(channel_obj, 0, y);
 	lv_obj_add_style(channel_obj, &channel_style, 0);
 
@@ -199,9 +220,13 @@ static void guiInit() {
 
 	y -= 24;
 
+	contact_shadow_obj = lv_label_create(main_obj);
+
+	lv_obj_set_pos(contact_shadow_obj, 2, y  +2);
+	lv_obj_add_style(contact_shadow_obj, &contact_shadow_style, 0);
+
 	contact_obj = lv_label_create(main_obj);
 
-	lv_label_set_text(contact_obj, "Channel");
 	lv_obj_set_pos(contact_obj, 0, y);
 	lv_obj_add_style(contact_obj, &contact_style, 0);
 
@@ -485,11 +510,14 @@ static void guiUpdateContact() {
 
 	if (trxGetMode() == RADIO_MODE_DIGITAL) {
 		lv_obj_clear_flag(contact_obj, LV_OBJ_FLAG_HIDDEN);
+		lv_obj_clear_flag(contact_shadow_obj, LV_OBJ_FLAG_HIDDEN);
 
-		if (uiDataGlobal.displayChannelSettings) {
+		if (displayChannelSettings) {
 			uint32_t PCorTG = ((nonVolatileSettings.overrideTG != 0) ? nonVolatileSettings.overrideTG : codeplugContactGetPackedId(&currentContactData));
 
-			lv_label_set_text_fmt(contact_obj, "%s %u", (((PCorTG >> 24) == PC_CALL_FLAG) ? "PC" : "TG"), (PCorTG & 0xFFFFFF));
+			snprintf(nameBuf, sizeof(nameBuf), "%s %u", (((PCorTG >> 24) == PC_CALL_FLAG) ? "PC" : "TG"), (PCorTG & 0xFFFFFF));
+			lv_label_set_text(contact_obj, nameBuf);
+			lv_label_set_text(contact_shadow_obj, nameBuf);
 		} else {
 			if (nonVolatileSettings.overrideTG != 0) {
 				uiUtilityBuildTgOrPCDisplayName(nameBuf, SCREEN_LINE_BUFFER_SIZE);
@@ -498,20 +526,23 @@ static void guiUpdateContact() {
 			} else {
 				codeplugUtilConvertBufToString(currentContactData.name, nameBuf, 16);
 				lv_label_set_text(contact_obj, nameBuf);
+				lv_label_set_text(contact_shadow_obj, nameBuf);
 			}
 		}
 	} else {
 		lv_obj_add_flag(contact_obj, LV_OBJ_FLAG_HIDDEN);
+		lv_obj_add_flag(contact_shadow_obj, LV_OBJ_FLAG_HIDDEN);
 	}
 }
 
 static void guiUpdateChannel() {
 	char nameBuf[NAME_BUFFER_LEN];
 
-	if (!uiDataGlobal.displayChannelSettings) {
+	if (!displayChannelSettings) {
 		codeplugUtilConvertBufToString(currentChannelData->name, nameBuf, 16);
 
 		lv_label_set_text(channel_obj, nameBuf);
+		lv_label_set_text(channel_shadow_obj, nameBuf);
 		// uiUtilityDisplayInformation(nameBuf, (uiDataGlobal.reverseRepeaterChannel == true)?DISPLAY_INFO_CHANNEL_INVERTED:DISPLAY_INFO_CHANNEL , (trxTransmissionEnabled ? DISPLAY_Y_POS_CHANNEL_SECOND_LINE : -1));
 	}
 }
@@ -519,7 +550,7 @@ static void guiUpdateChannel() {
 static void guiUpdateInfoZone() {
 	int channelNumber;
 
-	if (uiDataGlobal.displayChannelSettings) {
+	if (displayChannelSettings) {
 #if 0
 		uiUtilityDisplayInformation(NULL, DISPLAY_INFO_TONE_AND_SQUELCH, -1);
 
@@ -535,7 +566,7 @@ static void guiUpdateInfoZone() {
 			if (directChannelNumber > 0) {
 				lv_label_set_text_fmt(zone_obj, "Goto %d", directChannelNumber);
 			} else {
-				lv_label_set_text_fmt(zone_obj, "All Ch:%d", channelNumber);
+				lv_label_set_text_fmt(zone_obj, "All:%d", channelNumber);
 			}
 		} else {
 			channelNumber = nonVolatileSettings.currentChannelIndexInZone + 1;
@@ -543,7 +574,7 @@ static void guiUpdateInfoZone() {
 			if (directChannelNumber > 0) {
 				lv_label_set_text_fmt(zone_obj, "Goto %d", directChannelNumber);
 			} else {
-				lv_label_set_text_fmt(zone_obj, "%s Ch:%d", currentZoneName, channelNumber);
+				lv_label_set_text_fmt(zone_obj, "%s:%d", currentZoneName, channelNumber);
 			}
 		}
 	}

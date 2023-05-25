@@ -132,7 +132,7 @@ static menuFunctionData_t menuFunctions[] =
 		{ menuHotspotMode,          0 },
 		{ uiCPS,                    0 },
 		{ menuNumericalEntry,       0 },
-		{ menuTxScreen,             0 },
+		{ NULL,             		0 },	/* Was menuTxScreen */
 		{ NULL,           			0 },	/* Was Splash */
 		{ NULL,               		0 },	/* Was Poweroff	*/
 		{ NULL,                		0 },	/* Was VFOMode */

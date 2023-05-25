@@ -503,10 +503,12 @@ bool trxCheckAnalogSquelch(void)
 		return false;
 	}
 
+#if 0
 	if (uiVFOModeSweepScanning(false) || (currentMode == RADIO_MODE_NONE))
 	{
 		return false;
 	}
+#endif
 
 	trxReadRSSIAndNoise(0);
 

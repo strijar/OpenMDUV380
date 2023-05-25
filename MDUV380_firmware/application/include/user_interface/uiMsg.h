@@ -1,5 +1,10 @@
+
+#ifndef INCLUDE_USER_INTERFACE_UIMSG_H_
+#define INCLUDE_USER_INTERFACE_UIMSG_H_
+
 /*
  * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ *                         Colin, G4EML
  *                         Daniel Caujolle-Bert, F1RMB
  *                         Oleg Belousov, R1CBU
  *
@@ -27,28 +32,6 @@
  *
  */
 
-#ifndef INCLUDE_USER_INTERFACE_STYLES_H_
-#define INCLUDE_USER_INTERFACE_STYLES_H_
+#define UI_MSG_IDLE		1
 
-#include <lvgl.h>
-
-extern const lv_img_dsc_t	wallpaper;
-
-extern const lv_style_t		main_style;
-extern const lv_style_t		bordered_style;
-
-extern const lv_style_t		bottom_item_style;
-extern const lv_style_t		notify_style;
-
-extern const lv_style_t		splash_item_style;
-extern const lv_style_t		header_style;
-
-extern const lv_style_t		contact_style;
-extern const lv_style_t		contact_shadow_style;
-
-extern const lv_style_t		channel_style;
-extern const lv_style_t		channel_shadow_style;
-
-extern const lv_style_t		zone_style;
-
-#endif /* INCLUDE_USER_INTERFACE_STYLES_H_ */
+#endif /* INCLUDE_USER_INTERFACE_UIMSG_H_ */

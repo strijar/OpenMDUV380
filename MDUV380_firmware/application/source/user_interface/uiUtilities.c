@@ -3361,8 +3361,9 @@ void dtmfSequenceTick(bool popPreviousMenuOnEnding)
 			else
 			{
 				uiEvent_t ev = { .buttons = 0, .keys = NO_KEYCODE, .rotary = 0, .function = 0, .events = NO_EVENT, .hasEvent = false, .time = 0 };
-
+#if 0
 				menuTxScreenHandleTxTermination(&ev, (codeplugChannelIsFlagSet(currentChannelData, CHANNEL_FLAG_RX_ONLY) ? TXSTOP_RX_ONLY : TXSTOP_OUT_OF_BAND));
+#endif
 			}
 		}
 
