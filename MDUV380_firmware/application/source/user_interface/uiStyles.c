@@ -100,6 +100,15 @@ const lv_style_const_prop_t header_item_props[] = {
    LV_STYLE_PROP_INV,
 };
 
+const lv_style_const_prop_t meter_props[] = {
+   LV_STYLE_CONST_RADIUS(0),
+   LV_STYLE_CONST_HEIGHT(5),
+   LV_STYLE_CONST_BORDER_WIDTH(0),
+   LV_STYLE_CONST_BG_OPA(0),
+
+   LV_STYLE_PROP_INV,
+};
+
 const lv_style_const_prop_t contact_props[] = {
    LV_STYLE_CONST_TEXT_COLOR(LV_COLOR_MAKE16(0xFF, 0xFF, 0xFF)),
    LV_STYLE_CONST_TEXT_FONT(&lv_font_24),
@@ -167,6 +176,8 @@ LV_STYLE_CONST_INIT(splash_item_style, splash_item_props);
 
 LV_STYLE_CONST_INIT(header_style, header_props);
 LV_STYLE_CONST_INIT(header_item_style, header_item_props);
+
+LV_STYLE_CONST_INIT(meter_style, meter_props);
 
 LV_STYLE_CONST_INIT(contact_style, contact_props);
 LV_STYLE_CONST_INIT(contact_shadow_style, contact_shadow_props);

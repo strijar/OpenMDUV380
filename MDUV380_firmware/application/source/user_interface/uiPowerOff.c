@@ -83,8 +83,9 @@ void uiPowerOff() {
 	lv_obj_add_style(msg, &bordered_style, 0);
 	lv_obj_add_style(msg, &notify_style, 0);
 
-	lv_timer_t *timer = lv_timer_create(timeout, 250 + 1000, NULL);
+	lv_timer_t *timer = lv_timer_create(timeout, 1000, NULL);
 	lv_timer_set_repeat_count(timer, 1);
 
-	lv_scr_load_anim(main_obj, LV_SCR_LOAD_ANIM_FADE_IN, 250, 0, true);
+    uiHeaderStop();
+	lv_scr_load_anim(main_obj, LV_SCR_LOAD_ANIM_NONE, 0, 100, true);
 }

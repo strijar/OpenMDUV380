@@ -45,6 +45,8 @@ extern const lv_style_t		splash_item_style;
 extern const lv_style_t		header_style;
 extern const lv_style_t		header_item_style;
 
+extern const lv_style_t		meter_style;
+
 extern const lv_style_t		contact_style;
 extern const lv_style_t		contact_shadow_style;
 

@@ -92,7 +92,7 @@ void uiSplashScreen() {
 	strcat(line1, line2);
 	HRC6000SetTalkerAlias(line1);
 
-	lv_scr_load_anim(main_obj, LV_SCR_LOAD_ANIM_FADE_IN, 250, 0, true);
+	lv_scr_load_anim(main_obj, LV_SCR_LOAD_ANIM_NONE, 0, 0, true);
 
 	lv_timer_t *timer = lv_timer_create(timeout, 3000, NULL);
 	lv_timer_set_repeat_count(timer, 1);

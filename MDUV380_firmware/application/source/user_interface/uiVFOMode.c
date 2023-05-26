@@ -31,6 +31,7 @@
 #include "user_interface/styles.h"
 #include "user_interface/uiChannelMode.h"
 #include "user_interface/uiMenu.h"
+#include "user_interface/uiHeader.h"
 
 #include "functions/codeplug.h"
 #include "functions/settings.h"
@@ -43,12 +44,13 @@
 #include "functions/ticks.h"
 #include "functions/rxPowerSaving.h"
 
-static void key_cb(lv_event_t * e) {
+static void keyCallback(lv_event_t * e) {
 	uint32_t key = lv_event_get_key(e);
 
 	switch (key) {
 		case LV_KEY_ESC:
 			if (!uiMenuWasOpened()) {
+				uiHeaderStop();
 				uiChannelMode();
 			}
 			break;
@@ -62,18 +64,22 @@ static void key_cb(lv_event_t * e) {
 	}
 }
 
-static void button_cb(lv_event_t * e) {
+static void buttonCallback(lv_event_t * e) {
 	event_button_t *event = lv_event_get_param(e);
 }
 
-void uiVFOMode() {
+static void guiInit() {
 	lv_obj_t *main_obj = lv_obj_create(NULL);
 
-	lv_obj_add_event_cb(main_obj, button_cb, EVENT_BUTTON, NULL);
-	lv_obj_add_event_cb(main_obj, key_cb, LV_EVENT_KEY, NULL);
+	lv_obj_add_event_cb(main_obj, buttonCallback, EVENT_BUTTON, NULL);
+	lv_obj_add_event_cb(main_obj, keyCallback, LV_EVENT_KEY, NULL);
 	lv_group_add_obj(lv_group_get_default(), main_obj);
 
 	lv_obj_set_style_bg_img_src(main_obj, &wallpaper, LV_PART_MAIN);
+
+	uiHeader(main_obj);
+
+	/* * */
 
 	lv_obj_t *label = lv_label_create(main_obj);
 
@@ -95,7 +101,11 @@ void uiVFOMode() {
 	lv_obj_add_style(label, &bordered_style, 0);
 	lv_obj_add_style(label, &bottom_item_style, 0);
 
-	lv_scr_load_anim(main_obj, LV_SCR_LOAD_ANIM_FADE_IN, 250, 0, true);
+    lv_scr_load_anim(main_obj, LV_SCR_LOAD_ANIM_NONE, 0, 100, true);
+}
+
+void uiVFOMode() {
+	guiInit();
 
 	settingsSet(nonVolatileSettings.initialMenuNumber, UI_VFO_MODE);
 }

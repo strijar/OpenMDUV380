@@ -35,5 +35,6 @@
 
 lv_obj_t * uiHeader(lv_obj_t *parent);
 void uiHeaderInfoUpdate();
+void uiHeaderStop();
 
 #endif /* INCLUDE_USER_INTERFACE_UIHEADER_H_ */

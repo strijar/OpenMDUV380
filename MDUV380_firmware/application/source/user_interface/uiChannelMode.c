@@ -76,6 +76,7 @@ static void keyCallback(lv_event_t * e) {
 	switch (key) {
 		case LV_KEY_ESC:
 			if (!uiMenuWasOpened()) {
+				uiHeaderStop();
 				uiVFOMode();
 			}
 			break;
@@ -233,7 +234,7 @@ static void guiInit() {
 	lv_obj_set_pos(contact_obj, 0, y);
 	lv_obj_add_style(contact_obj, &contact_style, 0);
 
-	lv_scr_load_anim(main_obj, LV_SCR_LOAD_ANIM_FADE_IN, 250, 0, true);
+    lv_scr_load_anim(main_obj, LV_SCR_LOAD_ANIM_NONE, 0, 100, true);
 }
 
 static void updateTrxID() {
@@ -546,12 +547,17 @@ static void guiUpdateContact() {
 static void guiUpdateChannel() {
 	char nameBuf[NAME_BUFFER_LEN];
 
-	if (!displayChannelSettings) {
+	if (displayChannelSettings) {
+		lv_obj_add_flag(channel_obj, LV_OBJ_FLAG_HIDDEN);
+		lv_obj_add_flag(channel_shadow_obj, LV_OBJ_FLAG_HIDDEN);
+	} else {
 		codeplugUtilConvertBufToString(currentChannelData->name, nameBuf, 16);
+
+		lv_obj_clear_flag(channel_obj, LV_OBJ_FLAG_HIDDEN);
+		lv_obj_clear_flag(channel_shadow_obj, LV_OBJ_FLAG_HIDDEN);
 
 		lv_label_set_text(channel_obj, nameBuf);
 		lv_label_set_text(channel_shadow_obj, nameBuf);
-		// uiUtilityDisplayInformation(nameBuf, (uiDataGlobal.reverseRepeaterChannel == true)?DISPLAY_INFO_CHANNEL_INVERTED:DISPLAY_INFO_CHANNEL , (trxTransmissionEnabled ? DISPLAY_Y_POS_CHANNEL_SECOND_LINE : -1));
 	}
 }
 
@@ -559,6 +565,8 @@ static void guiUpdateInfoZone() {
 	int channelNumber;
 
 	if (displayChannelSettings) {
+		lv_obj_add_flag(zone_obj, LV_OBJ_FLAG_HIDDEN);
+
 #if 0
 		uiUtilityDisplayInformation(NULL, DISPLAY_INFO_TONE_AND_SQUELCH, -1);
 
@@ -566,6 +574,8 @@ static void guiUpdateInfoZone() {
 		uiUtilityDisplayFrequency(DISPLAY_Y_POS_TX_FREQ, true, false, (uiDataGlobal.reverseRepeaterChannel ? currentChannelData->rxFreq : currentChannelData->txFreq), false, false, 0);
 #endif
 	} else {
+		lv_obj_clear_flag(zone_obj, LV_OBJ_FLAG_HIDDEN);
+
 		if (CODEPLUG_ZONE_IS_ALLCHANNELS(currentZone)) {
 			/* All Channels virtual zone */
 
