@@ -35,7 +35,13 @@ const lv_style_const_prop_t main_props[] = {
    LV_STYLE_CONST_BG_COLOR(0x000000),
    LV_STYLE_CONST_BG_OPA(128),
 
+   LV_STYLE_CONST_BORDER_WIDTH(0),
    LV_STYLE_CONST_RADIUS(0),
+
+   LV_STYLE_CONST_PAD_LEFT(0),
+   LV_STYLE_CONST_PAD_RIGHT(0),
+   LV_STYLE_CONST_PAD_TOP(0),
+   LV_STYLE_CONST_PAD_BOTTOM(0),
 
    LV_STYLE_PROP_INV,
 };
@@ -80,6 +86,16 @@ const lv_style_const_prop_t header_props[] = {
 
    LV_STYLE_CONST_BG_COLOR(LV_COLOR_MAKE16(0x00, 0x00, 0x55)),
    LV_STYLE_CONST_BG_OPA(128),
+
+   LV_STYLE_CONST_RADIUS(0),
+   LV_STYLE_CONST_BORDER_WIDTH(0),
+
+   LV_STYLE_PROP_INV,
+};
+
+const lv_style_const_prop_t header_item_props[] = {
+   LV_STYLE_CONST_HEIGHT(14),
+   LV_STYLE_CONST_TEXT_FONT(&lv_font_14),
 
    LV_STYLE_PROP_INV,
 };
@@ -148,7 +164,9 @@ LV_STYLE_CONST_INIT(bottom_item_style, bottom_item_props);
 LV_STYLE_CONST_INIT(notify_style, notify_props);
 
 LV_STYLE_CONST_INIT(splash_item_style, splash_item_props);
+
 LV_STYLE_CONST_INIT(header_style, header_props);
+LV_STYLE_CONST_INIT(header_item_style, header_item_props);
 
 LV_STYLE_CONST_INIT(contact_style, contact_props);
 LV_STYLE_CONST_INIT(contact_shadow_style, contact_shadow_props);

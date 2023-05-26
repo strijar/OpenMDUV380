@@ -31,6 +31,7 @@
 #include "user_interface/styles.h"
 #include "user_interface/uiVFOMode.h"
 #include "user_interface/uiMenu.h"
+#include "user_interface/uiHeader.h"
 #include "functions/tx.h"
 
 #include "functions/codeplug.h"
@@ -168,6 +169,8 @@ static void guiInit() {
 	lv_obj_clear_flag(main_obj, LV_OBJ_FLAG_SCROLLABLE);
 
 	lv_obj_set_style_bg_img_src(main_obj, &wallpaper, LV_PART_MAIN);
+
+	uiHeader(main_obj);
 
 	/* Bottom */
 
@@ -318,6 +321,7 @@ static void changeZone(bool next) {
 	lastHeardClearLastID();
 	uiChannelInitializeCurrentZone();
 	loadChannelData(false, true);
+	uiHeaderInfoUpdate();
 
 	guiUpdateInfoZone();
 	guiUpdateChannel();
@@ -349,6 +353,8 @@ static void changeChannelNext() {
 
 	lastHeardClearLastID();
 	loadChannelData(false, true);
+	uiHeaderInfoUpdate();
+
 	guiUpdateInfoZone();
 	guiUpdateChannel();
 	guiUpdateContact();
@@ -378,6 +384,8 @@ static void changeChannelPrev() {
 
 	lastHeardClearLastID();
 	loadChannelData(false, true);
+	uiHeaderInfoUpdate();
+
 	guiUpdateInfoZone();
 	guiUpdateChannel();
 	guiUpdateContact();
@@ -587,4 +595,6 @@ void uiChannelMode() {
 	guiUpdateContact();
 	guiUpdateChannel();
 	guiUpdateInfoZone();
+
+	uiHeaderInfoUpdate();
 }
