@@ -47,9 +47,9 @@
 
 #define NAME_BUFFER_LEN   23
 
-static char 	currentZoneName[SCREEN_LINE_BUFFER_SIZE];
-static int 		directChannelNumber = 0;
-static bool		displayChannelSettings = false;
+static char 	current_zone_name[SCREEN_LINE_BUFFER_SIZE];
+static int 		direct_channel_number = 0;
+static bool		display_channel_settings = false;
 
 static lv_obj_t	*contact_obj;
 static lv_obj_t	*contact_shadow_obj;
@@ -66,12 +66,16 @@ static void changeChannelPrev();
 static void changeChannelNext();
 static void changeContact(bool next);
 static void changeSquelch(int dir);
+static void changeMode();
+static void changeTS();
+static void changeBW();
 static void loadChannelData(bool useChannelDataInMemory, bool loadVoicePromptAnnouncement);
 
 void uiChannelInitializeCurrentZone();
 
 static void keyCallback(lv_event_t * e) {
-	uint32_t key = lv_event_get_key(e);
+	uint32_t	key = lv_event_get_key(e);
+	int			mode = trxGetMode();
 
 	switch (key) {
 		case LV_KEY_ESC:
@@ -88,9 +92,10 @@ static void keyCallback(lv_event_t * e) {
 		case LV_KEY_UP:
 			if (buttonsPressed(BUTTON_SK2)) {
 				increasePowerLevel(false);
+				uiHeaderPwr(true);
 				uiHeaderInfoUpdate();
 			} else {
-				if (trxGetMode() == RADIO_MODE_DIGITAL) {
+				if (mode == RADIO_MODE_DIGITAL) {
 					changeContact(false);
 				} else {
 					changeSquelch(-1);
@@ -101,9 +106,10 @@ static void keyCallback(lv_event_t * e) {
 		case LV_KEY_DOWN:
 			if (buttonsPressed(BUTTON_SK2)) {
 				decreasePowerLevel();
+				uiHeaderPwr(true);
 				uiHeaderInfoUpdate();
 			} else {
-				if (trxGetMode() == RADIO_MODE_DIGITAL) {
+				if (mode == RADIO_MODE_DIGITAL) {
 					changeContact(true);
 				} else {
 					changeSquelch(+1);
@@ -124,6 +130,18 @@ static void keyCallback(lv_event_t * e) {
 				changeZone(false);
 			} else {
 				changeChannelNext();
+			}
+			break;
+
+		case '*':
+			if (buttonsPressed(BUTTON_SK2)) {
+				changeMode();
+			} else {
+				if (mode == RADIO_MODE_DIGITAL) {
+					changeTS();
+				} else {
+					changeBW();
+				}
 			}
 			break;
 
@@ -155,12 +173,12 @@ static void buttonCallback(lv_event_t * e) {
 		case BUTTON_SK1:
 			switch (event->state) {
 				case BUTTON_PRESS:
-					displayChannelSettings = true;
+					display_channel_settings = true;
 					break;
 
 				case BUTTON_RELEASE:
 				case BUTTON_LONG_RELEASE:
-					displayChannelSettings = false;
+					display_channel_settings = false;
 					break;
 
 				default:
@@ -315,6 +333,56 @@ static void changeSquelch(int dir) {
 
 }
 
+static void changeMode() {
+	if (trxGetMode() == RADIO_MODE_DIGITAL) {
+		currentChannelData->chMode = RADIO_MODE_ANALOG;
+		trxSetModeAndBandwidth(currentChannelData->chMode, codeplugChannelIsFlagSet(currentChannelData, CHANNEL_FLAG_BW_25K));
+		trxSetRxCSS(currentChannelData->rxTone);
+	} else {
+		currentChannelData->chMode = RADIO_MODE_DIGITAL;
+		uiDataGlobal.VoicePrompts.inhibitInitial = true;
+		loadChannelData(true, false);
+		uiDataGlobal.VoicePrompts.inhibitInitial = false;
+
+		uiHeaderPwr(false);
+		uiHeaderTS(false);
+	}
+
+	announceItem(PROMPT_SEQUENCE_MODE, PROMPT_THRESHOLD_1);
+	guiUpdateContact();
+	guiUpdateChannel();
+	guiUpdateInfoZone();
+
+	uiHeaderMode(true);
+	uiHeaderInfoUpdate();
+}
+
+static void changeTS() {
+	trxSetDMRTimeSlot(1 - trxGetDMRTimeSlot(), true);
+
+	disableAudioAmp(AUDIO_AMP_MODE_RF);
+	lastHeardClearLastID();
+	announceItem(PROMPT_SEQUENCE_TS, PROMPT_THRESHOLD_3);
+
+	uiHeaderTS(true);
+	uiHeaderInfoUpdate();
+}
+
+static void changeBW() {
+	if (codeplugChannelIsFlagSet(currentChannelData, CHANNEL_FLAG_BW_25K)) {
+		codeplugChannelSetFlag(currentChannelData, CHANNEL_FLAG_BW_25K, false);
+	} else {
+		codeplugChannelSetFlag(currentChannelData, CHANNEL_FLAG_BW_25K, true);
+		nextKeyBeepMelody = (int *)MELODY_KEY_BEEP_FIRST_ITEM;
+	}
+
+	trxSetModeAndBandwidth(RADIO_MODE_ANALOG, codeplugChannelIsFlagSet(currentChannelData, CHANNEL_FLAG_BW_25K));
+	soundSetMelody(MELODY_NACK_BEEP);
+
+	uiHeaderMode(true);
+	uiHeaderInfoUpdate();
+}
+
 static void changeZone(bool next) {
 	int numZones = codeplugZonesGetCount();
 
@@ -334,6 +402,10 @@ static void changeZone(bool next) {
 
 	settingsSet(nonVolatileSettings.currentChannelIndexInZone, 0);
 	currentChannelData->rxFreq = 0;
+
+	uiHeaderMode(false);
+	uiHeaderPwr(false);
+	uiHeaderTS(false);
 
 	lastHeardClearLastID();
 	uiChannelInitializeCurrentZone();
@@ -368,6 +440,10 @@ static void changeChannelNext() {
 		}
 	}
 
+	uiHeaderMode(false);
+	uiHeaderPwr(false);
+	uiHeaderTS(false);
+
 	lastHeardClearLastID();
 	loadChannelData(false, true);
 	uiHeaderInfoUpdate();
@@ -398,6 +474,10 @@ static void changeChannelPrev() {
 			settingsSet(nonVolatileSettings.currentChannelIndexInZone, prevChan);
 		}
 	}
+
+	uiHeaderMode(false);
+	uiHeaderPwr(false);
+	uiHeaderTS(false);
 
 	lastHeardClearLastID();
 	loadChannelData(false, true);
@@ -514,13 +594,16 @@ static void loadChannelData(bool useChannelDataInMemory, bool loadVoicePromptAnn
 
 void uiChannelInitializeCurrentZone(void) {
 	codeplugZoneGetDataForNumber(nonVolatileSettings.currentZone, &currentZone);
-	codeplugUtilConvertBufToString(currentZone.name, currentZoneName, 16);
+	codeplugUtilConvertBufToString(currentZone.name, current_zone_name, 16);
 }
 
 static void dataInit() {
 	settingsSet(nonVolatileSettings.initialMenuNumber, UI_CHANNEL_MODE);
 	lastHeardClearLastID();
 	currentChannelData = &channelScreenChannelData;
+
+	tsSetManualOverride(CHANNEL_CHANNEL, TS_NO_OVERRIDE);
+	tsSetContactHasBeenOverriden(CHANNEL_CHANNEL, false);
 
 	if (currentChannelData->rxFreq != 0) {
 		loadChannelData(true, false);
@@ -537,7 +620,7 @@ static void guiUpdateContact() {
 		lv_obj_clear_flag(contact_obj, LV_OBJ_FLAG_HIDDEN);
 		lv_obj_clear_flag(contact_shadow_obj, LV_OBJ_FLAG_HIDDEN);
 
-		if (displayChannelSettings) {
+		if (display_channel_settings) {
 			uint32_t PCorTG = ((nonVolatileSettings.overrideTG != 0) ? nonVolatileSettings.overrideTG : codeplugContactGetPackedId(&currentContactData));
 
 			snprintf(nameBuf, sizeof(nameBuf), "%s %u", (((PCorTG >> 24) == PC_CALL_FLAG) ? "PC" : "TG"), (PCorTG & 0xFFFFFF));
@@ -563,7 +646,7 @@ static void guiUpdateContact() {
 static void guiUpdateChannel() {
 	char nameBuf[NAME_BUFFER_LEN];
 
-	if (displayChannelSettings) {
+	if (display_channel_settings) {
 		lv_obj_add_flag(channel_obj, LV_OBJ_FLAG_HIDDEN);
 		lv_obj_add_flag(channel_shadow_obj, LV_OBJ_FLAG_HIDDEN);
 	} else {
@@ -580,7 +663,7 @@ static void guiUpdateChannel() {
 static void guiUpdateInfoZone() {
 	int channelNumber;
 
-	if (displayChannelSettings) {
+	if (display_channel_settings) {
 		lv_obj_add_flag(zone_obj, LV_OBJ_FLAG_HIDDEN);
 
 #if 0
@@ -597,18 +680,18 @@ static void guiUpdateInfoZone() {
 
 			channelNumber = nonVolatileSettings.currentChannelIndexInAllZone;
 
-			if (directChannelNumber > 0) {
-				lv_label_set_text_fmt(zone_obj, "Goto %d", directChannelNumber);
+			if (direct_channel_number > 0) {
+				lv_label_set_text_fmt(zone_obj, "Goto %d", direct_channel_number);
 			} else {
 				lv_label_set_text_fmt(zone_obj, "All:%d", channelNumber);
 			}
 		} else {
 			channelNumber = nonVolatileSettings.currentChannelIndexInZone + 1;
 
-			if (directChannelNumber > 0) {
-				lv_label_set_text_fmt(zone_obj, "Goto %d", directChannelNumber);
+			if (direct_channel_number > 0) {
+				lv_label_set_text_fmt(zone_obj, "Goto %d", direct_channel_number);
 			} else {
-				lv_label_set_text_fmt(zone_obj, "%s:%d", currentZoneName, channelNumber);
+				lv_label_set_text_fmt(zone_obj, "%s:%d", current_zone_name, channelNumber);
 			}
 		}
 	}

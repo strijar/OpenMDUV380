@@ -37,4 +37,8 @@ lv_obj_t * uiHeader(lv_obj_t *parent);
 void uiHeaderInfoUpdate();
 void uiHeaderStop();
 
+void uiHeaderPwr(bool manual);
+void uiHeaderMode(bool manual);
+void uiHeaderTS(bool manual);
+
 #endif /* INCLUDE_USER_INTERFACE_UIHEADER_H_ */

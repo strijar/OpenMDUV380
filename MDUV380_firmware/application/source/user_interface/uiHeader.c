@@ -147,6 +147,36 @@ void uiHeaderInfoUpdate() {
 	lv_label_set_text(pwr_obj, power_labels[trxGetPowerLevel()]);
 }
 
+void uiHeaderPwr(bool manual) {
+	if (manual) {
+		lv_obj_remove_style(pwr_obj, &header_item_style, LV_PART_MAIN);
+		lv_obj_add_style(pwr_obj, &header_manual_item_style, LV_PART_MAIN);
+	} else {
+		lv_obj_remove_style(pwr_obj, &header_manual_item_style, LV_PART_MAIN);
+		lv_obj_add_style(pwr_obj, &header_item_style, LV_PART_MAIN);
+	}
+}
+
+void uiHeaderMode(bool manual) {
+	if (manual) {
+		lv_obj_remove_style(mode_obj, &header_item_style, LV_PART_MAIN);
+		lv_obj_add_style(mode_obj, &header_manual_item_style, LV_PART_MAIN);
+	} else {
+		lv_obj_remove_style(mode_obj, &header_manual_item_style, LV_PART_MAIN);
+		lv_obj_add_style(mode_obj, &header_item_style, LV_PART_MAIN);
+	}
+}
+
+void uiHeaderTS(bool manual) {
+	if (manual) {
+		lv_obj_remove_style(ts_obj, &header_item_style, LV_PART_MAIN);
+		lv_obj_add_style(ts_obj, &header_manual_item_style, LV_PART_MAIN);
+	} else {
+		lv_obj_remove_style(ts_obj, &header_manual_item_style, LV_PART_MAIN);
+		lv_obj_add_style(ts_obj, &header_item_style, LV_PART_MAIN);
+	}
+}
+
 lv_obj_t * uiHeader(lv_obj_t *parent) {
 	main_obj = lv_obj_create(parent);
 
