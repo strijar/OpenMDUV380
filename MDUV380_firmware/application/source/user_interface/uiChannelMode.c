@@ -86,18 +86,28 @@ static void keyCallback(lv_event_t * e) {
 			break;
 
 		case LV_KEY_UP:
-			if (trxGetMode() == RADIO_MODE_DIGITAL) {
-				changeContact(false);
+			if (buttonsPressed(BUTTON_SK2)) {
+				increasePowerLevel(false);
+				uiHeaderInfoUpdate();
 			} else {
-				changeSquelch(-1);
+				if (trxGetMode() == RADIO_MODE_DIGITAL) {
+					changeContact(false);
+				} else {
+					changeSquelch(-1);
+				}
 			}
 			break;
 
 		case LV_KEY_DOWN:
-			if (trxGetMode() == RADIO_MODE_DIGITAL) {
-				changeContact(true);
+			if (buttonsPressed(BUTTON_SK2)) {
+				decreasePowerLevel();
+				uiHeaderInfoUpdate();
 			} else {
-				changeSquelch(+1);
+				if (trxGetMode() == RADIO_MODE_DIGITAL) {
+					changeContact(true);
+				} else {
+					changeSquelch(+1);
+				}
 			}
 			break;
 
@@ -136,6 +146,9 @@ static void buttonCallback(lv_event_t * e) {
 				case BUTTON_LONG_RELEASE:
 					txTurnOff();
 					break;
+
+				default:
+					break;
 			}
 			break;
 
@@ -148,6 +161,9 @@ static void buttonCallback(lv_event_t * e) {
 				case BUTTON_RELEASE:
 				case BUTTON_LONG_RELEASE:
 					displayChannelSettings = false;
+					break;
+
+				default:
 					break;
 			}
 			guiUpdateContact();
@@ -183,9 +199,9 @@ static void guiInit() {
 	lv_obj_set_pos(label, 2, y);
 	lv_obj_set_size(label, 160/3, 20);
 
-	lv_obj_add_style(label, &main_style, 0);
-	lv_obj_add_style(label, &bordered_style, 0);
-	lv_obj_add_style(label, &bottom_item_style, 0);
+	lv_obj_add_style(label, (lv_style_t *) &main_style, 0);
+	lv_obj_add_style(label, (lv_style_t *) &bordered_style, 0);
+	lv_obj_add_style(label, (lv_style_t *) &bottom_item_style, 0);
 
 	label = lv_label_create(main_obj);
 
@@ -193,9 +209,9 @@ static void guiInit() {
 	lv_obj_set_pos(label, 160 - 160/3 - 2, y);
 	lv_obj_set_size(label, 160/3, 20);
 
-	lv_obj_add_style(label, &main_style, 0);
-	lv_obj_add_style(label, &bordered_style, 0);
-	lv_obj_add_style(label, &bottom_item_style, 0);
+	lv_obj_add_style(label, (lv_style_t *) &main_style, 0);
+	lv_obj_add_style(label, (lv_style_t *) &bordered_style, 0);
+	lv_obj_add_style(label, (lv_style_t *) &bottom_item_style, 0);
 
 	/* * */
 
@@ -204,7 +220,7 @@ static void guiInit() {
 	zone_obj = lv_label_create(main_obj);
 
 	lv_obj_set_pos(zone_obj, 0, y);
-	lv_obj_add_style(zone_obj, &zone_style, 0);
+	lv_obj_add_style(zone_obj, (lv_style_t *) &zone_style, 0);
 
 	/* * */
 
@@ -213,12 +229,12 @@ static void guiInit() {
 	channel_shadow_obj = lv_label_create(main_obj);
 
 	lv_obj_set_pos(channel_shadow_obj, 2, y + 2);
-	lv_obj_add_style(channel_shadow_obj, &channel_shadow_style, 0);
+	lv_obj_add_style(channel_shadow_obj, (lv_style_t *) &channel_shadow_style, 0);
 
 	channel_obj = lv_label_create(main_obj);
 
 	lv_obj_set_pos(channel_obj, 0, y);
-	lv_obj_add_style(channel_obj, &channel_style, 0);
+	lv_obj_add_style(channel_obj, (lv_style_t *) &channel_style, 0);
 
 	/* * */
 
@@ -227,12 +243,12 @@ static void guiInit() {
 	contact_shadow_obj = lv_label_create(main_obj);
 
 	lv_obj_set_pos(contact_shadow_obj, 2, y  +2);
-	lv_obj_add_style(contact_shadow_obj, &contact_shadow_style, 0);
+	lv_obj_add_style(contact_shadow_obj, (lv_style_t *) &contact_shadow_style, 0);
 
 	contact_obj = lv_label_create(main_obj);
 
 	lv_obj_set_pos(contact_obj, 0, y);
-	lv_obj_add_style(contact_obj, &contact_style, 0);
+	lv_obj_add_style(contact_obj, (lv_style_t *) &contact_style, 0);
 
     lv_scr_load_anim(main_obj, LV_SCR_LOAD_ANIM_NONE, 0, 100, true);
 }
