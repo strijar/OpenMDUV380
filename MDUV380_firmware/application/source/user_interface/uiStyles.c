@@ -149,7 +149,7 @@ const lv_style_const_prop_t channel_props[] = {
    LV_STYLE_CONST_TEXT_ALIGN(LV_TEXT_ALIGN_CENTER),
 
    LV_STYLE_CONST_WIDTH(160),
-   LV_STYLE_CONST_HEIGHT(20),
+   LV_STYLE_CONST_HEIGHT(40),
 
    LV_STYLE_PROP_INV,
 };
@@ -161,7 +161,7 @@ const lv_style_const_prop_t channel_shadow_props[] = {
    LV_STYLE_CONST_TEXT_ALIGN(LV_TEXT_ALIGN_CENTER),
 
    LV_STYLE_CONST_WIDTH(160),
-   LV_STYLE_CONST_HEIGHT(20),
+   LV_STYLE_CONST_HEIGHT(40),
 
    LV_STYLE_PROP_INV,
 };
@@ -173,6 +173,25 @@ const lv_style_const_prop_t zone_props[] = {
 
    LV_STYLE_CONST_WIDTH(160),
    LV_STYLE_CONST_HEIGHT(20),
+
+   LV_STYLE_PROP_INV,
+};
+
+const lv_style_const_prop_t contact_settings_props[] = {
+   LV_STYLE_CONST_TEXT_COLOR(LV_COLOR_MAKE16(0xFF, 0xFF, 0x00)),
+
+   LV_STYLE_PROP_INV,
+};
+
+const lv_style_const_prop_t channel_settings_props[] = {
+   LV_STYLE_CONST_TEXT_COLOR(LV_COLOR_MAKE16(0xFF, 0xFF, 0x00)),
+   LV_STYLE_CONST_TEXT_FONT(&lv_font_24),
+
+   LV_STYLE_PROP_INV,
+};
+
+const lv_style_const_prop_t channel_settings_shadow_props[] = {
+   LV_STYLE_CONST_TEXT_FONT(&lv_font_24),
 
    LV_STYLE_PROP_INV,
 };
@@ -198,3 +217,8 @@ LV_STYLE_CONST_INIT(channel_style, channel_props);
 LV_STYLE_CONST_INIT(channel_shadow_style, channel_shadow_props);
 
 LV_STYLE_CONST_INIT(zone_style, zone_props);
+
+LV_STYLE_CONST_INIT(contact_settings_style, contact_settings_props);
+
+LV_STYLE_CONST_INIT(channel_settings_style, channel_settings_props);
+LV_STYLE_CONST_INIT(channel_settings_shadow_style, channel_settings_shadow_props);

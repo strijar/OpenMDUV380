@@ -59,6 +59,7 @@ static lv_obj_t	*zone_obj;
 
 static void guiUpdateContact();
 static void guiUpdateChannel();
+static void guiViewChannelSettings(bool settings);
 static void guiUpdateInfoZone();
 
 static void changeZone(bool next);
@@ -173,12 +174,12 @@ static void buttonCallback(lv_event_t * e) {
 		case BUTTON_SK1:
 			switch (event->state) {
 				case BUTTON_PRESS:
-					display_channel_settings = true;
+					guiViewChannelSettings(true);
 					break;
 
 				case BUTTON_RELEASE:
 				case BUTTON_LONG_RELEASE:
-					display_channel_settings = false;
+					guiViewChannelSettings(false);
 					break;
 
 				default:
@@ -643,20 +644,53 @@ static void guiUpdateContact() {
 	}
 }
 
+static void displayFrequency(char *buffer, size_t size, bool isTX, uint32_t frequency) {
+	int			mhz = frequency / 100000;
+	int			khz = frequency - mhz * 100000;
+
+	int16_t len = snprintf(buffer, size, "%s %d.%05d", isTX ? "Tx" : "Rx", mhz, khz);
+
+	for (int16_t i = len - 1; i > 0; i--)
+		if (buffer[i] == '0') {
+			buffer[i] = '\0';
+		} else {
+			break;
+		}
+}
+
 static void guiUpdateChannel() {
-	char nameBuf[NAME_BUFFER_LEN];
-
 	if (display_channel_settings) {
-		lv_obj_add_flag(channel_obj, LV_OBJ_FLAG_HIDDEN);
-		lv_obj_add_flag(channel_shadow_obj, LV_OBJ_FLAG_HIDDEN);
-	} else {
-		codeplugUtilConvertBufToString(currentChannelData->name, nameBuf, 16);
+		char rx[32];
+		char tx[32];
 
-		lv_obj_clear_flag(channel_obj, LV_OBJ_FLAG_HIDDEN);
-		lv_obj_clear_flag(channel_shadow_obj, LV_OBJ_FLAG_HIDDEN);
+		displayFrequency(rx, sizeof(rx), false, (uiDataGlobal.reverseRepeaterChannel ? currentChannelData->txFreq : currentChannelData->rxFreq));
+		displayFrequency(tx, sizeof(tx), true, (uiDataGlobal.reverseRepeaterChannel ? currentChannelData->rxFreq : currentChannelData->txFreq));
+
+		lv_label_set_text_fmt(channel_obj, "%s\n%s", rx, tx);
+		lv_label_set_text_fmt(channel_shadow_obj, "%s\n%s", rx, tx);
+	} else {
+		char nameBuf[NAME_BUFFER_LEN];
+
+		codeplugUtilConvertBufToString(currentChannelData->name, nameBuf, 16);
 
 		lv_label_set_text(channel_obj, nameBuf);
 		lv_label_set_text(channel_shadow_obj, nameBuf);
+	}
+}
+
+static void guiViewChannelSettings(bool settings) {
+	display_channel_settings = settings;
+
+	if (settings) {
+		lv_obj_add_style(contact_obj, &contact_settings_style, LV_PART_MAIN);
+
+		lv_obj_add_style(channel_obj, &channel_settings_style, LV_PART_MAIN);
+		lv_obj_add_style(channel_shadow_obj, &channel_settings_shadow_style, LV_PART_MAIN);
+	} else {
+		lv_obj_remove_style(contact_obj, &contact_settings_style, LV_PART_MAIN);
+
+		lv_obj_remove_style(channel_obj, &channel_settings_style, LV_PART_MAIN);
+		lv_obj_remove_style(channel_shadow_obj, &channel_settings_shadow_style, LV_PART_MAIN);
 	}
 }
 

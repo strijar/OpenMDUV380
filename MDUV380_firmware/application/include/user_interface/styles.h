@@ -56,4 +56,9 @@ extern const lv_style_t		channel_shadow_style;
 
 extern const lv_style_t		zone_style;
 
+extern const lv_style_t		contact_settings_style;
+
+extern const lv_style_t		channel_settings_style;
+extern const lv_style_t		channel_settings_shadow_style;
+
 #endif /* INCLUDE_USER_INTERFACE_STYLES_H_ */
