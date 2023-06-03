@@ -46,7 +46,6 @@ menuStatus_t menuPrivateCall(uiEvent_t *ev, bool isFirstRun)
 		if (handled)
 		{
 			handled = false;
-			keyboardReset();
 			menuSystemPopPreviousMenu();
 			return MENU_STATUS_SUCCESS;
 		}

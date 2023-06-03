@@ -47,6 +47,7 @@ static lv_disp_draw_buf_t	disp_draw_buf;
 static lv_color_t			disp_buf[DISPLAY_SIZE_X * ROWS];
 static lv_disp_drv_t 		disp_drv;
 static lv_disp_t			*disp;
+static lv_timer_t			*light_timer = NULL;
 
 void displayWriteCmd(uint8_t cmd)
 {
@@ -449,20 +450,34 @@ void displayInit()
 	disp = lv_disp_drv_register(&disp_drv);
 }
 
-void displayEnableBacklight(bool enable, int displayBacklightPercentageOff)
-{
-	if (enable)
-	{
+void displayEnableBacklight(bool enable, int displayBacklightPercentageOff) {
+	if (enable) {
 		gpioSetDisplayBacklightIntensityPercentage(nonVolatileSettings.displayBacklightPercentage);
-	}
-	else
-	{
+	} else {
 		gpioSetDisplayBacklightIntensityPercentage(((nonVolatileSettings.backlightMode == BACKLIGHT_MODE_NONE) ? 0 : displayBacklightPercentageOff));
 	}
 }
 
-bool displayIsBacklightLit(void)
-{
+bool displayIsBacklightLit(void) {
 	return (gpioGetDisplayBacklightIntensityPercentage() != nonVolatileSettings.displayBacklightPercentageOff);
 }
 
+static void light_timeout(lv_timer_t *t) {
+	displayEnableBacklight(false, nonVolatileSettings.displayBacklightPercentageOff);
+	light_timer = NULL;
+}
+
+void displayLightTrigger(bool fromKeyEvent) {
+	if (((nonVolatileSettings.backlightMode == BACKLIGHT_MODE_AUTO) || (nonVolatileSettings.backlightMode == BACKLIGHT_MODE_SQUELCH))
+		|| ((nonVolatileSettings.backlightMode == BACKLIGHT_MODE_BUTTONS) && fromKeyEvent))
+	{
+		if (light_timer) {
+			lv_timer_reset(light_timer);
+		} else {
+			light_timer = lv_timer_create(light_timeout, nonVolatileSettings.backLightTimeout * 1000, NULL);
+			lv_timer_set_repeat_count(light_timer, 1);
+		}
+
+		displayEnableBacklight(true, nonVolatileSettings.displayBacklightPercentageOff);
+	}
+}

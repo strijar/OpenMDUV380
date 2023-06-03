@@ -1249,7 +1249,6 @@ static void handleEvent(uiEvent_t *ev)
 			 * And I don't know what it was intended to do.
 			else
 			{
-				keyboardReset();
 				keypadAlphaEnable = true;
 				soundSetMelody(MELODY_ERROR_BEEP);
 			}*/

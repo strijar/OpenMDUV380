@@ -168,7 +168,6 @@ void uiCPSUpdate(uiCPSCommand_t command, int x, int y, ucFont_t fontSize, ucText
 
 void menuSystemInit(void);
 void menuSystemLanguageHasChanged(void);
-void displayLightTrigger(bool fromKeyEvent);
 void displayLightOverrideTimeout(int timeout);
 int menuSystemGetLastItemIndex(int stackPos);
 void menuSystemPushNewMenu(int menuNumber);

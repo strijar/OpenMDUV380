@@ -122,11 +122,11 @@ typedef struct
 	uint8_t			beepVolumeDivider;
 	uint8_t			micGainDMR;
 	uint8_t			micGainFM;
-	uint8_t			backlightMode; // see BACKLIGHT_MODE enum
-	uint8_t			backLightTimeout; // 0 = never timeout. 1 - 255 time in seconds
+	uint8_t			backlightMode; 					/* see BACKLIGHT_MODE enum	*/
+	uint8_t			backLightTimeout; 				/* 0 = never timeout. 1 - 255 time in seconds */
 	int8_t			displayContrast;
 	int8_t			displayBacklightPercentage;
-	int8_t			displayBacklightPercentageOff; // backlight level when "off"
+	int8_t			displayBacklightPercentageOff;	/* backlight level when "off" */
 	uint8_t			initialMenuNumber;
 	uint8_t			extendedInfosOnScreen;
 	uint8_t			txFreqLimited;

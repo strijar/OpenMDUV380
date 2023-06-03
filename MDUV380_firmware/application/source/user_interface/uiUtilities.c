@@ -1952,27 +1952,6 @@ void setOverrideTGorPC(uint32_t tgOrPc, bool privateCall)
 	settingsSet(nonVolatileSettings.overrideTG, tgOrPc);
 }
 
-void uiUtilityDisplayFrequency(uint8_t y, bool isTX, bool hasFocus, uint32_t frequency, bool displayVFOChannel, bool isScanMode, uint8_t dualWatchVFO)
-{
-	char buffer[SCREEN_LINE_BUFFER_SIZE];
-	int val_before_dp = frequency / 100000;
-	int val_after_dp = frequency - val_before_dp * 100000;
-
-	// Focus + direction
-	snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%c%c", ((hasFocus && !isScanMode)? '>' : ' '), (isTX ? 'T' : 'R'));
-
-	displayPrintAt(0, y, buffer, FONT_SIZE_3);
-	// VFO
-	if (displayVFOChannel)
-	{
-		displayPrintAt(16, y + VFO_LETTER_Y_OFFSET, (((dualWatchVFO == 0) && (nonVolatileSettings.currentVFONumber == 0)) || (dualWatchVFO == 1)) ? "A" : "B", FONT_SIZE_1);
-	}
-	// Frequency
-	snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%d.%05d", val_before_dp, val_after_dp);
-	displayPrintAt(FREQUENCY_X_POS, y, buffer, FONT_SIZE_3);
-	displayPrintAt(DISPLAY_SIZE_X - (3 * 8), y, "MHz", FONT_SIZE_3);
-}
-
 size_t dcsPrintf(char *dest, size_t maxLen, char *prefix, uint16_t tone)
 {
 	return snprintf(dest, maxLen, "%sD%03X%c", (prefix ? prefix : ""), (tone & ~CSS_TYPE_DCS_MASK), ((tone & CSS_TYPE_DCS_INVERTED) ? 'I' : 'N'));

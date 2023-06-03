@@ -425,8 +425,6 @@ static void changeChannelNext() {
 		if (currentZone.NOT_IN_CODEPLUGDATA_numChannelsInZone > 1) {
 			nextChan = nonVolatileSettings.currentChannelIndexInAllZone;
 
-			/* All Channels virtual zone */
-
 			do {
 				nextChan = ((((nextChan - 1) + 1) % currentZone.NOT_IN_CODEPLUGDATA_highestIndex) + 1);
 			} while (!codeplugAllChannelsIndexIsInUse(nextChan));
@@ -461,7 +459,6 @@ static void changeChannelPrev() {
 		if (currentZone.NOT_IN_CODEPLUGDATA_numChannelsInZone > 1) {
 			prevChan = nonVolatileSettings.currentChannelIndexInAllZone;
 
-			/* All Channels virtual zone */
 			do {
 				prevChan = ((((prevChan - 1) + currentZone.NOT_IN_CODEPLUGDATA_highestIndex - 1) % currentZone.NOT_IN_CODEPLUGDATA_highestIndex) + 1);
 			} while (!codeplugAllChannelsIndexIsInUse(prevChan));
@@ -495,7 +492,6 @@ static void loadChannelData(bool useChannelDataInMemory, bool loadVoicePromptAnn
 	int		previousSelectedChannelNumber = uiDataGlobal.currentSelectedChannelNumber;
 
 	if (CODEPLUG_ZONE_IS_ALLCHANNELS(currentZone)) {
-		/* All Channels virtual zone */
 		uiDataGlobal.currentSelectedChannelNumber = nonVolatileSettings.currentChannelIndexInAllZone;
 	} else {
 		uiDataGlobal.currentSelectedChannelNumber = currentZone.channels[nonVolatileSettings.currentChannelIndexInZone];
@@ -503,7 +499,6 @@ static void loadChannelData(bool useChannelDataInMemory, bool loadVoicePromptAnn
 
 	if (!useChannelDataInMemory) {
 		if (CODEPLUG_ZONE_IS_ALLCHANNELS(currentZone)) {
-			/* All Channels virtual zone */
 			codeplugChannelGetDataForIndex(nonVolatileSettings.currentChannelIndexInAllZone, &channelScreenChannelData);
 		} else {
 			codeplugChannelGetDataForIndex(currentZone.channels[nonVolatileSettings.currentChannelIndexInZone], &channelScreenChannelData);
@@ -686,11 +681,15 @@ static void guiViewChannelSettings(bool settings) {
 
 		lv_obj_add_style(channel_obj, &channel_settings_style, LV_PART_MAIN);
 		lv_obj_add_style(channel_shadow_obj, &channel_settings_shadow_style, LV_PART_MAIN);
+
+		lv_obj_add_flag(zone_obj, LV_OBJ_FLAG_HIDDEN);
 	} else {
 		lv_obj_remove_style(contact_obj, &contact_settings_style, LV_PART_MAIN);
 
 		lv_obj_remove_style(channel_obj, &channel_settings_style, LV_PART_MAIN);
 		lv_obj_remove_style(channel_shadow_obj, &channel_settings_shadow_style, LV_PART_MAIN);
+
+		lv_obj_clear_flag(zone_obj, LV_OBJ_FLAG_HIDDEN);
 	}
 }
 
@@ -698,35 +697,24 @@ static void guiUpdateInfoZone() {
 	int channelNumber;
 
 	if (display_channel_settings) {
-		lv_obj_add_flag(zone_obj, LV_OBJ_FLAG_HIDDEN);
+		return;
+	}
 
-#if 0
-		uiUtilityDisplayInformation(NULL, DISPLAY_INFO_TONE_AND_SQUELCH, -1);
+	if (CODEPLUG_ZONE_IS_ALLCHANNELS(currentZone)) {
+		channelNumber = nonVolatileSettings.currentChannelIndexInAllZone;
 
-		uiUtilityDisplayFrequency(DISPLAY_Y_POS_RX_FREQ, false, false, (uiDataGlobal.reverseRepeaterChannel ? currentChannelData->txFreq : currentChannelData->rxFreq), false, false, 0);
-		uiUtilityDisplayFrequency(DISPLAY_Y_POS_TX_FREQ, true, false, (uiDataGlobal.reverseRepeaterChannel ? currentChannelData->rxFreq : currentChannelData->txFreq), false, false, 0);
-#endif
-	} else {
-		lv_obj_clear_flag(zone_obj, LV_OBJ_FLAG_HIDDEN);
-
-		if (CODEPLUG_ZONE_IS_ALLCHANNELS(currentZone)) {
-			/* All Channels virtual zone */
-
-			channelNumber = nonVolatileSettings.currentChannelIndexInAllZone;
-
-			if (direct_channel_number > 0) {
-				lv_label_set_text_fmt(zone_obj, "Goto %d", direct_channel_number);
-			} else {
-				lv_label_set_text_fmt(zone_obj, "All:%d", channelNumber);
-			}
+		if (direct_channel_number > 0) {
+			lv_label_set_text_fmt(zone_obj, "Goto %d", direct_channel_number);
 		} else {
-			channelNumber = nonVolatileSettings.currentChannelIndexInZone + 1;
+			lv_label_set_text_fmt(zone_obj, "All:%d", channelNumber);
+		}
+	} else {
+		channelNumber = nonVolatileSettings.currentChannelIndexInZone + 1;
 
-			if (direct_channel_number > 0) {
-				lv_label_set_text_fmt(zone_obj, "Goto %d", direct_channel_number);
-			} else {
-				lv_label_set_text_fmt(zone_obj, "%s:%d", current_zone_name, channelNumber);
-			}
+		if (direct_channel_number > 0) {
+			lv_label_set_text_fmt(zone_obj, "Goto %d", direct_channel_number);
+		} else {
+			lv_label_set_text_fmt(zone_obj, "%s:%d", current_zone_name, channelNumber);
 		}
 	}
 }

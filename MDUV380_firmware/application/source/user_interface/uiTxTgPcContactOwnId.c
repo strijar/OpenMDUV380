@@ -336,7 +336,6 @@ static void handleEvent(uiEvent_t *ev)
 	))
 	{
 		dtmfSequenceStop();
-		keyboardReset();
 		return;
 	}
 

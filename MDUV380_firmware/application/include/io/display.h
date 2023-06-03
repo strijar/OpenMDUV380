@@ -44,4 +44,6 @@ void displayWriteData(uint8_t val);
 void displayWriteCmds(uint8_t cmd, size_t len, uint8_t opts[]);
 void displaySetToDefaultForegroundColour(void);
 
+void displayLightTrigger(bool fromKeyEvent);
+
 #endif /* _OPENGD77_DISPLAY_H_ */

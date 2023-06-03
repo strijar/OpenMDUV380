@@ -219,7 +219,6 @@ void menuSystemPushNewMenu(int menuNumber)
 {
 	if (menuDataGlobal.controlData.stackPosition < 15)
 	{
-		keyboardReset();
 		menuFunctions[menuDataGlobal.controlData.stack[menuDataGlobal.controlData.stackPosition]].lastItemIndex = menuDataGlobal.currentItemIndex;
 		menuDataGlobal.controlData.stackPosition++;
 		menuDataGlobal.controlData.stack[menuDataGlobal.controlData.stackPosition] = menuNumber;
@@ -235,7 +234,6 @@ void menuSystemPushNewMenu(int menuNumber)
 
 void menuSystemPopPreviousMenu(void)
 {
-	keyboardReset();
 	menuFunctions[menuDataGlobal.controlData.stack[menuDataGlobal.controlData.stackPosition]].lastItemIndex = menuDataGlobal.currentItemIndex;
 	// Clear stackPosition + 1 menu trace
 	if (menuDataGlobal.controlData.stackPosition < 15)
@@ -253,7 +251,6 @@ void menuSystemPopPreviousMenu(void)
 
 void menuSystemPopAllAndDisplayRootMenu(void)
 {
-	keyboardReset();
 	menuFunctions[menuDataGlobal.controlData.stack[menuDataGlobal.controlData.stackPosition]].lastItemIndex = menuDataGlobal.currentItemIndex;
 	// MENU_EMPTY is equal to -1 (0xFFFFFFFF), hence the following works, even if it's an int32_t array
 	memset(&menuDataGlobal.controlData.stack[1], MENU_EMPTY, sizeof(menuDataGlobal.controlData.stack) - sizeof(int));
@@ -263,10 +260,6 @@ void menuSystemPopAllAndDisplayRootMenu(void)
 
 void menuSystemPopAllAndDisplaySpecificRootMenu(int newRootMenu, bool resetKeyboard)
 {
-	if (resetKeyboard)
-	{
-		keyboardReset();
-	}
 	menuFunctions[menuDataGlobal.controlData.stack[menuDataGlobal.controlData.stackPosition]].lastItemIndex = menuDataGlobal.currentItemIndex;
 	// MENU_EMPTY is equal to -1 (0xFFFFFFFF), hence the following works, even if it's an int32_t array
 	memset(&menuDataGlobal.controlData.stack[1], MENU_EMPTY, sizeof(menuDataGlobal.controlData.stack) - sizeof(int));
@@ -277,7 +270,6 @@ void menuSystemPopAllAndDisplaySpecificRootMenu(int newRootMenu, bool resetKeybo
 
 void menuSystemSetCurrentMenu(int menuNumber)
 {
-	keyboardReset();
 	menuDataGlobal.controlData.stack[menuDataGlobal.controlData.stackPosition] = menuNumber;
 	menuSystemPushMenuFirstRun();
 }
@@ -403,18 +395,6 @@ void menuSystemCallCurrentMenuTick(uiEvent_t *ev)
 	}
 }
 
-void displayLightTrigger(bool fromKeyEvent)
-{
-	// BACKLIGHT_MODE_MANUAL is handled in main.c
-	if ((menuSystemGetCurrentMenuNumber() != UI_TX_SCREEN) &&
-			(((nonVolatileSettings.backlightMode == BACKLIGHT_MODE_AUTO) || (nonVolatileSettings.backlightMode == BACKLIGHT_MODE_SQUELCH))
-					|| ((nonVolatileSettings.backlightMode == BACKLIGHT_MODE_BUTTONS) && fromKeyEvent)))
-	{
-		menuDataGlobal.lightTimer = nonVolatileSettings.backLightTimeout * 1000;
-
-		displayEnableBacklight(true, nonVolatileSettings.displayBacklightPercentageOff);
-	}
-}
 
 // use -1 to force LED on all the time
 void displayLightOverrideTimeout(int timeout)

@@ -32,6 +32,7 @@
 #include <lvgl.h>
 #include "interfaces/adc.h"
 #include "io/buttons.h"
+#include "io/display.h"
 #include "main.h"
 
 uint32_t 				EVENT_BUTTON;
@@ -64,6 +65,7 @@ static void send_button_event(button_t button, button_state_t state) {
 	event->state = state;
 
 	lv_event_send(lv_scr_act(), EVENT_BUTTON, event);
+	displayLightTrigger(true);
 }
 
 void press_timeout(lv_timer_t * timer) {

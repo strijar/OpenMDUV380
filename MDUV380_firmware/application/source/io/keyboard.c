@@ -184,6 +184,8 @@ static void keyboard_read_cb(lv_indev_drv_t *drv, lv_indev_data_t *data) {
 		keyboard_prev_keycode = keycode;
 		data->key = keycode;
 		data->state = LV_INDEV_STATE_PRESSED;
+
+		displayLightTrigger(true);
 	} else {
 		data->key = keyboard_prev_keycode;
 		data->state = LV_INDEV_STATE_RELEASED;
@@ -195,10 +197,14 @@ static void rotary_read_cb(lv_indev_drv_t *drv, lv_indev_data_t *data) {
 		data->key = LV_KEY_LEFT;
 		data->state = LV_INDEV_STATE_PRESSED;
 		rotaryData.Direction = 0;
+
+		displayLightTrigger(true);
 	} else if (rotaryData.Direction > 0) {
 		data->key = LV_KEY_RIGHT;
 		data->state = LV_INDEV_STATE_PRESSED;
 		rotaryData.Direction = 0;
+
+		displayLightTrigger(true);
 	} else {
 		data->state = LV_INDEV_STATE_RELEASED;
 	}
@@ -228,9 +234,6 @@ void keyboardInit(void) {
 
 	rotary_indev = lv_indev_drv_register(&rotary_indev_drv);
 	lv_indev_set_group(rotary_indev, keyboard_group);
-}
-
-void keyboardReset(void) {
 }
 
 bool keyboardKeyIsDTMFKey(char key)

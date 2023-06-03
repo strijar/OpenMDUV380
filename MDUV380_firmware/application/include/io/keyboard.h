@@ -127,7 +127,6 @@ extern volatile rotaryData_t rotaryData;
 
 
 void keyboardInit(void);
-void keyboardReset(void);
 bool keyboardKeyIsDTMFKey(char key);
 void keyboardCheckKeyEvent(keyboardCode_t *keys, int *event);
 bool keyboardScanKey(uint32_t scancode, char *keycode);

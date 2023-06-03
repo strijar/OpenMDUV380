@@ -291,7 +291,8 @@ static void settingsUpdateAudioAlert(void)
 
 static void start_timeout(lv_timer_t *t) {
 	uiSplashScreen();
-	displayEnableBacklight(true, 50);
+	displayEnableBacklight(true, nonVolatileSettings.displayBacklightPercentageOff);
+	displayLightTrigger(false);
 }
 
 void applicationMainTask(void) {
@@ -351,6 +352,9 @@ void applicationMainTask(void) {
 	wasRestoringDefaultsettings = settingsLoadSettings();
 #endif
 
+	nonVolatileSettings.backLightTimeout = 5;
+	nonVolatileSettings.displayBacklightPercentageOff = 10;
+
 	radioPowerOn();
 	uiDataGlobal.dmrDisabled = !codecIsAvailable();
 	radioInit();
@@ -385,10 +389,6 @@ void applicationMainTask(void) {
 
 	if (nonVolatileSettings.gps > GPS_MODE_OFF) {
 		gpsOn();
-	}
-
-	if (nonVolatileSettings.backlightMode == BACKLIGHT_MODE_MANUAL) {
-		displayEnableBacklight(true, 100);
 	}
 
 	lv_obj_set_style_bg_opa(lv_scr_act(), LV_OPA_0, 0);
@@ -435,27 +435,8 @@ void applicationMainTask(void) {
 			updateLastHeard = false;
 		}
 
-		/* * */
-
 		apoTick((keyOrButtonChanged || (function_event != NO_EVENT) ||
 				(settingsIsOptionBitSet(BIT_APO_WITH_RF) ? (getAudioAmpStatus() & AUDIO_AMP_MODE_RF) : false)));
-
-		if (((nonVolatileSettings.backlightMode == BACKLIGHT_MODE_AUTO)
-				|| (nonVolatileSettings.backlightMode == BACKLIGHT_MODE_BUTTONS)
-				|| (nonVolatileSettings.backlightMode == BACKLIGHT_MODE_SQUELCH)) && (menuDataGlobal.lightTimer > 0))
-		{
-			// Countdown only in (AUTO), (BUTTONS) or (SQUELCH + no audio)
-			if ((nonVolatileSettings.backlightMode == BACKLIGHT_MODE_AUTO) || (nonVolatileSettings.backlightMode == BACKLIGHT_MODE_BUTTONS) ||
-					((nonVolatileSettings.backlightMode == BACKLIGHT_MODE_SQUELCH) && ((getAudioAmpStatus() & AUDIO_AMP_MODE_RF) == 0)))
-			{
-				menuDataGlobal.lightTimer--;
-			}
-
-			if (menuDataGlobal.lightTimer == 0)
-			{
-				displayEnableBacklight(false, nonVolatileSettings.displayBacklightPercentageOff);
-			}
-		}
 
 		/* * */
 
@@ -474,6 +455,7 @@ void applicationMainTask(void) {
 		if (latestVolume != lastVolume) {
 			lastVolume = latestVolume;
 			HRC6000SetDmrRxGain(latestVolume);
+			displayLightTrigger(true);
 		}
 
 		lv_msg_send(UI_MSG_IDLE, NULL);
