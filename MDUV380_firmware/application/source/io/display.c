@@ -471,11 +471,13 @@ void displayLightTrigger(bool fromKeyEvent) {
 	if (((nonVolatileSettings.backlightMode == BACKLIGHT_MODE_AUTO) || (nonVolatileSettings.backlightMode == BACKLIGHT_MODE_SQUELCH))
 		|| ((nonVolatileSettings.backlightMode == BACKLIGHT_MODE_BUTTONS) && fromKeyEvent))
 	{
-		if (light_timer) {
-			lv_timer_reset(light_timer);
-		} else {
-			light_timer = lv_timer_create(light_timeout, nonVolatileSettings.backLightTimeout * 1000, NULL);
-			lv_timer_set_repeat_count(light_timer, 1);
+		if (nonVolatileSettings.backLightTimeout > 0) {
+			if (light_timer) {
+				lv_timer_reset(light_timer);
+			} else {
+				light_timer = lv_timer_create(light_timeout, nonVolatileSettings.backLightTimeout * 1000, NULL);
+				lv_timer_set_repeat_count(light_timer, 1);
+			}
 		}
 
 		displayEnableBacklight(true, nonVolatileSettings.displayBacklightPercentageOff);

@@ -352,9 +352,6 @@ void applicationMainTask(void) {
 	wasRestoringDefaultsettings = settingsLoadSettings();
 #endif
 
-	nonVolatileSettings.backLightTimeout = 5;
-	nonVolatileSettings.displayBacklightPercentageOff = 10;
-
 	radioPowerOn();
 	uiDataGlobal.dmrDisabled = !codecIsAvailable();
 	radioInit();
