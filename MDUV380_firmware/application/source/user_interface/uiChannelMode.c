@@ -28,10 +28,12 @@
  */
 
 #include <lvgl.h>
+#include "user_interface/uiMsg.h"
 #include "user_interface/styles.h"
 #include "user_interface/uiVFOMode.h"
 #include "user_interface/uiMenu.h"
 #include "user_interface/uiHeader.h"
+#include "user_interface/uiCaller.h"
 #include "functions/tx.h"
 
 #include "functions/codeplug.h"
@@ -47,15 +49,19 @@
 
 #define NAME_BUFFER_LEN   23
 
-static char 	current_zone_name[SCREEN_LINE_BUFFER_SIZE];
-static int 		direct_channel_number = 0;
-static bool		display_channel_settings = false;
+static char 		current_zone_name[SCREEN_LINE_BUFFER_SIZE];
+static int 			direct_channel_number = 0;
+static bool			display_channel_settings = false;
 
-static lv_obj_t	*contact_obj;
-static lv_obj_t	*contact_shadow_obj;
-static lv_obj_t	*channel_obj;
-static lv_obj_t	*channel_shadow_obj;
-static lv_obj_t	*zone_obj;
+static lv_obj_t		*contact_obj;
+static lv_obj_t		*contact_shadow_obj;
+static lv_obj_t		*channel_obj;
+static lv_obj_t		*channel_shadow_obj;
+static lv_obj_t		*zone_obj;
+
+static bool			caller_show = false;
+static lv_timer_t	*caller_timer = NULL;
+static lv_timer_t	*caller_timeout = NULL;
 
 static void guiUpdateContact();
 static void guiUpdateChannel();
@@ -72,6 +78,9 @@ static void changeTS();
 static void changeBW();
 static void loadChannelData(bool useChannelDataInMemory, bool loadVoicePromptAnnouncement);
 
+static void callerShow();
+static void callerHide();
+
 void uiChannelInitializeCurrentZone();
 
 static void keyCallback(lv_event_t * e) {
@@ -81,6 +90,11 @@ static void keyCallback(lv_event_t * e) {
 	switch (key) {
 		case LV_KEY_ESC:
 			if (!uiMenuWasOpened()) {
+				if (caller_show) {
+					uiCallerDone();
+				}
+				lv_timer_del(caller_timer);
+
 				uiHeaderStop();
 				uiVFOMode();
 			}
@@ -719,6 +733,53 @@ static void guiUpdateInfoZone() {
 	}
 }
 
+static void callerShow() {
+	lv_obj_add_flag(contact_obj, LV_OBJ_FLAG_HIDDEN);
+	lv_obj_add_flag(contact_shadow_obj, LV_OBJ_FLAG_HIDDEN);
+	lv_obj_add_flag(channel_obj, LV_OBJ_FLAG_HIDDEN);
+	lv_obj_add_flag(channel_shadow_obj, LV_OBJ_FLAG_HIDDEN);
+	lv_obj_add_flag(zone_obj, LV_OBJ_FLAG_HIDDEN);
+
+	uiCallerInit();
+	caller_show = true;
+}
+
+static void callerHide()  {
+	uiCallerDone();
+	caller_show = false;
+
+	lv_obj_clear_flag(contact_obj, LV_OBJ_FLAG_HIDDEN);
+	lv_obj_clear_flag(contact_shadow_obj, LV_OBJ_FLAG_HIDDEN);
+	lv_obj_clear_flag(channel_obj, LV_OBJ_FLAG_HIDDEN);
+	lv_obj_clear_flag(channel_shadow_obj, LV_OBJ_FLAG_HIDDEN);
+	lv_obj_clear_flag(zone_obj, LV_OBJ_FLAG_HIDDEN);
+}
+
+static void callerTimeoutCallback(lv_timer_t *t) {
+	callerHide();
+	caller_timeout = NULL;
+}
+
+static void callerTimerCallback(lv_timer_t *t) {
+	if (caller_show) {
+		if (uiDataGlobal.displayQSOState == QSO_DISPLAY_CALLER_DATA_UPDATE) {
+			uiCallerUpdate();
+			lv_timer_reset(caller_timeout);
+		}
+
+		if (uiDataGlobal.displayQSOState == QSO_DISPLAY_CALLER_DATA || isQSODataAvailableForCurrentTalker()) {
+			lv_timer_reset(caller_timeout);
+		}
+	} else {
+		if (uiDataGlobal.displayQSOState == QSO_DISPLAY_CALLER_DATA || isQSODataAvailableForCurrentTalker()) {
+			callerShow();
+
+			caller_timeout = lv_timer_create(callerTimeoutCallback, 500, NULL);
+			lv_timer_set_repeat_count(caller_timeout, 1);
+		}
+	}
+}
+
 void uiChannelMode() {
 	dataInit();
 	guiInit();
@@ -728,4 +789,7 @@ void uiChannelMode() {
 	guiUpdateInfoZone();
 
 	uiHeaderInfoUpdate();
+
+	caller_show = false;
+	caller_timer = lv_timer_create(callerTimerCallback, 20, NULL);
 }

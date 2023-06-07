@@ -1641,7 +1641,7 @@ void handleHotspotRequest(void)
 		comRecvMMDVMFrameCount = 0;
 	}
 
-	if ((uiDataGlobal.displayQSOState == QSO_DISPLAY_CALLER_DATA) || (uiDataGlobal.displayQSOState == QSO_DISPLAY_CALLER_DATA_UPDATE))
+	if (uiDataGlobal.displayQSOState == QSO_DISPLAY_CALLER_DATA)
 	{
 		uiHotspotUpdateScreen(hotspotCurrentRxCommandState);
 		uiDataGlobal.displayQSOState = QSO_DISPLAY_IDLE;

@@ -452,7 +452,6 @@ void applicationMainTask(void) {
 		if (latestVolume != lastVolume) {
 			lastVolume = latestVolume;
 			HRC6000SetDmrRxGain(latestVolume);
-			displayLightTrigger(true);
 		}
 
 		lv_msg_send(UI_MSG_IDLE, NULL);

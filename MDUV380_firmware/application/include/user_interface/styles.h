@@ -61,4 +61,8 @@ extern const lv_style_t		contact_settings_style;
 extern const lv_style_t		channel_settings_style;
 extern const lv_style_t		channel_settings_shadow_style;
 
+extern const lv_style_t		caller_style;
+extern const lv_style_t		caller_header_style;
+extern const lv_style_t		caller_info_style;
+
 #endif /* INCLUDE_USER_INTERFACE_STYLES_H_ */

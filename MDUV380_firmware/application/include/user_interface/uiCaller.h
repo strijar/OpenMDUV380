@@ -1,10 +1,5 @@
-
-#ifndef INCLUDE_USER_INTERFACE_UIMSG_H_
-#define INCLUDE_USER_INTERFACE_UIMSG_H_
-
 /*
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
- *                         Colin, G4EML
+ * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *                         Oleg Belousov, R1CBU
  *
@@ -32,6 +27,11 @@
  *
  */
 
-#define UI_MSG_IDLE			1
+#ifndef INCLUDE_USER_INTERFACE_UICALLER_H_
+#define INCLUDE_USER_INTERFACE_UICALLER_H_
 
-#endif /* INCLUDE_USER_INTERFACE_UIMSG_H_ */
+void uiCallerInit();
+void uiCallerUpdate();
+void uiCallerDone();
+
+#endif /* INCLUDE_USER_INTERFACE_UICALLER_H_ */

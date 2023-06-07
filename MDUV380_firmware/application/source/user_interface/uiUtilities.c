@@ -27,6 +27,8 @@
  */
 
 #include <math.h>
+#include <lvgl.h>
+#include "user_interface/uiMsg.h"
 #include "user_interface/menuSystem.h"
 #include "user_interface/uiUtilities.h"
 #include "user_interface/uiLocalisation.h"
@@ -543,109 +545,74 @@ static void updateLHItem(LinkItem_t *item)
 	char buffer[bufferLen];// buffer passed to the DMR ID lookup function, needs to be large enough to hold worst case text length that is returned. Currently 16+1
 	dmrIdDataStruct_t currentRec;
 
-	if ((item->talkGroupOrPcId >> 24) == PC_CALL_FLAG)
-	{
-		// Its a Private call
-		switch (nonVolatileSettings.contactDisplayPriority)
-		{
-		case CONTACT_DISPLAY_PRIO_CC_DB_TA:
-		case CONTACT_DISPLAY_PRIO_TA_CC_DB:
-			if (contactIDLookup(item->id, CONTACT_CALLTYPE_PC, buffer) == true)
-			{
-				snprintf(item->contact, SCREEN_LINE_BUFFER_SIZE, "%s", buffer);
-			}
-			else
-			{
-				dmrIDLookup(item->id, &currentRec);
-				snprintf(item->contact, SCREEN_LINE_BUFFER_SIZE, "%s", currentRec.text);
-			}
-			break;
+	if ((item->talkGroupOrPcId >> 24) == PC_CALL_FLAG) { /* Its a Private call */
+		switch (nonVolatileSettings.contactDisplayPriority) {
+			case CONTACT_DISPLAY_PRIO_CC_DB_TA:
+			case CONTACT_DISPLAY_PRIO_TA_CC_DB:
+				if (contactIDLookup(item->id, CONTACT_CALLTYPE_PC, buffer) == true) {
+					strncpy(item->contact, buffer, sizeof(item->contact));
+				} else {
+					dmrIDLookup(item->id, &currentRec);
+					strncpy(item->contact, currentRec.text, sizeof(item->contact));
+				}
+				break;
 
-		case CONTACT_DISPLAY_PRIO_DB_CC_TA:
-		case CONTACT_DISPLAY_PRIO_TA_DB_CC:
-			if (dmrIDLookup(item->id, &currentRec) == true)
-			{
-				snprintf(item->contact, SCREEN_LINE_BUFFER_SIZE, "%s", currentRec.text);
-			}
-			else
-			{
-				if (contactIDLookup(item->id, CONTACT_CALLTYPE_PC, buffer) == true)
-				{
-					snprintf(item->contact, SCREEN_LINE_BUFFER_SIZE, "%s", buffer);
+			case CONTACT_DISPLAY_PRIO_DB_CC_TA:
+			case CONTACT_DISPLAY_PRIO_TA_DB_CC:
+				if (dmrIDLookup(item->id, &currentRec) == true) {
+					strncpy(item->contact, currentRec.text, sizeof(item->contact));
+				} else {
+					if (contactIDLookup(item->id, CONTACT_CALLTYPE_PC, buffer) == true) {
+						strncpy(item->contact, buffer, sizeof(item->contact));
+					} else {
+						strncpy(item->contact, currentRec.text, sizeof(item->contact));
+					}
 				}
-				else
-				{
-					snprintf(item->contact, SCREEN_LINE_BUFFER_SIZE, "%s", currentRec.text);
-				}
-			}
-			break;
+				break;
 		}
 
-		if (item->talkGroupOrPcId != (trxDMRID | (PC_CALL_FLAG << 24)))
-		{
-			if (contactIDLookup(item->talkGroupOrPcId & 0x00FFFFFF, CONTACT_CALLTYPE_PC, buffer) == true)
-			{
-				snprintf(item->talkgroup, SCREEN_LINE_BUFFER_SIZE, "%s", buffer);
-			}
-			else
-			{
+		if (item->talkGroupOrPcId != (trxDMRID | (PC_CALL_FLAG << 24))) {
+			if (contactIDLookup(item->talkGroupOrPcId & 0x00FFFFFF, CONTACT_CALLTYPE_PC, buffer) == true) {
+				strncpy(item->talkgroup, buffer, sizeof(item->talkgroup));
+			} else {
 				dmrIDLookup(item->talkGroupOrPcId & 0x00FFFFFF, &currentRec);
-				snprintf(item->talkgroup, SCREEN_LINE_BUFFER_SIZE, "%s", currentRec.text);
+				strncpy(item->talkgroup, currentRec.text, sizeof(item->talkgroup));
 			}
 		}
-	}
-	else
-	{
-		// TalkGroup
-		if (contactIDLookup(item->talkGroupOrPcId, CONTACT_CALLTYPE_TG, buffer) == true)
-		{
-			snprintf(item->talkgroup, SCREEN_LINE_BUFFER_SIZE, "%s", buffer);
-		}
-		else
-		{
-			if ((item->talkGroupOrPcId & 0x00FFFFFF) == ALL_CALL_VALUE)
-			{
-				snprintf(item->talkgroup, SCREEN_LINE_BUFFER_SIZE, "%s", currentLanguage->all_call);
-			}
-			else
-			{
-				snprintf(item->talkgroup, SCREEN_LINE_BUFFER_SIZE, "%s %u", currentLanguage->tg, (item->talkGroupOrPcId & 0x00FFFFFF));
+	} else { /* TalkGroup */
+		if (contactIDLookup(item->talkGroupOrPcId, CONTACT_CALLTYPE_TG, buffer) == true) {
+			strncpy(item->talkgroup, buffer, sizeof(item->talkgroup));
+		} else {
+			if ((item->talkGroupOrPcId & 0x00FFFFFF) == ALL_CALL_VALUE) {
+				strncpy(item->talkgroup, "All call", sizeof(item->talkgroup));
+			} else {
+				snprintf(item->talkgroup, sizeof(item->talkgroup), "%s %u", currentLanguage->tg, (item->talkGroupOrPcId & 0x00FFFFFF));
 			}
 		}
 
-		switch (nonVolatileSettings.contactDisplayPriority)
-		{
-		case CONTACT_DISPLAY_PRIO_CC_DB_TA:
-		case CONTACT_DISPLAY_PRIO_TA_CC_DB:
-			if (contactIDLookup(item->id, CONTACT_CALLTYPE_PC, buffer) == true)
-			{
-				snprintf(item->contact, MAX_DMR_ID_CONTACT_TEXT_LENGTH, "%s", buffer);
-			}
-			else
-			{
-				dmrIDLookup((item->id & 0x00FFFFFF), &currentRec);
-				snprintf(item->contact, MAX_DMR_ID_CONTACT_TEXT_LENGTH, "%s", currentRec.text);
-			}
-			break;
+		switch (nonVolatileSettings.contactDisplayPriority) {
+			case CONTACT_DISPLAY_PRIO_CC_DB_TA:
+			case CONTACT_DISPLAY_PRIO_TA_CC_DB:
+				if (contactIDLookup(item->id, CONTACT_CALLTYPE_PC, buffer) == true) {
+					strncpy(item->contact, buffer, sizeof(item->contact));
+				} else {
+					dmrIDLookup((item->id & 0x00FFFFFF), &currentRec);
+					strncpy(item->contact, currentRec.text, sizeof(item->contact));
+				}
+				break;
 
-		case CONTACT_DISPLAY_PRIO_DB_CC_TA:
-		case CONTACT_DISPLAY_PRIO_TA_DB_CC:
-			if (dmrIDLookup((item->id & 0x00FFFFFF), &currentRec) == true)
-			{
-				snprintf(item->contact, MAX_DMR_ID_CONTACT_TEXT_LENGTH, "%s", currentRec.text);
-			}
-			else
-			{
-				if (contactIDLookup(item->id, CONTACT_CALLTYPE_PC, buffer) == true)
-				{
-					snprintf(item->contact, MAX_DMR_ID_CONTACT_TEXT_LENGTH, "%s", buffer);
+			case CONTACT_DISPLAY_PRIO_DB_CC_TA:
+			case CONTACT_DISPLAY_PRIO_TA_DB_CC:
+				if (dmrIDLookup((item->id & 0x00FFFFFF), &currentRec) == true) {
+					strncpy(item->contact, currentRec.text, sizeof(item->contact));
+				} else {
+					if (contactIDLookup(item->id, CONTACT_CALLTYPE_PC, buffer) == true) {
+						strncpy(item->contact, buffer, sizeof(item->contact));
+					} else {
+						strncpy(item->contact, currentRec.text, sizeof(item->contact));
+					}
 				}
-				else
-				{
-					snprintf(item->contact, MAX_DMR_ID_CONTACT_TEXT_LENGTH, "%s", currentRec.text);
-				}
-			}
-			break;
+				break;
 		}
 	}
 }
@@ -657,32 +624,27 @@ void lastHeardClearWorkingTAData(void)
 	overrideTA = false;
 	contactDefinedForTA = false;
 }
-bool lastHeardListUpdate(uint8_t *dmrDataBuffer, bool forceOnHotspot)
-{
+
+bool lastHeardListUpdate(uint8_t *dmrDataBuffer, bool forceOnHotspot) {
 	uint32_t talkGroupOrPcId = (dmrDataBuffer[0] << 24) + (dmrDataBuffer[3] << 16) + (dmrDataBuffer[4] << 8) + (dmrDataBuffer[5] << 0);
 
-	if ((HRC6000GetReceivedTgOrPcId() != 0) || forceOnHotspot)
-	{
-		if (dmrDataBuffer[0] == TG_CALL_FLAG || dmrDataBuffer[0] == PC_CALL_FLAG)
-		{
+	if ((HRC6000GetReceivedTgOrPcId() != 0) || forceOnHotspot) {
+		if (dmrDataBuffer[0] == TG_CALL_FLAG || dmrDataBuffer[0] == PC_CALL_FLAG) {
 			uint32_t id = (dmrDataBuffer[6] << 16) + (dmrDataBuffer[7] << 8) + (dmrDataBuffer[8] << 0);
 
-			if ((id != 0) && (talkGroupOrPcId != 0))
-			{
-				if (id != lastID)
-				{
+			if ((id != 0) && (talkGroupOrPcId != 0)) {
+				if (id != lastID) {
 					lastHeardClearWorkingTAData();
 
 					lastID = id;
 
 					LinkItem_t *item = lastheardFindInList(id);
 
-					// Already in the list
-					if (item != NULL)
-					{
-						if (item->talkGroupOrPcId != talkGroupOrPcId)
-						{
-							item->talkGroupOrPcId = talkGroupOrPcId; // update the TG in case they changed TG
+					/* Already in the list */
+
+					if (item != NULL) {
+						if (item->talkGroupOrPcId != talkGroupOrPcId) {
+							item->talkGroupOrPcId = talkGroupOrPcId; /* update the TG in case they changed TG */
 							updateLHItem(item);
 						}
 
@@ -690,73 +652,69 @@ bool lastHeardListUpdate(uint8_t *dmrDataBuffer, bool forceOnHotspot)
 						lastTG = talkGroupOrPcId;
 						dmrRxAGCrxPeakAverage = item->rxAGCGain;
 
-						if (item == LinkHead)
-						{
-							uiDataGlobal.displayQSOState = QSO_DISPLAY_CALLER_DATA;// flag that the display needs to update
+						if (item == LinkHead) {
+							uiDataGlobal.displayQSOState = QSO_DISPLAY_CALLER_DATA;
+
 							contactDefinedForTA = true;
-							return true;// already at top of the list
-						}
-						else
-						{
-							// not at top of the list
-							// Move this item to the top of the list
+							return true; /* already at top of the list */
+						} else {
+							/* not at top of the list */
+							/* Move this item to the top of the list */
+
 							LinkItem_t *next = item->next;
 							LinkItem_t *prev = item->prev;
 
-							// set the previous item to skip this item and link to 'items' next item.
+							/* set the previous item to skip this item and link to 'items' next item. */
+
 							prev->next = next;
 
-							if (item->next != NULL)
-							{
-								// not the last in the list
-								next->prev = prev;// backwards link the next item to the item before us in the list.
+							if (item->next != NULL) {
+								/* not the last in the list */
+								next->prev = prev; /* backwards link the next item to the item before us in the list. */
 							}
 
-							item->next = LinkHead;// link our next item to the item at the head of the list
+							item->next = LinkHead; /* link our next item to the item at the head of the list */
+							LinkHead->prev = item; /* backwards link the hold head item to the item moving to the top of the list. */
 
-							LinkHead->prev = item;// backwards link the hold head item to the item moving to the top of the list.
+							item->prev = NULL; /* change the items prev to NULL now we are at teh top of the list */
+							LinkHead = item;   /* Change the global for the head of the link to the item that is to be at the top of the list. */
 
-							item->prev = NULL;// change the items prev to NULL now we are at teh top of the list
-							LinkHead = item;// Change the global for the head of the link to the item that is to be at the top of the list.
-							if (item->talkGroupOrPcId != 0)
-							{
-								uiDataGlobal.displayQSOState = QSO_DISPLAY_CALLER_DATA;// flag that the display needs to update
-							}
+							if (item->talkGroupOrPcId != 0) {
+								uiDataGlobal.displayQSOState = QSO_DISPLAY_CALLER_DATA;
 						}
-					}
-					else
-					{
-						// Not in the list
-						item = LinkHead;// setup to traverse the list from the top.
+						}
+					} else {
+						/* Not in the list */
+						item = LinkHead; /* setup to traverse the list from the top. */
 
-						if (uiDataGlobal.lastHeardCount < NUM_LASTHEARD_STORED)
-						{
+						if (uiDataGlobal.lastHeardCount < NUM_LASTHEARD_STORED) {
 							uiDataGlobal.lastHeardCount++;
 						}
 
-						// need to use the last item in the list as the new item at the top of the list.
-						// find last item in the list
-						while(item->next != NULL)
-						{
+						/* need to use the last item in the list as the new item at the top of the list. */
+						/* find last item in the list */
+
+						while(item->next != NULL) {
 							item = item->next;
 						}
-						//item is now the last
 
-						(item->prev)->next = NULL;// make the previous item the last
+						/* item is now the last */
 
-						LinkHead->prev = item;// set the current head item to back reference this item.
-						item->next = LinkHead;// set this items next to the current head
-						LinkHead = item;// Make this item the new head
+						(item->prev)->next = NULL;	/* make the previous item the last */
+						LinkHead->prev = item;		/* set the current head item to back reference this item. */
+						item->next = LinkHead;		/* set this items next to the current head */
+						LinkHead = item;			/* Make this item the new head */
 
 						item->id = id;
 						item->talkGroupOrPcId = talkGroupOrPcId;
 						item->time = ticksGetMillis();
 						item->receivedTS = (dmrMonitorCapturedTS != -1) ? dmrMonitorCapturedTS : trxGetDMRTimeSlot();
 						item->dmrMode = trxDMRModeRx;
+
 						dmrRxAGCrxPeakAverage = item->rxAGCGain = DMR_RX_AGC_DEFAULT_PEAK_SAMPLES;
 						lastTG = talkGroupOrPcId;
 
-						memset(item->contact, 0, sizeof(item->contact)); // Clear contact's datas
+						memset(item->contact, 0, sizeof(item->contact)); 	/* Clear contact's datas */
 						memset(item->talkgroup, 0, sizeof(item->talkgroup));
 						memset(item->talkerAlias, 0, sizeof(item->talkerAlias));
 						item->locationLat = NAN;
@@ -764,24 +722,20 @@ bool lastHeardListUpdate(uint8_t *dmrDataBuffer, bool forceOnHotspot)
 
 						updateLHItem(item);
 
-						if (item->talkGroupOrPcId != 0)
-						{
-							uiDataGlobal.displayQSOState = QSO_DISPLAY_CALLER_DATA;// flag that the display needs to update
+						if (item->talkGroupOrPcId != 0) {
+							uiDataGlobal.displayQSOState = QSO_DISPLAY_CALLER_DATA;
 						}
 					}
 
 					contactDefinedForTA = true;
-				}
-				else // update TG even if the DMRID did not change
-				{
+				} else { /* update TG even if the DMRID did not change */
 					LinkItem_t *item = lastheardFindInList(id);
 
-					if (lastTG != talkGroupOrPcId)
-					{
-						if (item != NULL)
-						{
-							// Already in the list
-							item->talkGroupOrPcId = talkGroupOrPcId;// update the TG in case they changed TG
+					if (lastTG != talkGroupOrPcId) {
+						if (item != NULL) {
+							/* Already in the list */
+
+							item->talkGroupOrPcId = talkGroupOrPcId; /* update the TG in case they changed TG */
 							updateLHItem(item);
 							item->time = ticksGetMillis();
 						}
@@ -790,82 +744,74 @@ bool lastHeardListUpdate(uint8_t *dmrDataBuffer, bool forceOnHotspot)
 						lastHeardClearWorkingTAData();
 					}
 
-					item->receivedTS = (dmrMonitorCapturedTS != -1) ? dmrMonitorCapturedTS : trxGetDMRTimeSlot();// Always update this in case the TS changed.
+					item->receivedTS = (dmrMonitorCapturedTS != -1) ? dmrMonitorCapturedTS : trxGetDMRTimeSlot(); /* Always update this in case the TS changed. */
 					item->dmrMode = trxDMRModeRx;
 					contactDefinedForTA = true;
 				}
 			}
-		}
-		else
-		{
-			if (contactDefinedForTA)
-			{
-				// Data contains the Talker Alias Data
+		} else {
+			if (contactDefinedForTA) {
+				/* Data contains the Talker Alias Data */
+
 				uint8_t blockID = (forceOnHotspot ? dmrDataBuffer[0] : DMR_frame_buffer[0]);
 
-				if (blockID >= 4)
-				{
-					blockID -= 4; // shift the blockID for maths reasons
+				if (blockID >= 4) {
+					blockID -= 4; 		/* shift the blockID for maths reasons */
 
-					if (blockID < 4) // ID 0x04..0x07: TA
-					{
+					if (blockID < 4) { 	/* ID 0x04..0x07: TA */
+						/* Already stored first byte in block TA Header has changed, lets clear other blocks too */
 
-						// Already stored first byte in block TA Header has changed, lets clear other blocks too
 						if ((blockID == 0) && ((blocksTA & (1 << blockID)) != 0) &&
 								(bufferTA[0] != (forceOnHotspot ? dmrDataBuffer[2] : DMR_frame_buffer[2])))
 						{
 							blocksTA &= ~(1 << 0);
 
-							// Clear all other blocks if they're already stored
-							if ((blocksTA & (1 << 1)) != 0)
-							{
+							/* Clear all other blocks if they're already stored */
+							if ((blocksTA & (1 << 1)) != 0) {
 								blocksTA &= ~(1 << 1);
-								memset(bufferTA + 7, 0, 7); // Clear 2nd TA block
+								memset(bufferTA + 7, 0, 7); 	/* Clear 2nd TA block */
 							}
-							if ((blocksTA & (1 << 2)) != 0)
-							{
+
+							if ((blocksTA & (1 << 2)) != 0) {
 								blocksTA &= ~(1 << 2);
-								memset(bufferTA + 14, 0, 7); // Clear 3rd TA block
+								memset(bufferTA + 14, 0, 7); 	/* Clear 3rd TA block */
 							}
-							if ((blocksTA & (1 << 3)) != 0)
-							{
+
+							if ((blocksTA & (1 << 3)) != 0) {
 								blocksTA &= ~(1 << 3);
-								memset(bufferTA + 21, 0, 7); // Clear 4th TA block
+								memset(bufferTA + 21, 0, 7); 	/* Clear 4th TA block */
 							}
 							overrideTA = true;
 						}
 
-						// We don't already have this TA block
-						if ((blocksTA & (1 << blockID)) == 0)
-						{
+						/* We don't already have this TA block */
+
+						if ((blocksTA & (1 << blockID)) == 0) {
 							static const uint8_t blockLen = 7;
 							uint32_t blockOffset = blockID * blockLen;
 
 							blocksTA |= (1 << blockID);
 
-							if ((blockOffset + blockLen) < sizeof(bufferTA))
-							{
+							if ((blockOffset + blockLen) < sizeof(bufferTA)) {
 								memcpy(bufferTA + blockOffset, (void *)(forceOnHotspot ? &dmrDataBuffer[2] : &DMR_frame_buffer[2]), blockLen);
 
-								// Format and length infos are available, we can decode now
-								if (bufferTA[0] != 0x0)
-								{
+								/* Format and length infos are available, we can decode now */
+
+								if (bufferTA[0] != 0x0) {
 									uint8_t *decodedTA;
 
-									if ((decodedTA = decodeTA(&bufferTA[0])) != NULL)
-									{
-										// TAs doesn't match, update contact and screen.
-										if (overrideTA || (strlen((const char *)decodedTA) > strlen((const char *)&LinkHead->talkerAlias)))
-										{
-											memcpy(&LinkHead->talkerAlias, decodedTA, 31);// Brandmeister seems to send callsign as 6 chars only
+									if ((decodedTA = decodeTA(&bufferTA[0])) != NULL) {
+										/* TAs doesn't match, update contact and screen. */
 
-											if ((blocksTA & (1 << 1)) != 0) // we already received the 2nd TA block, check for 'DMR ID:'
-											{
+										if (overrideTA || (strlen((const char *)decodedTA) > strlen((const char *)&LinkHead->talkerAlias))) {
+											memcpy(&LinkHead->talkerAlias, decodedTA, 31); /* Brandmeister seems to send callsign as 6 chars only */
+
+											if ((blocksTA & (1 << 1)) != 0) { /* we already received the 2nd TA block, check for 'DMR ID:' */
 												char *p = NULL;
 
-												// Get rid of 'DMR ID:xxxxxxx' part of the TA, sent by BM
-												if (((p = strstr(&LinkHead->talkerAlias[0], "DMR ID:")) != NULL) || ((p = strstr(&LinkHead->talkerAlias[0], "DMR I")) != NULL))
-												{
+												/* Get rid of 'DMR ID:xxxxxxx' part of the TA, sent by BM */
+
+												if (((p = strstr(&LinkHead->talkerAlias[0], "DMR ID:")) != NULL) || ((p = strstr(&LinkHead->talkerAlias[0], "DMR I")) != NULL)) {
 													*p = 0;
 												}
 											}
@@ -877,20 +823,17 @@ bool lastHeardListUpdate(uint8_t *dmrDataBuffer, bool forceOnHotspot)
 								}
 							}
 						}
-					}
-					else if (blockID == 4) // ID 0x08: GPS
-					{
+					} else if (blockID == 4) { /* ID 0x08: GPS */
 						double longitude, latitude;
+
 						decodeGPSPosition((uint8_t *)(forceOnHotspot ? &dmrDataBuffer[0] : &DMR_frame_buffer[0]), &latitude,&longitude);
 
-						if ((LinkHead->locationLat != latitude) || (LinkHead->locationLon != longitude))
-						{
+						if ((LinkHead->locationLat != latitude) || (LinkHead->locationLon != longitude)) {
 							LinkHead->locationLat = latitude;
 							LinkHead->locationLon = longitude;
 
-							// If we received the location but no TA text, then insert ID:xxxxx so that the rest of the QSO display system works and displays the maindenhead
-							if (LinkHead->talkerAlias[0] == 0x00)
-							{
+							/* If we received the location but no TA text, then insert ID:xxxxx so that the rest of the QSO display system works and displays the maindenhead */
+							if (LinkHead->talkerAlias[0] == 0x00) {
 								snprintf(LinkHead->talkerAlias, 16, "ID:%u", LinkHead->id);
 							}
 
@@ -904,7 +847,6 @@ bool lastHeardListUpdate(uint8_t *dmrDataBuffer, bool forceOnHotspot)
 
 	return true;
 }
-
 
 static bool dmrIDReadContactInFlash(uint32_t contactOffset, uint8_t *data, uint32_t len)
 {
