@@ -61,7 +61,7 @@ static lv_obj_t		*zone_obj;
 
 static bool			caller_show = false;
 static lv_timer_t	*caller_timer = NULL;
-static lv_timer_t	*caller_timeout = NULL;
+static uint32_t		caller_timeout;
 
 static void guiUpdateContact();
 static void guiUpdateChannel();
@@ -755,27 +755,26 @@ static void callerHide()  {
 	lv_obj_clear_flag(zone_obj, LV_OBJ_FLAG_HIDDEN);
 }
 
-static void callerTimeoutCallback(lv_timer_t *t) {
-	callerHide();
-	caller_timeout = NULL;
-}
-
 static void callerTimerCallback(lv_timer_t *t) {
+	uint32_t now = ticksGetMillis();
+
 	if (caller_show) {
 		if (uiDataGlobal.displayQSOState == QSO_DISPLAY_CALLER_DATA_UPDATE) {
 			uiCallerUpdate();
-			lv_timer_reset(caller_timeout);
+			caller_timeout = now + 500;
 		}
 
 		if (uiDataGlobal.displayQSOState == QSO_DISPLAY_CALLER_DATA || isQSODataAvailableForCurrentTalker()) {
-			lv_timer_reset(caller_timeout);
+			caller_timeout = now + 500;
+		}
+
+		if (now > caller_timeout) {
+			callerHide();
 		}
 	} else {
 		if (uiDataGlobal.displayQSOState == QSO_DISPLAY_CALLER_DATA || isQSODataAvailableForCurrentTalker()) {
 			callerShow();
-
-			caller_timeout = lv_timer_create(callerTimeoutCallback, 500, NULL);
-			lv_timer_set_repeat_count(caller_timeout, 1);
+			caller_timeout = now + 500;
 		}
 	}
 }
