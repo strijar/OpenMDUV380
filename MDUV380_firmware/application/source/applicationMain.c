@@ -43,6 +43,7 @@
 #include "hardware/radioHardwareInterface.h"
 
 #include "io/buttons.h"
+#include "io/display.h"
 #include "usb/usb_com.h"
 #include "usb_device.h"
 #include "user_interface/menuSystem.h"
@@ -404,8 +405,8 @@ void applicationMainTask(void) {
 		tick_com_request();
 
 		handleTimerCallbacks();
-		buttonsRead();
 
+		buttonsRead();
 		batteryUpdate();
 		batteryChecking();
 

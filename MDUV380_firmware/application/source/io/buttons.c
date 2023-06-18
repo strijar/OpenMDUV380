@@ -115,6 +115,10 @@ static void check_button(button_t button, bool on) {
 }
 
 void buttonsRead() {
+	if (displayBusy) {
+		return;
+	}
+
 	GPIO_InitTypeDef GPIO_InitStruct = {0};
 
 	GPIO_InitStruct.Mode = GPIO_MODE_INPUT;

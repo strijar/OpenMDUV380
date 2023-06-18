@@ -31,8 +31,11 @@
 #define _OPENGD77_DISPLAY_H_
 
 #include <stdbool.h>
+#include <stm32f4xx_hal.h>
+
 #define BACKLIGHT_MIN_USABLE_VALUE 1
 
+extern bool displayBusy;
 extern uint8_t displayLCD_Type;
 
 void displayInit();
@@ -45,5 +48,6 @@ void displayWriteCmds(uint8_t cmd, size_t len, uint8_t opts[]);
 void displaySetToDefaultForegroundColour(void);
 
 void displayLightTrigger(bool fromKeyEvent);
+void displayXferCpltCallback(DMA_HandleTypeDef *DmaHandle);
 
 #endif /* _OPENGD77_DISPLAY_H_ */

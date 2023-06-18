@@ -36,15 +36,15 @@
 #include "interfaces/gpio.h"
 #include "main.h"
 
-uint8_t displayLCD_Type = 1;
-static uint16_t foreground_color;
-static uint16_t background_color;
-static bool displayIsInverseVideo;
+#define ROWS	(8 * 4)
 
-#define ROWS	(8 * 5)
+bool						displayBusy = false;
+uint8_t 					displayLCD_Type = 1;
 
 static lv_disp_draw_buf_t	disp_draw_buf;
-static lv_color_t			disp_buf[DISPLAY_SIZE_X * ROWS];
+static lv_color_t			disp_buf_1[DISPLAY_SIZE_X * ROWS];
+static lv_color_t			disp_buf_2[DISPLAY_SIZE_X * ROWS];
+
 static lv_disp_drv_t 		disp_drv;
 static lv_disp_t			*disp;
 static lv_timer_t			*light_timer = NULL;
@@ -74,16 +74,20 @@ void displayWriteCmds(uint8_t cmd, size_t len, uint8_t opts[])
 	}
 }
 
-void displaySetInvertedState(bool isInverted)
-{
-	displayIsInverseVideo = isInverted;
-    displaySetForegroundColour(isInverted ? background_color : foreground_color);
-    displaySetBackgroundColour(isInverted ? foreground_color : background_color);
+void displaySetInvertedState(bool isInverted) {
 }
 
-void displaySetToDefaultForegroundColour(void)
-{
-    displaySetForegroundColour(displayIsInverseVideo ? background_color : foreground_color);
+void displaySetToDefaultForegroundColour(void) {
+}
+
+void displayXferCpltCallback(DMA_HandleTypeDef *DmaHandle) {
+	if (DmaHandle->Instance == hdma_memtomem_dma2_stream0.Instance) {
+		HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_SET);
+		*((volatile uint8_t*) LCD_FSMC_ADDR_DATA) = 0;
+
+		lv_disp_flush_ready(&disp_drv);
+		displayBusy = false;
+	}
 }
 
 void display_flush_cb(lv_disp_drv_t * disp_drv, const lv_area_t * area, lv_color_t * color_p) {
@@ -121,16 +125,8 @@ void display_flush_cb(lv_disp_drv_t * disp_drv, const lv_area_t * area, lv_color
 
 	displayWriteCmd(HX8583_CMD_RAMWR);
 
-	HAL_StatusTypeDef status = HAL_DMA_Start(&hdma_memtomem_dma2_stream0, (uint32_t) buf, LCD_FSMC_ADDR_DATA, buf_size);
-
-	if (status == HAL_OK) {
-		HAL_DMA_PollForTransfer(&hdma_memtomem_dma2_stream0, HAL_DMA_FULL_TRANSFER, HAL_MAX_DELAY);
-	}
-
-    HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_SET);
-   	*((volatile uint8_t*) LCD_FSMC_ADDR_DATA) = 0;
-
-   	lv_disp_flush_ready(disp_drv);
+	displayBusy = true;
+	HAL_DMA_Start_IT(&hdma_memtomem_dma2_stream0, (uint32_t) buf, LCD_FSMC_ADDR_DATA, buf_size);
 }
 
 void display_rounder_cb(lv_disp_drv_t * disp_drv, lv_area_t * area) {
@@ -141,11 +137,8 @@ void display_rounder_cb(lv_disp_drv_t * disp_drv, lv_area_t * area) {
     area->y2 = (area->y2 / 8) * 8 + 8;
 }
 
-void displayInit()
-{
-	foreground_color = MAIN_FG_COLOR;
-	background_color = MAIN_BG_COLOR;
-	displayIsInverseVideo = false;
+void displayInit() {
+	displayBusy = false;
 
 	GPIO_InitTypeDef GPIO_InitStruct = {0};
 
@@ -437,8 +430,7 @@ void displayInit()
 
 	HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_SET);
 
-	lv_disp_draw_buf_init(&disp_draw_buf, disp_buf, NULL, DISPLAY_SIZE_X * ROWS);
-
+	lv_disp_draw_buf_init(&disp_draw_buf, disp_buf_1, disp_buf_2, DISPLAY_SIZE_X * ROWS);
 	lv_disp_drv_init(&disp_drv);
 
 	disp_drv.draw_buf = &disp_draw_buf;

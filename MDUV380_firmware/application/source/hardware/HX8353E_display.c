@@ -1144,72 +1144,7 @@ void displayOverrideScreenBuffer(uint16_t *buffer)
 
 static bool isAwake = true;
 
-#if 0
-static void dmaCompleteCallback(DMA_HandleTypeDef *hdma)
-{
-	HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_SET);
-
-   	*((volatile uint8_t*) LCD_FSMC_ADDR_DATA) = 0;// write 0 to the display pins , to pull them all low, so keyboard reads don't need to
-}
-#endif
-
-void displayRenderRows(int16_t startRow, int16_t endRow)
-{
-#if 0
-	GPIO_InitTypeDef GPIO_InitStruct = {0};
-
-	// GD77 display controller has 8 lines per row.
-	startRow *= 8;
-	endRow *= 8;
-
-	// Display shares its pins with the keypad, so the pind need to be put into alternate mode to work with the FSMC
-	GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-	GPIO_InitStruct.Pull = GPIO_NOPULL;
-	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-	GPIO_InitStruct.Alternate = GPIO_AF12_FSMC;
-
-	GPIO_InitStruct.Pin = LCD_D0_Pin | LCD_D1_Pin | LCD_D2_Pin | LCD_D3_Pin;
-	HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
-
-	GPIO_InitStruct.Pin = LCD_D4_Pin | LCD_D5_Pin | LCD_D6_Pin | LCD_D7_Pin;
-	HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
-
-	HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_RESET);
-
-    // Set start and end rows of the transfer
-    {
-    	uint8_t opts[] = { 0x00, startRow, 0x00, endRow };
-    	displayWriteCmds(HX8583_CMD_PASET, sizeof(opts), opts);
-    }
-
-    displayWriteCmd(HX8583_CMD_RAMWR);
-
-	uint8_t *framePtr = (uint8_t *)screenBuf + (DISPLAY_SIZE_X * startRow * sizeof(uint16_t));
-
-	//if (HAL_DMA_RegisterCallback(&hdma_memtomem_dma2_stream0, HAL_DMA_XFER_CPLT_CB_ID, dmaCompleteCallback)== HAL_OK)
-	{
-		HAL_StatusTypeDef status = HAL_DMA_Start(&hdma_memtomem_dma2_stream0, (uint32_t)framePtr, LCD_FSMC_ADDR_DATA, (endRow - startRow) * DISPLAY_SIZE_X * sizeof(uint16_t));
-		if (status == HAL_OK)
-		{
-			HAL_DMA_PollForTransfer(&hdma_memtomem_dma2_stream0, HAL_DMA_FULL_TRANSFER, HAL_MAX_DELAY);
-			// need to wait for completion otherwise we CS gets disabled immediately.
-			// This could be done using a transfer complete callback
-		}
-	}
-
-
-#if false
-	// fallback
-	for(int y = 0; y < (endRow - startRow) * DISPLAY_SIZE_X * sizeof(uint16_t); y++)
-	{
-		*((volatile uint8_t*) LCD_FSMC_ADDR_DATA) = *framePtr++;
-	}
-#endif
-
-	HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_SET);
-
-   	*((volatile uint8_t*) LCD_FSMC_ADDR_DATA) = 0;// write 0 to the display pins , to pull them all low, so keyboard reads don't need to
-#endif
+void displayRenderRows(int16_t startRow, int16_t endRow) {
 }
 
 void displaySetInverseVideo(bool inverted)

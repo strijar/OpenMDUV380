@@ -33,11 +33,12 @@
 #include <lvgl.h>
 
 #include "io/keyboard.h"
+#include "io/display.h"
+#include "io/buttons.h"
 #include "interfaces/pit.h"
-#include "functions/settings.h"
 #include "interfaces/gpio.h"
 #include "interfaces/adc.h"
-#include "io/buttons.h"
+#include "functions/settings.h"
 
 typedef struct {
 	GPIO_TypeDef  *GPIOPort;
@@ -129,6 +130,10 @@ static const struct {
 };
 
 static void keyboard_read_cb(lv_indev_drv_t *drv, lv_indev_data_t *data) {
+	while (displayBusy) {
+		osDelay(pdMS_TO_TICKS(5));
+	}
+
 	uint16_t keycode = 0;
 
 	GPIO_InitTypeDef GPIO_InitStruct = {0};
