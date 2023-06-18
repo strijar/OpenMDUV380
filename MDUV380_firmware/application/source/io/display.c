@@ -41,7 +41,7 @@ static uint16_t foreground_color;
 static uint16_t background_color;
 static bool displayIsInverseVideo;
 
-#define ROWS	(DISPLAY_SIZE_Y / 10)
+#define ROWS	(8 * 5)
 
 static lv_disp_draw_buf_t	disp_draw_buf;
 static lv_color_t			disp_buf[DISPLAY_SIZE_X * ROWS];

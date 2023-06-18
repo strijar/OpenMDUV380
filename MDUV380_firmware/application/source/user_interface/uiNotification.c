@@ -47,7 +47,9 @@
 #define XBAR            69
 #define YBOX            (YCENTER - (INNERBOX_H / 2))
 
+#if 0
 static uint16_t screenNotificationBufData[DISPLAY_SIZE_X * DISPLAY_SIZE_Y] __attribute__((section(".ccmram")));
+#endif
 
 typedef struct
 {
@@ -115,6 +117,7 @@ void uiNotificationShow(uiNotificationType_t type, uiNotificationID_t id, uint32
 
 void uiNotificationRefresh(void)
 {
+#if 0
 	if (notificationData.visible)
 	{
 		// copy the primary screen content
@@ -171,6 +174,7 @@ void uiNotificationRefresh(void)
 		memcpy(displayGetPrimaryScreenBuffer(), screenNotificationBufData, sizeof(screenNotificationBufData));
 		//displayRestorePrimaryScreenBuffer();
 	}
+#endif
 }
 
 bool uiNotificationHasTimedOut(void)
