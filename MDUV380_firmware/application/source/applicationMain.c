@@ -48,6 +48,7 @@
 #include "user_interface/menuSystem.h"
 #include "user_interface/uiUtilities.h"
 #include "user_interface/styles.h"
+#include "user_interface/uiEvents.h"
 #include "user_interface/uiSplashScreen.h"
 #include "user_interface/uiPowerOff.h"
 #include "user_interface/uiMsg.h"
@@ -326,6 +327,7 @@ void applicationMainTask(void) {
 	displayInit();
 	gpioInitDisplay();
 
+	uiEventsInit();
 	buttonsInit();
 	keyboardInit();
 	rotaryEncoderISR();

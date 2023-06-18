@@ -130,7 +130,7 @@ static menuFunctionData_t menuFunctions[] =
 		// *** Add new menus to be accessed using quickkey (ID: 0..31) above this line ***
 		{ uiMessageBox,             0 },
 		{ menuHotspotMode,          0 },
-		{ uiCPS,                    0 },
+		{ NULL,                    	0 },	/* Was uiCPS */
 		{ menuNumericalEntry,       0 },
 		{ NULL,             		0 },	/* Was menuTxScreen */
 		{ NULL,           			0 },	/* Was Splash */

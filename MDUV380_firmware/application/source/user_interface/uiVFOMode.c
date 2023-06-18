@@ -44,13 +44,20 @@
 #include "functions/ticks.h"
 #include "functions/rxPowerSaving.h"
 
+static void unloadCallback(lv_event_t * e) {
+	uiHeaderStop();
+	/*
+	lv_timer_del(caller_timer);
+	caller_timer = NULL;
+	*/
+}
+
 static void keyCallback(lv_event_t * e) {
 	uint32_t key = lv_event_get_key(e);
 
 	switch (key) {
 		case LV_KEY_ESC:
 			if (!uiMenuWasOpened()) {
-				uiHeaderStop();
 				uiChannelMode();
 			}
 			break;
@@ -73,6 +80,7 @@ static void guiInit() {
 
 	lv_obj_add_event_cb(main_obj, buttonCallback, EVENT_BUTTON, NULL);
 	lv_obj_add_event_cb(main_obj, keyCallback, LV_EVENT_KEY, NULL);
+	lv_obj_add_event_cb(main_obj, unloadCallback, LV_EVENT_SCREEN_UNLOAD_START, NULL);
 	lv_group_add_obj(lv_group_get_default(), main_obj);
 
 	lv_obj_set_style_bg_img_src(main_obj, &wallpaper, LV_PART_MAIN);

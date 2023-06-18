@@ -28,7 +28,7 @@
  */
 
 #include <lvgl.h>
-#include "user_interface/uiMsg.h"
+#include "user_interface/uiEvents.h"
 #include "user_interface/styles.h"
 #include "user_interface/uiVFOMode.h"
 #include "user_interface/uiMenu.h"
@@ -59,9 +59,9 @@ static lv_obj_t		*channel_obj;
 static lv_obj_t		*channel_shadow_obj;
 static lv_obj_t		*zone_obj;
 
-static bool			caller_show = false;
 static lv_timer_t	*caller_timer = NULL;
 static uint32_t		caller_timeout;
+static uint32_t		caller_delay;
 
 static void guiUpdateContact();
 static void guiUpdateChannel();
@@ -78,10 +78,20 @@ static void changeTS();
 static void changeBW();
 static void loadChannelData(bool useChannelDataInMemory, bool loadVoicePromptAnnouncement);
 
-static void callerShow();
-static void callerHide();
+static void callerDelay();
 
 void uiChannelInitializeCurrentZone();
+
+static void unloadCallback(lv_event_t * e) {
+	uiHeaderStop();
+
+	if (uiCallerIsShow()) {
+		uiCallerDone();
+	}
+
+	lv_timer_del(caller_timer);
+	caller_timer = NULL;
+}
 
 static void keyCallback(lv_event_t * e) {
 	uint32_t	key = lv_event_get_key(e);
@@ -90,12 +100,6 @@ static void keyCallback(lv_event_t * e) {
 	switch (key) {
 		case LV_KEY_ESC:
 			if (!uiMenuWasOpened()) {
-				if (caller_show) {
-					uiCallerDone();
-				}
-				lv_timer_del(caller_timer);
-
-				uiHeaderStop();
 				uiVFOMode();
 			}
 			break;
@@ -111,6 +115,7 @@ static void keyCallback(lv_event_t * e) {
 				uiHeaderInfoUpdate();
 			} else {
 				if (mode == RADIO_MODE_DIGITAL) {
+					callerDelay();
 					changeContact(false);
 				} else {
 					changeSquelch(-1);
@@ -125,6 +130,7 @@ static void keyCallback(lv_event_t * e) {
 				uiHeaderInfoUpdate();
 			} else {
 				if (mode == RADIO_MODE_DIGITAL) {
+					callerDelay();
 					changeContact(true);
 				} else {
 					changeSquelch(+1);
@@ -134,16 +140,24 @@ static void keyCallback(lv_event_t * e) {
 
 		case LV_KEY_LEFT:
 			if (buttonsPressed(BUTTON_SK2)) {
+				callerDelay();
 				changeZone(true);
 			} else {
+				if (uiCallerIsShow()) {
+					uiCallerDone();
+				}
 				changeChannelPrev();
 			}
 			break;
 
 		case LV_KEY_RIGHT:
 			if (buttonsPressed(BUTTON_SK2)) {
+				callerDelay();
 				changeZone(false);
 			} else {
+				if (uiCallerIsShow()) {
+					uiCallerDone();
+				}
 				changeChannelNext();
 			}
 			break;
@@ -188,11 +202,13 @@ static void buttonCallback(lv_event_t * e) {
 		case BUTTON_SK1:
 			switch (event->state) {
 				case BUTTON_PRESS:
+					callerDelay();
 					guiViewChannelSettings(true);
 					break;
 
 				case BUTTON_RELEASE:
 				case BUTTON_LONG_RELEASE:
+					callerDelay();
 					guiViewChannelSettings(false);
 					break;
 
@@ -209,12 +225,33 @@ static void buttonCallback(lv_event_t * e) {
 	}
 }
 
+static void mainHideCallback(lv_event_t * e) {
+	lv_obj_add_flag(contact_obj, LV_OBJ_FLAG_HIDDEN);
+	lv_obj_add_flag(contact_shadow_obj, LV_OBJ_FLAG_HIDDEN);
+	lv_obj_add_flag(channel_obj, LV_OBJ_FLAG_HIDDEN);
+	lv_obj_add_flag(channel_shadow_obj, LV_OBJ_FLAG_HIDDEN);
+	lv_obj_add_flag(zone_obj, LV_OBJ_FLAG_HIDDEN);
+}
+
+static void mainShowCallback(lv_event_t * e) {
+	lv_obj_clear_flag(contact_obj, LV_OBJ_FLAG_HIDDEN);
+	lv_obj_clear_flag(contact_shadow_obj, LV_OBJ_FLAG_HIDDEN);
+	lv_obj_clear_flag(channel_obj, LV_OBJ_FLAG_HIDDEN);
+	lv_obj_clear_flag(channel_shadow_obj, LV_OBJ_FLAG_HIDDEN);
+	lv_obj_clear_flag(zone_obj, LV_OBJ_FLAG_HIDDEN);
+}
+
 static void guiInit() {
 	lv_coord_t	y = 128 - 2;
 	lv_obj_t	*main_obj = lv_obj_create(NULL);
 
 	lv_obj_add_event_cb(main_obj, buttonCallback, EVENT_BUTTON, NULL);
 	lv_obj_add_event_cb(main_obj, keyCallback, LV_EVENT_KEY, NULL);
+	lv_obj_add_event_cb(main_obj, unloadCallback, LV_EVENT_DELETE, NULL);
+
+	lv_obj_add_event_cb(main_obj, mainHideCallback, EVENT_MAIN_HIDE, NULL);
+	lv_obj_add_event_cb(main_obj, mainShowCallback, EVENT_MAIN_SHOW, NULL);
+
 	lv_group_add_obj(lv_group_get_default(), main_obj);
 	lv_obj_clear_flag(main_obj, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -297,6 +334,7 @@ static void updateTrxID() {
 		}
 
 		tsSetContactHasBeenOverriden(CHANNEL_CHANNEL, false);
+		uiHeaderTS(false);
 
 		trxUpdateTsForCurrentChannelWithSpecifiedContact(&currentContactData);
 		trxTalkGroupOrPcId = codeplugContactGetPackedId(&currentContactData);
@@ -334,12 +372,7 @@ static void changeContact(bool next) {
 	menuPrivateCallClear();
 	updateTrxID();
 	guiUpdateContact();
-
-#if 0
-	if (isQSODataAvailableForCurrentTalker()) {
-		(void)addTimerCallback(uiUtilityRenderQSODataAndUpdateScreen, 2000, UI_CHANNEL_MODE, true);
-	}
-#endif
+	uiHeaderInfoUpdate();
 
 	announceItem(PROMPT_SEQUENCE_CONTACT_TG_OR_PC, PROMPT_THRESHOLD_3);
 }
@@ -626,6 +659,10 @@ static void dataInit() {
 static void guiUpdateContact() {
 	char nameBuf[NAME_BUFFER_LEN];
 
+	if (uiCallerIsShow()) {
+		return;
+	}
+
 	if (trxGetMode() == RADIO_MODE_DIGITAL) {
 		lv_obj_clear_flag(contact_obj, LV_OBJ_FLAG_HIDDEN);
 		lv_obj_clear_flag(contact_shadow_obj, LV_OBJ_FLAG_HIDDEN);
@@ -733,48 +770,41 @@ static void guiUpdateInfoZone() {
 	}
 }
 
-static void callerShow() {
-	lv_obj_add_flag(contact_obj, LV_OBJ_FLAG_HIDDEN);
-	lv_obj_add_flag(contact_shadow_obj, LV_OBJ_FLAG_HIDDEN);
-	lv_obj_add_flag(channel_obj, LV_OBJ_FLAG_HIDDEN);
-	lv_obj_add_flag(channel_shadow_obj, LV_OBJ_FLAG_HIDDEN);
-	lv_obj_add_flag(zone_obj, LV_OBJ_FLAG_HIDDEN);
+static void callerDelay() {
+	caller_delay = ticksGetMillis() + 1000;
 
-	uiCallerInit();
-	caller_show = true;
-}
-
-static void callerHide()  {
-	uiCallerDone();
-	caller_show = false;
-
-	lv_obj_clear_flag(contact_obj, LV_OBJ_FLAG_HIDDEN);
-	lv_obj_clear_flag(contact_shadow_obj, LV_OBJ_FLAG_HIDDEN);
-	lv_obj_clear_flag(channel_obj, LV_OBJ_FLAG_HIDDEN);
-	lv_obj_clear_flag(channel_shadow_obj, LV_OBJ_FLAG_HIDDEN);
-	lv_obj_clear_flag(zone_obj, LV_OBJ_FLAG_HIDDEN);
+	if (uiCallerIsShow()) {
+		uiCallerDone();
+	}
 }
 
 static void callerTimerCallback(lv_timer_t *t) {
 	uint32_t now = ticksGetMillis();
 
-	if (caller_show) {
+	if (caller_delay > now) {
+		return;
+	}
+
+	if (uiCallerIsShow()) {
 		if (uiDataGlobal.displayQSOState == QSO_DISPLAY_CALLER_DATA_UPDATE) {
 			uiCallerUpdate();
-			caller_timeout = now + 500;
+			caller_timeout = now;
 		}
 
 		if (uiDataGlobal.displayQSOState == QSO_DISPLAY_CALLER_DATA || isQSODataAvailableForCurrentTalker()) {
-			caller_timeout = now + 500;
+			if (now - caller_timeout > 100) {
+				uiCallerUpdate();
+				caller_timeout = now;
+			}
 		}
 
-		if (now > caller_timeout) {
-			callerHide();
+		if (now - caller_timeout > 500) {
+			uiCallerDone();
 		}
 	} else {
 		if (uiDataGlobal.displayQSOState == QSO_DISPLAY_CALLER_DATA || isQSODataAvailableForCurrentTalker()) {
-			callerShow();
-			caller_timeout = now + 500;
+			uiCallerInit();
+			caller_timeout = now;
 		}
 	}
 }
@@ -789,6 +819,6 @@ void uiChannelMode() {
 
 	uiHeaderInfoUpdate();
 
-	caller_show = false;
+	caller_delay = 0;
 	caller_timer = lv_timer_create(callerTimerCallback, 20, NULL);
 }

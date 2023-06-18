@@ -27,12 +27,14 @@
  *
  */
 
-#ifndef INCLUDE_USER_INTERFACE_UICALLER_H_
-#define INCLUDE_USER_INTERFACE_UICALLER_H_
+#ifndef INCLUDE_USER_INTERFACE_UIEVENTS_H_
+#define INCLUDE_USER_INTERFACE_UIEVENTS_H_
 
-void uiCallerInit();
-void uiCallerUpdate();
-void uiCallerDone();
-bool uiCallerIsShow();
+#include <stdint.h>
 
-#endif /* INCLUDE_USER_INTERFACE_UICALLER_H_ */
+void uiEventsInit();
+
+extern uint32_t	EVENT_MAIN_HIDE;
+extern uint32_t	EVENT_MAIN_SHOW;
+
+#endif /* INCLUDE_USER_INTERFACE_UIEVENTS_H_ */

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *                         Oleg Belousov, R1CBU
  *
@@ -27,12 +27,21 @@
  *
  */
 
-#ifndef INCLUDE_USER_INTERFACE_UICALLER_H_
-#define INCLUDE_USER_INTERFACE_UICALLER_H_
+#ifndef INCLUDE_USER_INTERFACE_UICPS_H_
+#define INCLUDE_USER_INTERFACE_UICPS_H_
 
-void uiCallerInit();
-void uiCallerUpdate();
-void uiCallerDone();
-bool uiCallerIsShow();
+typedef enum {
+	CPS2UI_COMMAND_CLEARBUF = 0,
+	CPS2UI_COMMAND_PRINT,
+	CPS2UI_COMMAND_RENDER_DISPLAY,
+	CPS2UI_COMMAND_BACKLIGHT,
+	CPS2UI_COMMAND_GREEN_LED,
+	CPS2UI_COMMAND_RED_LED,
+	CPS2UI_COMMAND_END
+} uiCPSCommand_t;
 
-#endif /* INCLUDE_USER_INTERFACE_UICALLER_H_ */
+void uiCPSInit();
+void uiCPSDone();
+void uiCPSUpdate(uiCPSCommand_t command, int x, int y, ucFont_t fontSize, ucTextAlign_t alignment, bool isInverted, char *szMsg);
+
+#endif /* INCLUDE_USER_INTERFACE_UICPS_H_ */

@@ -31,6 +31,7 @@
 #include "functions/settings.h"
 #include "user_interface/uiUtilities.h"
 #include "user_interface/menuSystem.h"
+#include "user_interface/uiCPS.h"
 #include "usb/usb_com.h"
 #include "functions/ticks.h"
 #include "interfaces/wdog.h"
@@ -475,150 +476,168 @@ static void cpsHandleDebugCommand(void)
 	}
 }
 #endif
-static void cpsHandleCommand(void)
-{
+
+static void cpsHandleCommand(void) {
 	int command = com_requestbuffer[1];
-	switch(command)
-	{
+
+	switch (command) {
 		case 0:
-			// Show CPS screen
-			menuSystemPushNewMenu(UI_CPS);
+			/* Show CPS screen */
+			uiCPSInit();
 			break;
+
 		case 1:
-			// Clear CPS screen
+			/* Clear CPS screen */
 			uiCPSUpdate(CPS2UI_COMMAND_CLEARBUF, 0, 0, FONT_SIZE_1, TEXT_ALIGN_LEFT, 0, NULL);
 			break;
+
 		case 2:
-			// Write a line of text to CPS screen
+			/* Write a line of text to CPS screen */
 			uiCPSUpdate(CPS2UI_COMMAND_PRINT, com_requestbuffer[2], com_requestbuffer[3], (ucFont_t)com_requestbuffer[4], (ucTextAlign_t)com_requestbuffer[5], com_requestbuffer[6], (char *)&com_requestbuffer[7]);
 			break;
+
 		case 3:
-			// Render CPS screen
+			/* Render CPS screen */
 			uiCPSUpdate(CPS2UI_COMMAND_RENDER_DISPLAY, 0, 0, FONT_SIZE_1, TEXT_ALIGN_LEFT, 0, NULL);
 			break;
+
 		case 4:
-			// Turn on the display backlight
+			/* Turn on the display backlight */
 			uiCPSUpdate(CPS2UI_COMMAND_BACKLIGHT, 0, 0, FONT_SIZE_1, TEXT_ALIGN_LEFT, 0, NULL);
 			break;
+
 		case 5:
-			// Close
-			if (flashingDMRIDs)
-			{
+			/* Close */
+			if (flashingDMRIDs) {
 				dmrIDCacheInit();
 				flashingDMRIDs = false;
 			}
+
 			isCompressingAMBE = false;
 			rxPowerSavingSetLevel(nonVolatileSettings.ecoLevel);
 			uiCPSUpdate(CPS2UI_COMMAND_END, 0, 0, FONT_SIZE_1, TEXT_ALIGN_LEFT, 0, NULL);
 			break;
-		case 6:
-			{
-				int subCommand = com_requestbuffer[2];
-				uint32_t m = ticksGetMillis();
 
-				// Do some other processing
-				switch(subCommand)
-				{
-					case 0:
-						// Channels has be rewritten, switch currentZone to All Channels
-						if (channelsRewritten)
-						{
-							uint16_t firstContact = 1;
+		case 6: {
+			int subCommand = com_requestbuffer[2];
+			uint32_t m = ticksGetMillis();
 
-							//
-							// Give it a bit of time before reading the zone count as DM-1801 EEPROM looks slower
-							// than GD-77 to write
-							m = ticksGetMillis();
-							while (1U)
-							{
-								if ((ticksGetMillis() - m) > 50)
-								{
-									break;
-								}
-							}
+			// Do some other processing
+			switch (subCommand) {
+				case 0:
+				/* Channels has be rewritten, switch currentZone to All Channels */
 
-							codeplugAllChannelsInitCache(); // Rebuild channels cache
-							nonVolatileSettings.currentZone = (int16_t) (codeplugZonesGetCount() - 1); // Set to All Channels zone
+					if (channelsRewritten) {
+						uint16_t firstContact = 1;
 
-							// Search for the first assigned contact
-							for (uint16_t i = CODEPLUG_CHANNELS_MIN; i <= CODEPLUG_CHANNELS_MAX; i++)
-							{
-								if (codeplugAllChannelsIndexIsInUse(i))
-								{
-									firstContact = i;
-									break;
-								}
+						/* Give it a bit of time before reading the zone count as DM-1801 EEPROM looks slower */
+						/* than GD-77 to write */
 
-								// Call tick_watchdog() ??
-							}
-
-							nonVolatileSettings.currentChannelIndexInAllZone = firstContact;
-							nonVolatileSettings.currentChannelIndexInZone = 0;
-						}
-
-						// save current settings and reboot
 						m = ticksGetMillis();
-//#warning Temporary disabled USB saved settings (See also below)
-//						settingsSaveSettings(false);// Need to save these channels prior to reboot, as reboot does not save
 
-						// Give it a bit of time before pulling the plug as DM-1801 EEPROM looks slower
-						// than GD-77 to write, then quickly power cycling triggers settings reset.
-
-						addTimerCallback(NVIC_SystemReset, 500, MENU_ANY, false);
-						//NVIC_SystemReset();//watchdogReboot();
-					break;
-					case 1:
-						addTimerCallback(NVIC_SystemReset, 500, MENU_ANY, false);	//						NVIC_SystemReset();//watchdogReboot();
-						break;
-					case 2:
-						// Save settings VFO's to codeplug
-// SETTINGS SAVE ALSO DISABLED HERE
-						//settingsSaveSettings(true);
-						break;
-					case 3:
-						// flash green LED
-						uiCPSUpdate(CPS2UI_COMMAND_GREEN_LED, 0, 0, FONT_SIZE_1, TEXT_ALIGN_LEFT, 0, NULL);
-						break;
-					case 4:
-						// flash red LED
-						uiCPSUpdate(CPS2UI_COMMAND_RED_LED, 0, 0, FONT_SIZE_1, TEXT_ALIGN_LEFT, 0, NULL);
-						break;
-					case 5:
-						rxPowerSavingSetLevel(0);
-						isCompressingAMBE = true;
-						codecInitInternalBuffers();
-						break;
-					case 6:
-						soundInit();// Resets the sound buffers
-						memset((uint8_t *)&audioAndHotspotDataBuffer.rawBuffer[0], 0, (6 * WAV_BUFFER_SIZE));// clear 1 dmr frame size of wav buffer memory
-						break;
-					case 7:
-						memcpy(&uiDataGlobal.dateTimeSecs, (uint8_t *)&com_requestbuffer[3], sizeof(uint32_t));// update date with data from the CPS
-						setRtc_custom(uiDataGlobal.dateTimeSecs);
-						menuSatelliteScreenClearPredictions(true);
-						break;
-					// 8:
-					// 9:
-					case 10: // wait 10ms
-						m = ticksGetMillis();
-						while (1U)
-						{
-							if ((ticksGetMillis() - m) > 10)
-							{
+						while (1U) {
+							if ((ticksGetMillis() - m) > 50) {
 								break;
 							}
 						}
-						break;
-					default:
-						break;
-				}
+
+						codeplugAllChannelsInitCache(); 											/* Rebuild channels cache */
+						nonVolatileSettings.currentZone = (int16_t) (codeplugZonesGetCount() - 1);	/* Set to All Channels zone */
+
+						/* Search for the first assigned contact */
+
+						for (uint16_t i = CODEPLUG_CHANNELS_MIN; i <= CODEPLUG_CHANNELS_MAX; i++) {
+							if (codeplugAllChannelsIndexIsInUse(i)) {
+								firstContact = i;
+								break;
+							}
+							/* Call tick_watchdog() ?? */
+						}
+
+						nonVolatileSettings.currentChannelIndexInAllZone = firstContact;
+						nonVolatileSettings.currentChannelIndexInZone = 0;
+					}
+
+					/* save current settings and reboot */
+
+					m = ticksGetMillis();
+					/* #warning Temporary disabled USB saved settings (See also below) */
+					/*	settingsSaveSettings(false);// Need to save these channels prior to reboot, as reboot does not save */
+
+					/* Give it a bit of time before pulling the plug as DM-1801 EEPROM looks slower */
+					/* than GD-77 to write, then quickly power cycling triggers settings reset. */
+
+					addTimerCallback(NVIC_SystemReset, 500, MENU_ANY, false);
+					/* NVIC_SystemReset();//watchdogReboot(); */
+					break;
+
+				case 1:
+					addTimerCallback(NVIC_SystemReset, 500, MENU_ANY, false);	/*	NVIC_SystemReset();//watchdogReboot(); */
+					break;
+
+				case 2:
+					/* Save settings VFO's to codeplug */
+					/* SETTINGS SAVE ALSO DISABLED HERE */
+					/* settingsSaveSettings(true); */
+					break;
+
+				case 3:
+					/* flash green LED */
+					uiCPSUpdate(CPS2UI_COMMAND_GREEN_LED, 0, 0, FONT_SIZE_1, TEXT_ALIGN_LEFT, 0, NULL);
+					break;
+
+				case 4:
+					/* flash red LED */
+					uiCPSUpdate(CPS2UI_COMMAND_RED_LED, 0, 0, FONT_SIZE_1, TEXT_ALIGN_LEFT, 0, NULL);
+					break;
+
+				case 5:
+					rxPowerSavingSetLevel(0);
+					isCompressingAMBE = true;
+					codecInitInternalBuffers();
+					break;
+
+				case 6:
+					/* Resets the sound buffers */
+					soundInit();
+
+					/* clear 1 dmr frame size of wav buffer memory */
+					memset((uint8_t *)&audioAndHotspotDataBuffer.rawBuffer[0], 0, (6 * WAV_BUFFER_SIZE));
+					break;
+
+				case 7:
+					/* update date with data from the CPS */
+
+					memcpy(&uiDataGlobal.dateTimeSecs, (uint8_t *)&com_requestbuffer[3], sizeof(uint32_t));
+					setRtc_custom(uiDataGlobal.dateTimeSecs);
+					menuSatelliteScreenClearPredictions(true);
+					break;
+
+				// 8:
+				// 9:
+
+				case 10:
+					/* wait 10ms */
+					m = ticksGetMillis();
+					while (1U) {
+						if ((ticksGetMillis() - m) > 10) {
+							break;
+						}
+					}
+					break;
+				default:
+					break;
 			}
-			break;
-		default:
-			break;
+		}
+		break;
+
+	default:
+		break;
 	}
-	// Send something generic back.
-	// Probably need to send a response code in the future
+
+	/* Send something generic back. */
+	/* Probably need to send a response code in the future */
+
 	usbComSendBuf[0] = '-';
 	hasToReply = true;
 	replyLength = 1;

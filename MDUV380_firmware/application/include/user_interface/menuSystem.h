@@ -49,7 +49,6 @@
 #define BUTTONCHECK_EXTRALONGDOWN(e, sk) (((e)->keys.key == 0) && ((e)->buttons & sk ## _EXTRA_LONG_DOWN))
 // SK*/ORANGE button is down, regardless event status
 #define BUTTONCHECK_DOWN(e, sk) (((e)->buttons & sk))
-
 typedef enum
 {
 	NO_EVENT       = 0,
@@ -58,17 +57,6 @@ typedef enum
 	FUNCTION_EVENT = (1 << 2),
 	ROTARY_EVENT   = (1 << 3)
 } uiEventInput_t;
-
-typedef enum
-{
-	CPS2UI_COMMAND_CLEARBUF = 0,
-	CPS2UI_COMMAND_PRINT,
-	CPS2UI_COMMAND_RENDER_DISPLAY,
-	CPS2UI_COMMAND_BACKLIGHT,
-	CPS2UI_COMMAND_GREEN_LED,
-	CPS2UI_COMMAND_RED_LED,
-	CPS2UI_COMMAND_END
-} uiCPSCommand_t;
 
 
 typedef enum
@@ -114,6 +102,8 @@ typedef struct
 
 
 typedef menuStatus_t (*menuFunctionPointer_t)(uiEvent_t *, bool); // Typedef for menu function pointers.  Functions are passed the key, the button and the event data. Event can be a Key or a button or both. Last arg is for when the function is only called to initialise and display its screen.
+
+
 typedef struct
 {
 	const menuFunctionPointer_t	function;
@@ -162,9 +152,6 @@ bool uiVFOModeFrequencyScanningIsActiveAndEnabled(uint32_t *lowFreq, uint32_t *h
 void uiChannelModeStopScanning(void);
 bool uiChannelModeIsScanning(void);
 void uiChannelInitializeCurrentZone(void);
-
-
-void uiCPSUpdate(uiCPSCommand_t command, int x, int y, ucFont_t fontSize, ucTextAlign_t alignment, bool isInverted, char *szMsg);
 
 void menuSystemInit(void);
 void menuSystemLanguageHasChanged(void);
@@ -371,7 +358,6 @@ extern const menuItemsList_t 	menuDataOptions;
 
 menuStatus_t uiVFOModeQuickMenu(uiEvent_t *event, bool isFirstRun);
 menuStatus_t uiChannelModeQuickMenu(uiEvent_t *event, bool isFirstRun);
-menuStatus_t uiCPS(uiEvent_t *event, bool isFirstRun);
 menuStatus_t menuZoneList(uiEvent_t *event, bool isFirstRun);
 menuStatus_t menuDisplayMenuList(uiEvent_t *event, bool isFirstRun);
 menuStatus_t menuRadioInfos(uiEvent_t *event, bool isFirstRun);

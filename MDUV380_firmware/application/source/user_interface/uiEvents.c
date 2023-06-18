@@ -27,12 +27,13 @@
  *
  */
 
-#ifndef INCLUDE_USER_INTERFACE_UICALLER_H_
-#define INCLUDE_USER_INTERFACE_UICALLER_H_
+#include <lvgl.h>
+#include "user_interface/uiEvents.h"
 
-void uiCallerInit();
-void uiCallerUpdate();
-void uiCallerDone();
-bool uiCallerIsShow();
+uint32_t	EVENT_MAIN_HIDE;
+uint32_t	EVENT_MAIN_SHOW;
 
-#endif /* INCLUDE_USER_INTERFACE_UICALLER_H_ */
+void uiEventsInit() {
+	EVENT_MAIN_HIDE = lv_event_register_id();
+	EVENT_MAIN_SHOW = lv_event_register_id();
+}

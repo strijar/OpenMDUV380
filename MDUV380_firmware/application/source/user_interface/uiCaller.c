@@ -31,31 +31,40 @@
 #include "user_interface/uiUtilities.h"
 #include "user_interface/uiCaller.h"
 #include "user_interface/styles.h"
+#include "user_interface/uiEvents.h"
 
 static lv_obj_t	*main_obj = NULL;
 static lv_obj_t	*header_obj = NULL;
 static lv_obj_t	*info_obj = NULL;
 
 void uiCallerInit() {
-	main_obj = lv_obj_create(lv_scr_act());
+	if (main_obj == NULL) {
+		lv_event_send(lv_scr_act(), EVENT_MAIN_HIDE, NULL);
 
-	lv_obj_add_style(main_obj, &main_style, 0);
-	lv_obj_add_style(main_obj, &bordered_style, 0);
-	lv_obj_add_style(main_obj, &caller_style, 0);
+		main_obj = lv_obj_create(lv_scr_act());
 
-	header_obj = lv_label_create(main_obj);
+		lv_obj_add_style(main_obj, &main_style, 0);
+		lv_obj_add_style(main_obj, &bordered_style, 0);
+		lv_obj_add_style(main_obj, &caller_style, 0);
 
-	lv_obj_add_style(header_obj, &caller_header_style, 0);
+		header_obj = lv_label_create(main_obj);
 
-	info_obj = lv_label_create(main_obj);
+		lv_obj_add_style(header_obj, &caller_header_style, 0);
 
-	lv_obj_add_style(info_obj, &caller_info_style, 0);
+		info_obj = lv_label_create(main_obj);
+
+		lv_obj_add_style(info_obj, &caller_info_style, 0);
+	}
 
 	uiCallerUpdate();
 }
 
 void uiCallerUpdate() {
 	uiDataGlobal.receivedPcId = 0x00;
+
+	if (main_obj == NULL) {
+		return;
+	}
 
 	/*
 	 * Note.
@@ -117,8 +126,18 @@ void uiCallerUpdate() {
 			lv_label_set_text(info_obj, contact);
 		}
 	}
+	displayLightTrigger(false);
+}
+
+bool uiCallerIsShow() {
+	return main_obj != NULL;
 }
 
 void uiCallerDone() {
-	lv_obj_del(main_obj);
+	if (main_obj) {
+		lv_event_send(lv_scr_act(), EVENT_MAIN_SHOW, NULL);
+
+		lv_obj_del(main_obj);
+		main_obj = NULL;
+	}
 }
