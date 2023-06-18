@@ -32,10 +32,12 @@
 
 #include <stdbool.h>
 #include <stm32f4xx_hal.h>
+#include <semphr.h>
 
 #define BACKLIGHT_MIN_USABLE_VALUE 1
 
-extern bool displayBusy;
+extern SemaphoreHandle_t displayMutex;
+
 extern uint8_t displayLCD_Type;
 
 void displayInit();

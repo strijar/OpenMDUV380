@@ -38,8 +38,8 @@
 
 #define ROWS	(8 * 4)
 
-bool						displayBusy = false;
 uint8_t 					displayLCD_Type = 1;
+SemaphoreHandle_t			displayMutex = NULL;
 
 static lv_disp_draw_buf_t	disp_draw_buf;
 static lv_color_t			disp_buf_1[DISPLAY_SIZE_X * ROWS];
@@ -86,7 +86,11 @@ void displayXferCpltCallback(DMA_HandleTypeDef *DmaHandle) {
 		*((volatile uint8_t*) LCD_FSMC_ADDR_DATA) = 0;
 
 		lv_disp_flush_ready(&disp_drv);
-		displayBusy = false;
+
+		BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+		xSemaphoreGiveFromISR(displayMutex, &xHigherPriorityTaskWoken);
+		portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 	}
 }
 
@@ -125,7 +129,7 @@ void display_flush_cb(lv_disp_drv_t * disp_drv, const lv_area_t * area, lv_color
 
 	displayWriteCmd(HX8583_CMD_RAMWR);
 
-	displayBusy = true;
+	xSemaphoreTake(displayMutex, portMAX_DELAY);
 	HAL_DMA_Start_IT(&hdma_memtomem_dma2_stream0, (uint32_t) buf, LCD_FSMC_ADDR_DATA, buf_size);
 }
 
@@ -138,7 +142,8 @@ void display_rounder_cb(lv_disp_drv_t * disp_drv, lv_area_t * area) {
 }
 
 void displayInit() {
-	displayBusy = false;
+	displayMutex = xSemaphoreCreateBinary();
+	xSemaphoreGive(displayMutex);
 
 	GPIO_InitTypeDef GPIO_InitStruct = {0};
 

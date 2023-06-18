@@ -130,8 +130,8 @@ static const struct {
 };
 
 static void keyboard_read_cb(lv_indev_drv_t *drv, lv_indev_data_t *data) {
-	while (displayBusy) {
-		osDelay(pdMS_TO_TICKS(5));
+	if (xSemaphoreTake(displayMutex, pdMS_TO_TICKS(5)) != pdTRUE) {
+		return;
 	}
 
 	uint16_t keycode = 0;
@@ -184,6 +184,8 @@ static void keyboard_read_cb(lv_indev_drv_t *drv, lv_indev_data_t *data) {
 			break;
 		}
 	}
+
+	xSemaphoreGive(displayMutex);
 
 	if (keycode != 0) {
 		keyboard_prev_keycode = keycode;

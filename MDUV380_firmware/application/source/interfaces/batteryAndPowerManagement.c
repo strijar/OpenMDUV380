@@ -465,19 +465,12 @@ void powerOffFinalStage(bool maintainRTC, bool forceSuspend)
 
 	menuHotspotRestoreSettings();
 
-	m = ticksGetMillis();
 	settingsSaveForPowerOff();
 
 	// Give it a bit of time before pulling the plug as DM-1801 EEPROM looks slower
 	// than GD-77 to write, then quickly power cycling triggers settings reset.
-	while (1U)
-	{
-		if ((ticksGetMillis() - m) > 50)
-		{
-			break;
-		}
-	}
 
+	osDelay(pdMS_TO_TICKS(50));
 	displayEnableBacklight(false, 0);
 
 	HAL_GPIO_WritePin(PWR_SW_GPIO_Port, PWR_SW_Pin, GPIO_PIN_RESET);

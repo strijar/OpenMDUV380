@@ -115,7 +115,7 @@ static void check_button(button_t button, bool on) {
 }
 
 void buttonsRead() {
-	if (displayBusy) {
+	if (xSemaphoreTake(displayMutex, pdMS_TO_TICKS(5)) != pdTRUE) {
 		return;
 	}
 
@@ -156,6 +156,8 @@ void buttonsRead() {
 	bool ptt = ((HAL_GPIO_ReadPin(PTT_GPIO_Port, PTT_Pin) == GPIO_PIN_RESET) || (HAL_GPIO_ReadPin(PTT_EXTERNAL_GPIO_Port, PTT_EXTERNAL_Pin) == GPIO_PIN_RESET));
 
 	check_button(BUTTON_PTT, ptt);
+
+	xSemaphoreGive(displayMutex);
 }
 
 void buttonsInit(void) {
