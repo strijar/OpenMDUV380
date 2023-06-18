@@ -83,14 +83,14 @@ static void callerDelay();
 void uiChannelInitializeCurrentZone();
 
 static void unloadCallback(lv_event_t * e) {
+	lv_timer_del(caller_timer);
+	caller_timer = NULL;
+
 	uiHeaderStop();
 
 	if (uiCallerIsShow()) {
 		uiCallerDone();
 	}
-
-	lv_timer_del(caller_timer);
-	caller_timer = NULL;
 }
 
 static void keyCallback(lv_event_t * e) {
@@ -247,7 +247,7 @@ static void guiInit() {
 
 	lv_obj_add_event_cb(main_obj, buttonCallback, EVENT_BUTTON, NULL);
 	lv_obj_add_event_cb(main_obj, keyCallback, LV_EVENT_KEY, NULL);
-	lv_obj_add_event_cb(main_obj, unloadCallback, LV_EVENT_DELETE, NULL);
+	lv_obj_add_event_cb(main_obj, unloadCallback, LV_EVENT_SCREEN_UNLOAD_START, NULL);
 
 	lv_obj_add_event_cb(main_obj, mainHideCallback, EVENT_MAIN_HIDE, NULL);
 	lv_obj_add_event_cb(main_obj, mainShowCallback, EVENT_MAIN_SHOW, NULL);
