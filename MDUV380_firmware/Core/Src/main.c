@@ -870,8 +870,8 @@ static void MX_DMA_Init(void)
   hdma_memtomem_dma2_stream0.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
   hdma_memtomem_dma2_stream0.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
   hdma_memtomem_dma2_stream0.Init.Mode = DMA_NORMAL;
-  hdma_memtomem_dma2_stream0.Init.Priority = DMA_PRIORITY_HIGH;
-  hdma_memtomem_dma2_stream0.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
+  hdma_memtomem_dma2_stream0.Init.Priority = DMA_PRIORITY_LOW;
+  hdma_memtomem_dma2_stream0.Init.FIFOMode = DMA_FIFOMODE_ENABLE;
   hdma_memtomem_dma2_stream0.Init.FIFOThreshold = DMA_FIFO_THRESHOLD_FULL;
   hdma_memtomem_dma2_stream0.Init.MemBurst = DMA_MBURST_SINGLE;
   hdma_memtomem_dma2_stream0.Init.PeriphBurst = DMA_PBURST_SINGLE;

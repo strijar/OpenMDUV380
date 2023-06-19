@@ -300,7 +300,6 @@ static void start_timeout(lv_timer_t *t) {
 void applicationMainTask(void) {
 	int				function_event = 0;
 	bool			keyOrButtonChanged = false;
-	bool 			wasRestoringDefaultsettings = false;
 	bool 			hasSignal = false;
 
 	uiEvent_t ev = {
@@ -341,19 +340,7 @@ void applicationMainTask(void) {
 
 	/* * */
 
-#if 0
-	buttonsCheckButtonsEvent(&buttons, &button_event, false);
-
-	if (buttons & BUTTON_SK2_OLD) {
-		wasRestoringDefaultsettings = true;
-		settingsRestoreDefaultSettings();
-		settingsLoadSettings();
-	} else {
-		wasRestoringDefaultsettings = settingsLoadSettings();
-	}
-#else
-	wasRestoringDefaultsettings = settingsLoadSettings();
-#endif
+	settingsLoadSettings();
 
 	radioPowerOn();
 	uiDataGlobal.dmrDisabled = !codecIsAvailable();
@@ -372,15 +359,6 @@ void applicationMainTask(void) {
 	dmrIDCacheInit();
 	voicePromptsCacheInit();
 
-#if 0
-	keyboardCheckKeyEvent(&keys, &key_event);
-
-	if (wasRestoringDefaultsettings || KEYCHECK_DOWN(keys, KEY_HASH)) {
-		enableVoicePromptsIfLoaded(KEYCHECK_DOWN(keys, KEY_HASH));
-	}
-#endif
-
-	wasRestoringDefaultsettings = settingsIsOptionBitSet(BIT_SETTINGS_UPDATED);
 	voxSetParameters(nonVolatileSettings.voxThreshold, nonVolatileSettings.voxTailUnits);
 	codeplugGetSignallingDTMFDurations(&uiDataGlobal.DTMFContactList.durations);
 	uiDataGlobal.dateTimeSecs = getRtcTime_custom();

@@ -245,17 +245,12 @@ void settingsInitVFOChannel(int vfoNumber)
 }
 
 // returns true on default settings, false if upgraded.
-bool settingsRestoreDefaultSettings(void)
-{
+bool settingsRestoreDefaultSettings(void) {
 	bool ret = true;
 
-	// Upgrade location settings
-//	if ((nonVolatileSettings.magicNumber >= 0x4764) == false)
-	{
-		nonVolatileSettings.locationLat = SETTINGS_UNITIALISED_LOCATION_LAT;// Value that are out of range, so that it can be detected in the Satellite menu;
-		nonVolatileSettings.locationLon = 0;
-		nonVolatileSettings.timezone = SETTINGS_TIMEZONE_UTC;
-	}
+	nonVolatileSettings.locationLat = SETTINGS_UNITIALISED_LOCATION_LAT; /* Value that are out of range, so that it can be detected in the Satellite menu; */
+	nonVolatileSettings.locationLon = 0;
+	nonVolatileSettings.timezone = SETTINGS_TIMEZONE_UTC;
 
 	nonVolatileSettings.magicNumber = STORAGE_MAGIC_NUMBER;
 
@@ -265,103 +260,45 @@ bool settingsRestoreDefaultSettings(void)
 	nonVolatileSettings.currentIndexInTRxGroupList[SETTINGS_VFO_A_MODE] = 0;
 	nonVolatileSettings.currentIndexInTRxGroupList[SETTINGS_VFO_B_MODE] = 0;
 	nonVolatileSettings.currentZone = 0;
-	nonVolatileSettings.backlightMode =
-#if defined(PLATFORM_GD77S)
-			BACKLIGHT_MODE_NONE;
-#else
-			BACKLIGHT_MODE_AUTO;
-#endif
-	nonVolatileSettings.backLightTimeout = 0U;//0 = never timeout. 1 - 255 time in seconds
-	nonVolatileSettings.displayContrast =
-#if defined(PLATFORM_DM1801) || defined(PLATFORM_DM1801A)
-			0x0e; // 14
-#elif defined (PLATFORM_RD5R)
-			0x06;
-#else
-			0x12; // 18
-#endif
-	nonVolatileSettings.initialMenuNumber =
-#if defined(PLATFORM_GD77S)
-			UI_CHANNEL_MODE;
-#else
-			UI_VFO_MODE;
-#endif
-	nonVolatileSettings.displayBacklightPercentage = 100;// 100% brightness
-	nonVolatileSettings.displayBacklightPercentageOff = 0;// 0% brightness
+	nonVolatileSettings.backlightMode = BACKLIGHT_MODE_AUTO;
+	nonVolatileSettings.backLightTimeout = 10U; /* 0 = never timeout. 1 - 255 time in seconds */
+	nonVolatileSettings.displayContrast = 18;
+	nonVolatileSettings.initialMenuNumber = UI_VFO_MODE;
+	nonVolatileSettings.displayBacklightPercentage = 50;
+	nonVolatileSettings.displayBacklightPercentageOff = 10;
 	nonVolatileSettings.extendedInfosOnScreen = INFO_ON_SCREEN_OFF;
-	nonVolatileSettings.txFreqLimited =
-#if defined(PLATFORM_GD77S)
-			BAND_LIMITS_NONE;//GD-77S is channelised, and there is no way to disable band limits from the UI, so disable limits by default.
-#else
-			BAND_LIMITS_ON_LEGACY_DEFAULT;// Limit Tx frequency to US Amateur bands
-#endif
-	nonVolatileSettings.txPowerLevel =
-#if defined(PLATFORM_GD77S)
-			3U; // 750mW
-#else
-			4U; // 1 W   3:750  2:500  1:250
-#endif
+	nonVolatileSettings.txFreqLimited = BAND_LIMITS_ON_LEGACY_DEFAULT;
+	nonVolatileSettings.txPowerLevel = 4U; 	/* 1 W   3:750  2:500  1:250 */
+	nonVolatileSettings.userPower = 4100U;	/* Max DAC value is 4095. 4100 is a hack to make the numbers more palatable. */
+	nonVolatileSettings.bitfieldOptions = BIT_SETTINGS_UPDATED;
 
-	nonVolatileSettings.userPower = 4100U;// Max DAC value is 4095. 4100 is a hack to make the numbers more palatable.
-	nonVolatileSettings.bitfieldOptions =
-#if defined(PLATFORM_GD77S)
-			0U;
-#else
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017) 
-	#if defined(PLATFORM_MD9600)
-				 BIT_BATTERY_VOLTAGE_IN_HEADER |
-	#else
-				 BIT_SETTINGS_UPDATED;// we need to keep track if the user has been notified about settings update.
-	#endif
-#else
-	 	 	 BIT_SETTINGS_UPDATED; // we need to keep track if the user has been notified about settings update.
-#endif
-
-#endif
-
-	nonVolatileSettings.overrideTG = 0U;// 0 = No override
+	nonVolatileSettings.overrideTG = 0U;
 	nonVolatileSettings.txTimeoutBeepX5Secs = 2U;
-	nonVolatileSettings.beepVolumeDivider = 4U; //-6dB: Beeps are way too loud using the same setting as the official firmware
-	nonVolatileSettings.micGainDMR = SETTINGS_DMR_MIC_ZERO; // Normal value
-	nonVolatileSettings.micGainFM = SETTINGS_FM_MIC_ZERO; // Normal Value
-	nonVolatileSettings.tsManualOverride = 0U; // No manual TS override using the Star key
+	nonVolatileSettings.beepVolumeDivider = 4U; /* -6dB: Beeps are way too loud using the same setting as the official firmware */
+	nonVolatileSettings.micGainDMR = SETTINGS_DMR_MIC_ZERO; /* Normal value */
+	nonVolatileSettings.micGainFM = SETTINGS_FM_MIC_ZERO; /* Normal Value */
+	nonVolatileSettings.tsManualOverride = 0U; /* No manual TS override using the Star key */
 	nonVolatileSettings.keypadTimerLong = 5U;
 	nonVolatileSettings.keypadTimerRepeat = 3U;
 	nonVolatileSettings.currentVFONumber = CHANNEL_VFO_A;
-	nonVolatileSettings.dmrDestinationFilter =
-#if defined(PLATFORM_GD77S)
-	DMR_DESTINATION_FILTER_TG;
-#else
-	DMR_DESTINATION_FILTER_NONE;
-#endif
+	nonVolatileSettings.dmrDestinationFilter = DMR_DESTINATION_FILTER_NONE;
 	nonVolatileSettings.dmrCcTsFilter = DMR_CCTS_FILTER_CC_TS;
 
-	nonVolatileSettings.dmrCaptureTimeout = 10U;// Default to holding 10 seconds after a call ends
+	nonVolatileSettings.dmrCaptureTimeout = 10U; /* Default to holding 10 seconds after a call ends */
 	nonVolatileSettings.analogFilterLevel = ANALOG_FILTER_CSS;
 	trxSetAnalogFilterLevel(nonVolatileSettings.analogFilterLevel);
 	nonVolatileSettings.languageIndex = 0U;
-	nonVolatileSettings.scanDelay = 5U;// 5 seconds
-	nonVolatileSettings.scanStepTime = 0;// 30ms
+	nonVolatileSettings.scanDelay = 5U; /* 5 seconds */
+	nonVolatileSettings.scanStepTime = 0; /* 30ms */
 	nonVolatileSettings.scanModePause = SCAN_MODE_HOLD;
 	nonVolatileSettings.squelchDefaults[RADIO_BAND_VHF]		= 10U;// 1 - 21 = 0 - 100% , same as from the CPS variable squelch
-#if !(defined(PLATFORM_MD9600) || defined(PLATFORM_MD380))
 	nonVolatileSettings.squelchDefaults[RADIO_BAND_220MHz]	= 10U;// 1 - 21 = 0 - 100% , same as from the CPS variable squelch
-#endif
 	nonVolatileSettings.squelchDefaults[RADIO_BAND_UHF]		= 10U;// 1 - 21 = 0 - 100% , same as from the CPS variable squelch
-	nonVolatileSettings.hotspotType =
-#if defined(PLATFORM_GD77S)
-			HOTSPOT_TYPE_MMDVM;
-#else
-			HOTSPOT_TYPE_OFF;
-#endif
-	nonVolatileSettings.privateCalls =
-#if defined(PLATFORM_GD77S)
-			ALLOW_PRIVATE_CALLS_OFF;
-#else
-			ALLOW_PRIVATE_CALLS_ON;
-#endif
+	nonVolatileSettings.hotspotType = HOTSPOT_TYPE_OFF;
+	nonVolatileSettings.privateCalls = ALLOW_PRIVATE_CALLS_ON;
 
-    // Set all these value to zero to force the operator to set their own limits.
+    /* Set all these value to zero to force the operator to set their own limits. */
+
 	nonVolatileSettings.vfoScanLow[CHANNEL_VFO_A] = 0U;
 	nonVolatileSettings.vfoScanLow[CHANNEL_VFO_B] = 0U;
 	nonVolatileSettings.vfoScanHigh[CHANNEL_VFO_A] = 0U;
@@ -370,41 +307,33 @@ bool settingsRestoreDefaultSettings(void)
 	nonVolatileSettings.contactDisplayPriority = CONTACT_DISPLAY_PRIO_CC_DB_TA;
 	nonVolatileSettings.splitContact = SPLIT_CONTACT_ON_TWO_LINES;
 	nonVolatileSettings.beepOptions = BEEP_TX_STOP | BEEP_TX_START;
-	// VOX related
-	nonVolatileSettings.voxThreshold = 20U;
-	nonVolatileSettings.voxTailUnits = 4U; // 2 seconds tail
 
-#if defined(PLATFORM_GD77S)
-	nonVolatileSettings.audioPromptMode = AUDIO_PROMPT_MODE_VOICE_LEVEL_3;
-#else
-	if (voicePromptDataIsLoaded)
-	{
+	/* VOX related */
+
+	nonVolatileSettings.voxThreshold = 20U;
+	nonVolatileSettings.voxTailUnits = 4U; /* 2 seconds tail */
+
+	if (voicePromptDataIsLoaded) {
 		nonVolatileSettings.audioPromptMode = AUDIO_PROMPT_MODE_VOICE_LEVEL_1;
-	}
-	else
-	{
+	} else {
 		nonVolatileSettings.audioPromptMode = AUDIO_PROMPT_MODE_BEEP;
 	}
-#endif
 
 	nonVolatileSettings.temperatureCalibration = 0;
-	nonVolatileSettings.batteryCalibration = (0x05) + (0x07 << 4);// Time is in upper 4 bits battery calibration in upper 4 bits
+	nonVolatileSettings.batteryCalibration = (0x05) + (0x07 << 4); /* Time is in upper 4 bits battery calibration in upper 4 bits */
 
 	nonVolatileSettings.ecoLevel = 1;
-	nonVolatileSettings.DMR_RxAGC = 0;// disabled
+	nonVolatileSettings.DMR_RxAGC = 0; /* disabled */
 	nonVolatileSettings.apo = 0;
 
 	nonVolatileSettings.vfoSweepSettings = ((((sizeof(VFO_SWEEP_SCAN_RANGE_SAMPLE_STEP_TABLE) / sizeof(VFO_SWEEP_SCAN_RANGE_SAMPLE_STEP_TABLE[0])) - 1) << 12) | (VFO_SWEEP_RSSI_NOISE_FLOOR_DEFAULT << 7) | VFO_SWEEP_GAIN_DEFAULT);
 
 	nonVolatileSettings.gps = GPS_NOT_DETECTED;
 
-
-	currentChannelData = &settingsVFOChannel[nonVolatileSettings.currentVFONumber];// Set the current channel data to point to the VFO data since the default screen will be the VFO
-
-	//readDone: // Used when upgrading
+	/* Set the current channel data to point to the VFO data since the default screen will be the VFO */
+	currentChannelData = &settingsVFOChannel[nonVolatileSettings.currentVFONumber];
 
 	settingsDirty = true;
-
 	settingsSaveSettings(false);
 
 	return ret;

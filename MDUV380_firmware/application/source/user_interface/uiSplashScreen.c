@@ -28,16 +28,23 @@
  */
 
 #include <lvgl.h>
-#include "user_interface/styles.h"
 
+#include "user_interface/styles.h"
 #include "user_interface/uiSplashScreen.h"
 #include "user_interface/uiChannelMode.h"
 #include "user_interface/uiVFOMode.h"
-#include "functions/settings.h"
 #include "user_interface/uiUtilities.h"
-#include "functions/codeplug.h"
 #include "user_interface/uiLocalisation.h"
+#include "functions/codeplug.h"
+#include "functions/settings.h"
 #include "functions/ticks.h"
+
+static lv_obj_t *main_obj;
+static lv_obj_t	*msg;
+static lv_obj_t	*yes;
+static lv_obj_t	*no;
+
+static void talkerMsg();
 
 static void timeout(lv_timer_t *t) {
 	switch (nonVolatileSettings.initialMenuNumber) {
@@ -54,8 +61,70 @@ static void timeout(lv_timer_t *t) {
 	}
 }
 
+static void keyCallback(lv_event_t * e) {
+	uint32_t	key = lv_event_get_key(e);
+
+	switch (key) {
+		case LV_KEY_ENTER:
+			settingsRestoreDefaultSettings();
+			settingsLoadSettings();
+			/* no break */
+
+		case LV_KEY_ESC:
+			lv_obj_del(yes);
+			lv_obj_del(no);
+			talkerMsg();
+			break;
+	}
+}
+
+static void defaultSettingsMsg() {
+	lv_coord_t	y = 128 - 2 - 20;
+
+	lv_obj_add_event_cb(main_obj, keyCallback, LV_EVENT_KEY, NULL);
+	lv_group_add_obj(lv_group_get_default(), main_obj);
+
+	lv_label_set_text(msg, "Set default\nsettings?");
+
+	yes = lv_label_create(main_obj);
+
+	lv_label_set_text(yes, "Yes");
+	lv_obj_set_pos(yes, 2, y);
+	lv_obj_set_size(yes, 160/3, 20);
+
+	lv_obj_add_style(yes, (lv_style_t *) &main_style, 0);
+	lv_obj_add_style(yes, (lv_style_t *) &bordered_style, 0);
+	lv_obj_add_style(yes, (lv_style_t *) &bottom_item_style, 0);
+
+	no = lv_label_create(main_obj);
+
+	lv_label_set_text(no, "No");
+	lv_obj_set_pos(no, 160 - 160/3 - 2, y);
+	lv_obj_set_size(no, 160/3, 20);
+
+	lv_obj_add_style(no, (lv_style_t *) &main_style, 0);
+	lv_obj_add_style(no, (lv_style_t *) &bordered_style, 0);
+	lv_obj_add_style(no, (lv_style_t *) &bottom_item_style, 0);
+}
+
+static void talkerMsg() {
+	char line1[(SCREEN_LINE_BUFFER_SIZE * 2) + 1];
+	char line2[SCREEN_LINE_BUFFER_SIZE];
+
+	codeplugGetBootScreenData(line1, line2, NULL);
+
+	lv_label_set_text_fmt(msg, "%s\n%s", line1, line2);
+
+	strcat(line1, " ");
+	strcat(line1, line2);
+	HRC6000SetTalkerAlias(line1);
+
+	lv_timer_t *timer = lv_timer_create(timeout, 3000, NULL);
+	lv_timer_set_repeat_count(timer, 1);
+}
+
 void uiSplashScreen() {
-	lv_obj_t *main_obj = lv_obj_create(NULL);
+	main_obj = lv_obj_create(NULL);
 
 	lv_obj_set_style_bg_img_src(main_obj, &wallpaper, LV_PART_MAIN);
 
@@ -72,28 +141,20 @@ void uiSplashScreen() {
 
 	/* * */
 
-	char line1[(SCREEN_LINE_BUFFER_SIZE * 2) + 1];
-	char line2[SCREEN_LINE_BUFFER_SIZE];
+	msg = lv_label_create(main_obj);
 
-	codeplugGetBootScreenData(line1, line2, NULL);
+	lv_obj_add_style(msg, &main_style, 0);
+	lv_obj_add_style(msg, &bordered_style, 0);
+	lv_obj_add_style(msg, &splash_item_style, 0);
 
-	obj = lv_label_create(main_obj);
+	lv_obj_set_height(msg, 44);
+	lv_obj_center(msg);
 
-	lv_label_set_text_fmt(obj, "%s\n%s", line1, line2);
-
-	lv_obj_add_style(obj, &main_style, 0);
-	lv_obj_add_style(obj, &bordered_style, 0);
-	lv_obj_add_style(obj, &splash_item_style, 0);
-
-	lv_obj_set_height(obj, 44);
-	lv_obj_center(obj);
-
-	strcat(line1, " ");
-	strcat(line1, line2);
-	HRC6000SetTalkerAlias(line1);
+	if (buttonsPressed(BUTTON_SK2)) {
+		defaultSettingsMsg();
+	} else {
+		talkerMsg();
+	}
 
 	lv_scr_load_anim(main_obj, LV_SCR_LOAD_ANIM_NONE, 0, 0, true);
-
-	lv_timer_t *timer = lv_timer_create(timeout, 3000, NULL);
-	lv_timer_set_repeat_count(timer, 1);
 }
