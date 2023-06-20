@@ -265,7 +265,7 @@ bool settingsRestoreDefaultSettings(void) {
 	nonVolatileSettings.displayContrast = 18;
 	nonVolatileSettings.initialMenuNumber = UI_VFO_MODE;
 	nonVolatileSettings.displayBacklightPercentage = 50;
-	nonVolatileSettings.displayBacklightPercentageOff = 10;
+	nonVolatileSettings.displayBacklightPercentageOff = 1;
 	nonVolatileSettings.extendedInfosOnScreen = INFO_ON_SCREEN_OFF;
 	nonVolatileSettings.txFreqLimited = BAND_LIMITS_ON_LEGACY_DEFAULT;
 	nonVolatileSettings.txPowerLevel = 4U; 	/* 1 W   3:750  2:500  1:250 */

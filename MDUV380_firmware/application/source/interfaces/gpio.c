@@ -29,82 +29,34 @@
 #include "interfaces/gpio.h"
 #include <stdint.h>
 
-static uint8_t currentDisplayPercentage = 0;
-
-#if 0
-void gpioInitButtons(void)
-{
-}
-
-void gpioInitCommon(void)
-{
-}
-
-
-#endif
-
-// use 100 + 1 elements so that we can achieve 100% by putting the reset pattern beyond the end of the DMA loop range
-
 #define dimingTableSize  101
-uint32_t dimingPattern[dimingTableSize];
 
-void gpioInitDisplay()
-{
-	HAL_DMA_Start(&hdma_tim1_ch1,  (uint32_t)dimingPattern, (uint32_t)&(GPIOD->BSRR), 100);// 100 steps
+static uint8_t 	currentDisplayPercentage = 0;
+static uint32_t	dimingPattern[dimingTableSize];
+
+void gpioInitDisplay() {
+	HAL_DMA_Start(&hdma_tim1_ch1,  (uint32_t)dimingPattern, (uint32_t)&(GPIOD->BSRR), dimingTableSize-1);
 	HAL_TIM_Base_Start(&htim1);
 	HAL_TIM_OC_Start(&htim1, TIM_CHANNEL_1);
 	__HAL_TIM_ENABLE_DMA(&htim1, TIM_DMA_CC1);
 }
 
-
-void gpioSetDisplayBacklightIntensityPercentage(uint8_t intensityPercentage)
-{
-	if (intensityPercentage > 100)
-	{
+void gpioSetDisplayBacklightIntensityPercentage(uint8_t intensityPercentage) {
+	if (intensityPercentage > 100) {
 		intensityPercentage = 100;
 	}
 
-	if (intensityPercentage == currentDisplayPercentage)
-	{
+	if (intensityPercentage == currentDisplayPercentage) {
 		return;
 	}
 
-	dimingPattern[currentDisplayPercentage] = 0;// remove the previous pin reset pattern
+	dimingPattern[currentDisplayPercentage] = 0;
 
-	dimingPattern[0] = LCD_BKLIGHT_Pin;// turn on the backlight at the start of the array
-	dimingPattern[intensityPercentage] = LCD_BKLIGHT_Pin << 16U;// Turn off the pin at the appropriate position in the array
+	dimingPattern[0] = LCD_BKLIGHT_Pin;
+	dimingPattern[intensityPercentage] = LCD_BKLIGHT_Pin << 16U;
 	currentDisplayPercentage = intensityPercentage;
 }
 
-uint8_t gpioGetDisplayBacklightIntensityPercentage(void)
-{
+uint8_t gpioGetDisplayBacklightIntensityPercentage(void) {
 	return currentDisplayPercentage;
 }
-
-#if 0
-void gpioInitFlash(void)
-{
-
-}
-#endif
-
-void gpioInitKeyboard(void)
-{
-
-}
-
-void gpioInitLEDs(void)
-{
-
-}
-
-void gpioInitRotarySwitch(void)
-{
-// config is via the STM32Cube config tool
-}
-
-#if 0
-void gpioInitC6000Interface(void)
-{
-}
-#endif

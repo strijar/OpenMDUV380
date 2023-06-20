@@ -513,16 +513,5 @@ void gpioInitCommon(void);
 void gpioInitDisplay(void);
 void gpioSetDisplayBacklightIntensityPercentage(uint8_t intensityPercentage);
 uint8_t gpioGetDisplayBacklightIntensityPercentage(void);
-#if 0
-void gpioInitFlash(void);
-#endif
-void gpioInitKeyboard(void);
-void gpioInitLEDs(void);
-void gpioInitRotarySwitch(void);
-
-#if 0
-//void gpioInitC6000Interface(void);
-#endif
-
 
 #endif

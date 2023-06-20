@@ -36,8 +36,6 @@ uint8_t LEDsState[2] = { 0, 0 };
 
 void LEDsInit(void)
 {
-	//gpioInitLEDs();
-
     LedWrite(LED_GREEN, 0);
     LedWrite(LED_RED, 0);
 }
