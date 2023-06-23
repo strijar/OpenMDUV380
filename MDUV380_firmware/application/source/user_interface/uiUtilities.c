@@ -3044,7 +3044,6 @@ bool uiShowQuickKeysChoices(char *buf, const int bufferLen, const char *menuTitl
 	return settingOption;
 }
 
-
 // --- DTMF contact list playback ---
 
 static uint32_t dtmfGetToneDuration(uint32_t duration)
