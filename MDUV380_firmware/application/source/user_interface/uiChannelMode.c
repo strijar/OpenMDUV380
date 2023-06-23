@@ -167,6 +167,7 @@ static void keyCallback(lv_event_t * e) {
 				changeMode();
 			} else {
 				if (mode == RADIO_MODE_DIGITAL) {
+					callerDelay();
 					changeTS();
 				} else {
 					changeBW();
@@ -383,6 +384,7 @@ static void changeSquelch(int dir) {
 
 static void changeMode() {
 	if (trxGetMode() == RADIO_MODE_DIGITAL) {
+		callerDelay();
 		currentChannelData->chMode = RADIO_MODE_ANALOG;
 		trxSetModeAndBandwidth(currentChannelData->chMode, codeplugChannelIsFlagSet(currentChannelData, CHANNEL_FLAG_BW_25K));
 		trxSetRxCSS(currentChannelData->rxTone);
