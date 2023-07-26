@@ -62,7 +62,7 @@ void uiCallerInit() {
 void uiCallerUpdate() {
 	uiDataGlobal.receivedPcId = 0x00;
 
-	if (main_obj == NULL) {
+	if (main_obj == NULL || LinkHead == NULL) {
 		return;
 	}
 
@@ -135,9 +135,9 @@ bool uiCallerIsShow() {
 
 void uiCallerDone() {
 	if (main_obj) {
-		lv_event_send(lv_scr_act(), EVENT_MAIN_SHOW, NULL);
-
 		lv_obj_del(main_obj);
 		main_obj = NULL;
+
+		lv_event_send(lv_scr_act(), EVENT_MAIN_SHOW, NULL);
 	}
 }

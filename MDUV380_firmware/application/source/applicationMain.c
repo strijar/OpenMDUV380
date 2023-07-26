@@ -408,6 +408,8 @@ void applicationMainTask(void) {
 			}
 		}
 
+		uiDataGlobal.displayQSOState = QSO_DISPLAY_IDLE;
+
 		if (!trxTransmissionEnabled && (updateLastHeard == true)) {
 			lastHeardListUpdate((uint8_t *)DMR_frame_buffer, false);
 			updateLastHeard = false;

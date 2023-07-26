@@ -139,25 +139,21 @@ static void keyCallback(lv_event_t * e) {
 			break;
 
 		case LV_KEY_LEFT:
+			callerDelay();
+
 			if (buttonsPressed(BUTTON_SK2)) {
-				callerDelay();
 				changeZone(true);
 			} else {
-				if (uiCallerIsShow()) {
-					uiCallerDone();
-				}
 				changeChannelPrev();
 			}
 			break;
 
 		case LV_KEY_RIGHT:
+			callerDelay();
+
 			if (buttonsPressed(BUTTON_SK2)) {
-				callerDelay();
 				changeZone(false);
 			} else {
-				if (uiCallerIsShow()) {
-					uiCallerDone();
-				}
 				changeChannelNext();
 			}
 			break;
@@ -774,16 +770,20 @@ static void guiUpdateInfoZone() {
 
 static void callerDelay() {
 	caller_delay = ticksGetMillis() + 1000;
-
-	if (uiCallerIsShow()) {
-		uiCallerDone();
-	}
 }
 
 static void callerTimerCallback(lv_timer_t *t) {
 	uint32_t now = ticksGetMillis();
 
 	if (caller_delay > now) {
+		if (uiCallerIsShow()) {
+			lastHeardClearLastID();
+			uiCallerDone();
+		}
+		return;
+	}
+
+	if (trxGetMode() != RADIO_MODE_DIGITAL) {
 		return;
 	}
 

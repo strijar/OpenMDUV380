@@ -43,6 +43,10 @@ static lv_obj_t		*pwr_obj;
 static lv_obj_t		*bat_obj;
 static lv_obj_t		*meter_obj;
 
+static bool			pwr_manual = false;
+static bool			mode_manual = false;
+static bool			ts_manual = false;
+
 static lv_timer_t	*bat_timer = NULL;
 static lv_timer_t	*meter_timer = NULL;
 
@@ -148,6 +152,12 @@ void uiHeaderInfoUpdate() {
 }
 
 void uiHeaderPwr(bool manual) {
+	if (pwr_manual == manual) {
+		return;
+	}
+
+	pwr_manual = manual;
+
 	if (manual) {
 		lv_obj_remove_style(pwr_obj, &header_item_style, LV_PART_MAIN);
 		lv_obj_add_style(pwr_obj, &header_manual_item_style, LV_PART_MAIN);
@@ -158,6 +168,12 @@ void uiHeaderPwr(bool manual) {
 }
 
 void uiHeaderMode(bool manual) {
+	if (mode_manual == manual) {
+		return;
+	}
+
+	mode_manual = manual;
+
 	if (manual) {
 		lv_obj_remove_style(mode_obj, &header_item_style, LV_PART_MAIN);
 		lv_obj_add_style(mode_obj, &header_manual_item_style, LV_PART_MAIN);
@@ -168,6 +184,12 @@ void uiHeaderMode(bool manual) {
 }
 
 void uiHeaderTS(bool manual) {
+	if (ts_manual == manual) {
+		return;
+	}
+
+	ts_manual = manual;
+
 	if (manual) {
 		lv_obj_remove_style(ts_obj, &header_item_style, LV_PART_MAIN);
 		lv_obj_add_style(ts_obj, &header_manual_item_style, LV_PART_MAIN);
