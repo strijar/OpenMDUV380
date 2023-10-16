@@ -118,7 +118,7 @@ static void keyCallback(lv_event_t * e) {
 					callerDelay();
 					changeContact(false);
 				} else {
-					changeSquelch(-1);
+					changeSquelch(+1);
 				}
 			}
 			break;
@@ -133,7 +133,7 @@ static void keyCallback(lv_event_t * e) {
 					callerDelay();
 					changeContact(true);
 				} else {
-					changeSquelch(+1);
+					changeSquelch(-1);
 				}
 			}
 			break;
@@ -375,7 +375,21 @@ static void changeContact(bool next) {
 }
 
 static void changeSquelch(int dir) {
+	soundSetMelody(MELODY_KEY_BEEP);
 
+	if (currentChannelData->sql == 0) {
+		currentChannelData->sql = nonVolatileSettings.squelchDefaults[trxCurrentBand[TRX_RX_FREQ_BAND]];
+	}
+
+	if (dir > 0) {
+		if (currentChannelData->sql < CODEPLUG_MAX_VARIABLE_SQUELCH) {
+			currentChannelData->sql++;
+		}
+	} else {
+		if (currentChannelData->sql > CODEPLUG_MIN_VARIABLE_SQUELCH) {
+			currentChannelData->sql--;
+		}
+	}
 }
 
 static void changeMode() {

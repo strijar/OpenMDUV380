@@ -295,6 +295,8 @@ static void start_timeout(lv_timer_t *t) {
 	uiSplashScreen();
 	displayEnableBacklight(true, nonVolatileSettings.displayBacklightPercentageOff);
 	displayLightTrigger(false);
+
+	soundSetMelody(MELODY_POWER_ON);
 }
 
 void applicationMainTask(void) {
