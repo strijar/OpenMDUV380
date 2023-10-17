@@ -41,4 +41,7 @@ void uiHeaderPwr(bool manual);
 void uiHeaderMode(bool manual);
 void uiHeaderTS(bool manual);
 
+void uiHeaderMeterVol(int32_t value);
+void uiHeaderMeterSquelch(int32_t value);
+
 #endif /* INCLUDE_USER_INTERFACE_UIHEADER_H_ */

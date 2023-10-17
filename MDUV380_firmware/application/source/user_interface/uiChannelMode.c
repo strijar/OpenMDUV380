@@ -390,6 +390,8 @@ static void changeSquelch(int dir) {
 			currentChannelData->sql--;
 		}
 	}
+
+	uiHeaderMeterSquelch(currentChannelData->sql);
 }
 
 static void changeMode() {

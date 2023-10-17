@@ -36,6 +36,7 @@
 #include <lvgl.h>
 
 #include "user_interface/uiMsg.h"
+#include "user_interface/uiHeader.h"
 #include "interfaces/adc.h"
 #include "interfaces/batteryRAM.h"
 #include "hardware/SPI_Flash.h"
@@ -437,6 +438,7 @@ void applicationMainTask(void) {
 		if (latestVolume != lastVolume) {
 			lastVolume = latestVolume;
 			HRC6000SetDmrRxGain(latestVolume);
+			uiHeaderMeterVol(latestVolume);
 		}
 
 		lv_msg_send(UI_MSG_IDLE, NULL);

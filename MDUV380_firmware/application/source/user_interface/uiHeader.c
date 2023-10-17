@@ -36,21 +36,34 @@
 #include "functions/trx.h"
 #include "functions/settings.h"
 
-static lv_obj_t 	*main_obj;
-static lv_obj_t		*mode_obj;
-static lv_obj_t		*ts_obj;
-static lv_obj_t		*pwr_obj;
-static lv_obj_t		*bat_obj;
-static lv_obj_t		*meter_obj;
+#define VOL_MIN	(-31)
+#define VOL_MAX (31)
 
-static bool			pwr_manual = false;
-static bool			mode_manual = false;
-static bool			ts_manual = false;
+typedef enum {
+	METER_RX_SMETER = 0,
+	METER_RX_VOL,
+	METER_RX_SQUELCH
+} meter_rx_mode_t;
 
-static lv_timer_t	*bat_timer = NULL;
-static lv_timer_t	*meter_timer = NULL;
+static lv_obj_t 		*main_obj;
+static lv_obj_t			*mode_obj;
+static lv_obj_t			*ts_obj;
+static lv_obj_t			*pwr_obj;
+static lv_obj_t			*bat_obj;
+static lv_obj_t			*meter_obj;
 
-static const char	*power_labels[] = { "50mW", "250mW", "500mW", "750mW", "1W", "2W", "3W", "4W", "5W", "+W-"};
+static bool				pwr_manual = false;
+static bool				mode_manual = false;
+static bool				ts_manual = false;
+
+static lv_timer_t		*bat_timer = NULL;
+static lv_timer_t		*meter_timer = NULL;
+
+static meter_rx_mode_t	meter_rx_mode = METER_RX_SMETER;
+static int32_t			meter_rx_value = 0;
+static int32_t			meter_rx_timeout = 0;
+
+static const char		*power_labels[] = { "50mW", "250mW", "500mW", "750mW", "1W", "2W", "3W", "4W", "5W", "+W-"};
 
 static void batUpdate(lv_timer_t *t) {
 	bool batteryIsLow = batteryIsLowWarning();
@@ -97,10 +110,33 @@ static void meterDraw(lv_event_t *e) {
 			value = (x - 50) * 19 / (300 - 50);
 		}
 	} else {
-		x = trxGetRSSIdBm();
+		switch (meter_rx_mode) {
+			case METER_RX_SMETER:
+				x = trxGetRSSIdBm();
+				rect_dsc.bg_color = lv_color_make(0x00, 0xFF, 0x00);
+				value = (x - SMETER_S0) * 19 / (SMETER_S9_40 - SMETER_S0);
+				break;
 
-		rect_dsc.bg_color = lv_color_make(0x00, 0xFF, 0x00);
-		value = (x - SMETER_S0) * 19 / (SMETER_S9_40 - SMETER_S0);
+			case METER_RX_VOL:
+				rect_dsc.bg_color = lv_color_make(0xFF, 0xFF, 0xFF);
+				value = meter_rx_value;
+				meter_rx_timeout--;
+
+				if (meter_rx_timeout == 0) {
+					meter_rx_mode = METER_RX_SMETER;
+				}
+				break;
+
+			case METER_RX_SQUELCH:
+				rect_dsc.bg_color = lv_color_make(0xFF, 0xFF, 0x00);
+				value = meter_rx_value;
+				meter_rx_timeout--;
+
+				if (meter_rx_timeout == 0) {
+					meter_rx_mode = METER_RX_SMETER;
+				}
+				break;
+		}
 	}
 
 	area.y1 = y1;
@@ -197,6 +233,18 @@ void uiHeaderTS(bool manual) {
 		lv_obj_remove_style(ts_obj, &header_manual_item_style, LV_PART_MAIN);
 		lv_obj_add_style(ts_obj, &header_item_style, LV_PART_MAIN);
 	}
+}
+
+void uiHeaderMeterVol(int32_t value) {
+	meter_rx_value = (value - VOL_MIN) * 19 / (VOL_MAX - VOL_MIN);
+	meter_rx_timeout = 10;
+	meter_rx_mode = METER_RX_VOL;
+}
+
+void uiHeaderMeterSquelch(int32_t value) {
+	meter_rx_value = (value - CODEPLUG_MIN_VARIABLE_SQUELCH) * 19 / (CODEPLUG_MAX_VARIABLE_SQUELCH - CODEPLUG_MIN_VARIABLE_SQUELCH);
+	meter_rx_timeout = 10;
+	meter_rx_mode = METER_RX_SQUELCH;
 }
 
 lv_obj_t * uiHeader(lv_obj_t *parent) {
