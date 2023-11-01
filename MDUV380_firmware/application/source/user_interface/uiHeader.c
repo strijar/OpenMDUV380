@@ -61,7 +61,7 @@ static lv_timer_t		*meter_timer = NULL;
 
 static meter_rx_mode_t	meter_rx_mode = METER_RX_SMETER;
 static int32_t			meter_rx_value = 0;
-static int32_t			meter_rx_timeout = 0;
+static uint32_t			meter_rx_timeout = 0;
 
 static const char		*power_labels[] = { "50mW", "250mW", "500mW", "750mW", "1W", "2W", "3W", "4W", "5W", "+W-"};
 
@@ -120,9 +120,8 @@ static void meterDraw(lv_event_t *e) {
 			case METER_RX_VOL:
 				rect_dsc.bg_color = lv_color_make(0xFF, 0xFF, 0xFF);
 				value = meter_rx_value;
-				meter_rx_timeout--;
 
-				if (meter_rx_timeout == 0) {
+				if (ticksGetMillis() > meter_rx_timeout) {
 					meter_rx_mode = METER_RX_SMETER;
 				}
 				break;
@@ -130,9 +129,8 @@ static void meterDraw(lv_event_t *e) {
 			case METER_RX_SQUELCH:
 				rect_dsc.bg_color = lv_color_make(0xFF, 0xFF, 0x00);
 				value = meter_rx_value;
-				meter_rx_timeout--;
 
-				if (meter_rx_timeout == 0) {
+				if (ticksGetMillis() > meter_rx_timeout) {
 					meter_rx_mode = METER_RX_SMETER;
 				}
 				break;
@@ -237,13 +235,13 @@ void uiHeaderTS(bool manual) {
 
 void uiHeaderMeterVol(int32_t value) {
 	meter_rx_value = (value - VOL_MIN) * 19 / (VOL_MAX - VOL_MIN);
-	meter_rx_timeout = 10;
+	meter_rx_timeout = ticksGetMillis() + 1000;
 	meter_rx_mode = METER_RX_VOL;
 }
 
 void uiHeaderMeterSquelch(int32_t value) {
 	meter_rx_value = (value - CODEPLUG_MIN_VARIABLE_SQUELCH) * 19 / (CODEPLUG_MAX_VARIABLE_SQUELCH - CODEPLUG_MIN_VARIABLE_SQUELCH);
-	meter_rx_timeout = 10;
+	meter_rx_timeout = ticksGetMillis() + 1000;
 	meter_rx_mode = METER_RX_SQUELCH;
 }
 
