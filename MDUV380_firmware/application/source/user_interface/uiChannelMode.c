@@ -377,17 +377,17 @@ static void changeContact(bool next) {
 static void changeSquelch(int dir) {
 	soundSetMelody(MELODY_KEY_BEEP);
 
-	if (currentChannelData->sql == 0) {
-		currentChannelData->sql = nonVolatileSettings.squelchDefaults[trxCurrentBand[TRX_RX_FREQ_BAND]];
-	}
+	currentChannelData->sql = nonVolatileSettings.squelchDefaults[trxCurrentBand[TRX_RX_FREQ_BAND]];
 
 	if (dir > 0) {
 		if (currentChannelData->sql < CODEPLUG_MAX_VARIABLE_SQUELCH) {
 			currentChannelData->sql++;
+			settingsIncrement(nonVolatileSettings.squelchDefaults[trxCurrentBand[TRX_RX_FREQ_BAND]], 1);
 		}
 	} else {
 		if (currentChannelData->sql > CODEPLUG_MIN_VARIABLE_SQUELCH) {
 			currentChannelData->sql--;
+			settingsDecrement(nonVolatileSettings.squelchDefaults[trxCurrentBand[TRX_RX_FREQ_BAND]], 1);
 		}
 	}
 
