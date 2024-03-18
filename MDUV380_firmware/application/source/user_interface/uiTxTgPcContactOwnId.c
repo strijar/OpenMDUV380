@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -131,7 +131,9 @@ static void updateCursor(void)
 		{
 			sLen *= 8;
 
+			displayThemeApply(THEME_ITEM_FG_TEXT_INPUT, THEME_ITEM_BG);
 			displayPrintCore((((DISPLAY_SIZE_X - sLen) >> 1) + sLen), (DISPLAY_SIZE_Y / 2), "_", FONT_SIZE_3, 0, blink);
+			displayThemeResetToDefault();
 
 			blink = !blink;
 			lastBlink = m;
@@ -149,11 +151,12 @@ static void updateScreen(bool inputModeHasChanged)
 
 	displayClearBuf();
 
+	displayThemeApply(THEME_ITEM_FG_DECORATION, THEME_ITEM_BG_MENU_NAME);
 	displayDrawRoundRectWithDropShadow(2, y - 1, (DISPLAY_SIZE_X - 6), TITLE_BOX_HEIGHT, 3, true);
 
+	displayThemeApply(THEME_ITEM_FG_MENU_NAME, THEME_ITEM_BG_MENU_NAME);
 	// Not really centered, off by 2 pixels
 	displayPrintAt(((DISPLAY_SIZE_X - sLen) >> 1) - 2, y, (char *)menuName[menuDataGlobal.currentItemIndex], FONT_SIZE_3);
-
 
 	if (inputModeHasChanged)
 	{
@@ -161,13 +164,13 @@ static void updateScreen(bool inputModeHasChanged)
 		switch(menuDataGlobal.currentItemIndex)
 		{
 			case ENTRY_TG:
-				voicePromptsAppendLanguageString(&currentLanguage->tg_entry);
+				voicePromptsAppendLanguageString(currentLanguage->tg_entry);
 				break;
 			case ENTRY_PC:
-				voicePromptsAppendLanguageString(&currentLanguage->pc_entry);
+				voicePromptsAppendLanguageString(currentLanguage->pc_entry);
 				break;
 			case ENTRY_DTMF:
-				voicePromptsAppendLanguageString(&currentLanguage->dtmf_entry);
+				voicePromptsAppendLanguageString(currentLanguage->dtmf_entry);
 				break;
 			case ENTRY_SELECT_CONTACT:
 				voicePromptsAppendPrompt(PROMPT_CONTACT);
@@ -181,9 +184,9 @@ static void updateScreen(bool inputModeHasChanged)
 					}
 					else
 					{
-						voicePromptsAppendLanguageString(&currentLanguage->name);
+						voicePromptsAppendLanguageString(currentLanguage->name);
 						voicePromptsAppendPrompt(PROMPT_SILENCE);
-						voicePromptsAppendLanguageString(&currentLanguage->none);
+						voicePromptsAppendLanguageString(currentLanguage->none);
 					}
 				}
 				break;
@@ -197,15 +200,19 @@ static void updateScreen(bool inputModeHasChanged)
 
 	if (pcIdx == 0)
 	{
+		displayThemeApply(THEME_ITEM_FG_TEXT_INPUT, THEME_ITEM_BG);
 		displayPrintCentered((DISPLAY_SIZE_Y / 2), (char *)digits, FONT_SIZE_3);
 	}
 	else
 	{
+		displayThemeApply(THEME_ITEM_FG_CHANNEL_CONTACT, THEME_ITEM_BG);
+
 		codeplugUtilConvertBufToString((inAnalog ? dtmfContact.name : contact.name), buf, 16);
 		displayPrintCentered((DISPLAY_SIZE_Y / 2), buf, FONT_SIZE_3);
 		displayPrintCentered((DISPLAY_SIZE_Y - 12), (char *)digits, FONT_SIZE_1);
 	}
 
+	displayThemeResetToDefault();
 	displayRender();
 }
 
@@ -303,7 +310,7 @@ static void dtmfCode2digits(uint8_t *code)
 
 static void announceContactName(void)
 {
-	if (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_LEVEL_1)
+	if (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_THRESHOLD)
 	{
 		char buf[17];
 		codeplugUtilConvertBufToString((inAnalog ? dtmfContact.name : contact.name), buf, 16);
@@ -315,9 +322,9 @@ static void announceContactName(void)
 		}
 		else
 		{
-			voicePromptsAppendLanguageString(&currentLanguage->name);
+			voicePromptsAppendLanguageString(currentLanguage->name);
 			voicePromptsAppendPrompt(PROMPT_SILENCE);
-			voicePromptsAppendLanguageString(&currentLanguage->none);
+			voicePromptsAppendLanguageString(currentLanguage->none);
 		}
 		voicePromptsPlay();
 	}
@@ -327,6 +334,12 @@ static void handleEvent(uiEvent_t *ev)
 {
 	size_t sLen;
 	uint32_t tmpID;
+
+	if ((ev->events & FUNCTION_EVENT) && (ev->function == FUNC_REDRAW))
+	{
+		updateScreen(false);
+		return;
+	}
 
 	// DTMF sequence is playing, stop it.
 	if (dtmfSequenceIsKeying() && ((ev->keys.key != 0) || BUTTONCHECK_DOWN(ev, BUTTON_PTT)
@@ -340,7 +353,7 @@ static void handleEvent(uiEvent_t *ev)
 		return;
 	}
 
-	if ((nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_LEVEL_1) && (ev->events & BUTTON_EVENT))
+	if ((nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_THRESHOLD) && (ev->events & BUTTON_EVENT))
 	{
 		if (BUTTONCHECK_SHORTUP(ev, BUTTON_SK1))
 		{
@@ -354,7 +367,7 @@ static void handleEvent(uiEvent_t *ev)
 						voicePromptsAppendString(digits);
 						break;
 					case ENTRY_PC:
-						voicePromptsAppendLanguageString(&currentLanguage->private_call);
+						voicePromptsAppendLanguageString(currentLanguage->private_call);
 						voicePromptsAppendString(digits);
 						break;
 					case ENTRY_DTMF:
@@ -441,11 +454,11 @@ static void handleEvent(uiEvent_t *ev)
 
 					if (tmpID != 0)
 					{
-						setTxDMRID(uiDataGlobal.manualOverrideDMRId);
+						trxDMRID = uiDataGlobal.manualOverrideDMRId;
 					}
 					else
 					{
-						setTxDMRID(uiDataGlobal.userDMRId);
+						trxDMRID = uiDataGlobal.userDMRId;
 					}
 
 					if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
@@ -654,12 +667,16 @@ static void handleEvent(uiEvent_t *ev)
 						}
 					}
 
-					if ((keyval != 99) & (keyval !=16))
+					if ((keyval != 99)
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+							&& (keyval != 16)
+#endif
+					)
 					{
 						char c[2] = {0, 0};
 						c[0] = keyval + '0';
 
-						if (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_LEVEL_1)
+						if (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_THRESHOLD)
 						{
 							voicePromptsInit();
 							voicePromptsAppendString(c);

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -47,8 +47,8 @@ menuStatus_t menuZoneList(uiEvent_t *ev, bool isFirstRun)
 
 		voicePromptsInit();
 		voicePromptsAppendPrompt(PROMPT_SILENCE);
-		voicePromptsAppendLanguageString(&currentLanguage->zone);
-		voicePromptsAppendLanguageString(&currentLanguage->menu);
+		voicePromptsAppendLanguageString(currentLanguage->zone);
+		voicePromptsAppendLanguageString(currentLanguage->menu);
 		voicePromptsAppendPrompt(PROMPT_SILENCE);
 
 		updateScreen(true);
@@ -95,7 +95,7 @@ static void updateScreen(bool isFirstRun)
 		codeplugZoneGetDataForNumber(mNum, &zoneBuf);
 		codeplugUtilConvertBufToString(zoneBuf.name, nameBuf, 16);// need to convert to zero terminated string
 
-		menuDisplayEntry(i, mNum, (char *)nameBuf);
+		menuDisplayEntry(i, mNum, (char *)nameBuf, 0, THEME_ITEM_FG_ZONE_NAME, THEME_ITEM_COLOUR_NONE, THEME_ITEM_BG);
 
 		if (i == 0)
 		{
@@ -106,7 +106,7 @@ static void updateScreen(bool isFirstRun)
 
 			if (strcmp(nameBuf,currentLanguage->all_channels) == 0)
 			{
-				voicePromptsAppendLanguageString(&currentLanguage->all_channels);
+				voicePromptsAppendLanguageString(currentLanguage->all_channels);
 			}
 			else
 			{
@@ -132,14 +132,18 @@ static void handleEvent(uiEvent_t *ev)
 
 	if (ev->events & FUNCTION_EVENT)
 	{
-		if ((QUICKKEY_TYPE(ev->function) == QUICKKEY_MENU) && (QUICKKEY_LONGENTRYID(ev->function) > 0) && (QUICKKEY_LONGENTRYID(ev->function) <= menuDataGlobal.numItems))
+		if (ev->function == FUNC_REDRAW)
 		{
-			menuDataGlobal.currentItemIndex = QUICKKEY_LONGENTRYID(ev->function)-1;
+			updateScreen(false);
+		}
+		else if ((QUICKKEY_TYPE(ev->function) == QUICKKEY_MENU) && (QUICKKEY_LONGENTRYID(ev->function) > 0) && (QUICKKEY_LONGENTRYID(ev->function) <= menuDataGlobal.numItems))
+		{
+			menuDataGlobal.currentItemIndex = QUICKKEY_LONGENTRYID(ev->function) - 1;
 			setZoneToUserSelection();
 		}
+
 		return;
 	}
-
 
 	if (KEYCHECK_PRESS(ev->keys, KEY_DOWN))
 	{
@@ -155,7 +159,6 @@ static void handleEvent(uiEvent_t *ev)
 	}
 	else if (KEYCHECK_SHORTUP(ev->keys, KEY_GREEN))
 	{
-
 		setZoneToUserSelection();
 		return;
 	}
@@ -176,7 +179,6 @@ static void setZoneToUserSelection(void)
 {
 	settingsSet(nonVolatileSettings.overrideTG, 0); // remove any TG override
 	settingsSet(nonVolatileSettings.currentZone, (int16_t) menuDataGlobal.currentItemIndex);
-	settingsSet(nonVolatileSettings.currentChannelIndexInZone , 0);// Since we are switching zones the channel index should be reset
 	settingsSet(nonVolatileSettings.currentIndexInTRxGroupList[SETTINGS_CHANNEL_MODE], 0);// Since we are switching zones the TRx Group index should be reset
 	channelScreenChannelData.rxFreq = 0x00; // Flag to the Channel screen that the channel data is now invalid and needs to be reloaded
 

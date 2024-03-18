@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2020-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -58,12 +58,11 @@ extern volatile bool   PTTLocked;
 extern volatile bool PTTLocked;
 
 void buttonsInit(void);
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380)  || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
-void buttonsCheckButtonsEvent(uint32_t *buttons, int *event, bool keyIsDown);
+#if defined(PLATFORM_MD9600)
+void buttonsCheckButtonsEvent(uint32_t *buttons, int *event, bool keyIsDown, bool sk2IsLatched, uint16_t *frontPanelButtons);
 #else
 uint32_t buttonsRead(void);
 void buttonsCheckButtonsEvent(uint32_t *buttons, int *event, bool keyIsDown);
 #endif
-
 
 #endif /* _OPENGD77_BUTTONS_H_ */

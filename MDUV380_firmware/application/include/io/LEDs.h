@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2019      Kai Ludwig, DG4KLU
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -33,19 +33,11 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "functions/settings.h"
-#include "interfaces/gpio.h"
+
+typedef enum LEDS { LED_GREEN, LED_RED, NUM_LEDS } LEDs_t;
 
 #if ! defined(PLATFORM_GD77S)
-extern uint8_t LEDsState[2];
-#endif
-
-typedef enum LEDS {LED_GREEN, LED_RED, NUM_LEDS} LEDs_t;
-#if !(defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380)  || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017))
-typedef struct ledPorts
-{
-	GPIO_Type 	*port;
-	uint32_t	pinNumber;
-} ledPorts_t;
+extern uint8_t LEDsState[NUM_LEDS];
 #endif
 
 void LEDsInit(void);
@@ -54,9 +46,8 @@ void LEDsInit(void);
 void torchToggle(void);
 #endif
 
-
 void LedWrite(LEDs_t theLED, uint8_t output);
-uint32_t LedRead(LEDs_t theLED);
+uint8_t LedRead(LEDs_t theLED);
 void LedWriteDirect(LEDs_t theLED, uint8_t output);
 
 #endif /* _OPENGD77_LEDS_H_ */

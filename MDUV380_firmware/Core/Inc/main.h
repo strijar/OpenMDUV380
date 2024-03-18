@@ -84,8 +84,10 @@ extern DMA_HandleTypeDef hdma_memtomem_dma2_stream0;
 extern TIM_HandleTypeDef htim1;
 extern TIM_HandleTypeDef htim2;
 extern TIM_HandleTypeDef htim3;
+extern TIM_HandleTypeDef htim6;
 extern DMA_HandleTypeDef hdma_tim1_ch1;
 extern DMA_HandleTypeDef hdma_usart1_rx;
+extern volatile bool aprsIsrFlag;
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/

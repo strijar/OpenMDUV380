@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2019      Kai Ludwig, DG4KLU
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -32,6 +32,7 @@
 #include "functions/codeplug.h"
 #include "hardware/EEPROM.h"
 #include "hardware/SPI_Flash.h"
+#include "functions/trx.h"
 #include "usb/usb_com.h"
 #include "user_interface/uiLocalisation.h"
 #include "user_interface/uiGlobals.h"
@@ -74,14 +75,16 @@ const int CODEPLUG_ADDR_BOOT_LINE2 = 0x7550;
 const int CODEPLUG_ADDR_VFO_A_CHANNEL = 0x7590;
 const int CPS_CODEPLUG_SECTION_2_START = 0x7500;
 
+const int CODEPLUG_ADDR_APRS_CONFIGS = 0x1588;// Address of start of APRS configs (formerly Emergency Systems)
+
 int codeplugChannelsPerZone = 16;
 
 const int VFO_FREQ_STEP_TABLE[8] = {250,500,625,1000,1250,2500,3000,5000};
 const int VFO_SWEEP_SCAN_RANGE_SAMPLE_STEP_TABLE[7] = {78,157,313,625, 1250,2500,5000};
 
 
-const int CODEPLUG_MAX_VARIABLE_SQUELCH = 21;
-const int CODEPLUG_MIN_VARIABLE_SQUELCH = 1;
+const int CODEPLUG_MAX_VARIABLE_SQUELCH = 21U;
+const int CODEPLUG_MIN_VARIABLE_SQUELCH = 1U;
 
 const int CODEPLUG_MIN_PER_CHANNEL_POWER  = 1;
 
@@ -90,7 +93,8 @@ const int CODEPLUG_ADDR_DEVICE_INFO_READ_SIZE = 96;// (sizeof struct_codeplugDev
 
 const int CODEPLUG_ADDR_BOOT_PASSWORD_PIN = 0x7518;
 
-const uint32_t VFO_MAGIC_NUMBER = 0x33554259;
+const uint16_t APRS_MAGIC_VERSION = 0x4152;
+
 
 static uint16_t allChannelsTotalNumOfChannels = 0;
 static uint16_t allChannelsHighestChannelIndex = 0;
@@ -117,6 +121,17 @@ typedef struct
 	codeplugDTMFContactCache_t contactsDTMFLookupCache[CODEPLUG_DTMF_CONTACTS_MAX];
 } codeplugContactsCache_t;
 
+typedef struct
+{
+	int 	numOfConfigs;
+} codeplugAPRSConfigsCache_t;
+
+typedef struct
+{
+	int dataType;
+	int dataLength;
+} codeplugCustomDataBlockHeader_t;
+
 __attribute__((section(".data.$RAM2"))) codeplugContactsCache_t codeplugContactsCache;
 
 __attribute__((section(".data.$RAM2"))) uint8_t codeplugRXGroupCache[CODEPLUG_RX_GROUPLIST_MAX];
@@ -124,6 +139,10 @@ __attribute__((section(".data.$RAM2"))) uint8_t codeplugAllChannelsCache[128];
 __attribute__((section(".data.$RAM2"))) uint8_t codeplugZonesInUseCache[CODEPLUG_EX_ZONE_INUSE_PACKED_DATA_SIZE];
 __attribute__((section(".data.$RAM2"))) uint16_t quickKeysCache[CODEPLUG_QUICKKEYS_SIZE];
 
+__attribute__((section(".data.$RAM2"))) uint8_t lastUsedChannelInZoneData[CODEPLUG_ALL_ZONES_MAX + 1]; // All zones (0..79) + AllChannel 0..1023 (hence one extra byte to store this value)
+static bool lastUsedChannelInZoneHasChanged = false;
+
+__attribute__((section(".data.$RAM2"))) codeplugAPRSConfigsCache_t codeplugAPRSCache;
 
 static bool codeplugContactGetReserve1ByteForIndex(int index, struct_codeplugContact_t *contact);
 
@@ -256,7 +275,7 @@ void codeplugUtilConvertStringToBuf(char *inBuf, char *outBuf, int len)
 	}
 }
 
-static void codeplugZonesInitCache(void)
+void codeplugZonesInitCache(void)
 {
 	EEPROM_Read(CODEPLUG_ADDR_EX_ZONE_INUSE_PACKED_DATA, (uint8_t *)&codeplugZonesInUseCache, CODEPLUG_EX_ZONE_INUSE_PACKED_DATA_SIZE);
 }
@@ -312,7 +331,7 @@ bool codeplugZoneGetDataForNumber(int zoneNum, struct_codeplugZone_t *returnBuf)
 					{
 						// found it. So save the index before we exit the "for" loops
 						foundIndex = (i * 8) + j;
-						break;// Will break out of this loop, but the outer loop breaks becuase it also checks for foundIndex
+						break;// Will break out of this loop, but the outer loop breaks because it also checks for foundIndex
 					}
 				}
 			}
@@ -444,25 +463,15 @@ void codeplugAllChannelsInitCache(void)
 			break;
 		}
 	}
-}
 
-static void setChannelFlag(uint8_t *flag, uint8_t bit, bool enabled)
-{
-	if (enabled)
-	{
-		*flag |= bit;
-	}
-	else
-	{
-		*flag &= ~bit;
-	}
+	allChannelsTotalNumOfChannels = codeplugAllChannelsGetCount();
 }
 
 uint32_t codeplugChannelGetOptionalDMRID(struct_codeplugChannel_t *channelBuf)
 {
 	uint32_t retVal = 0;
 
-	if (codeplugChannelIsFlagSet(channelBuf, CHANNEL_FLAG_OPTIONAL_DMRID))
+	if (codeplugChannelGetFlag(channelBuf, CHANNEL_FLAG_OPTIONAL_DMRID) != 0)
 	{
 		retVal = ((channelBuf->rxSignaling << 16) | (channelBuf->artsInterval << 8) | channelBuf->encrypt);
 	}
@@ -488,112 +497,90 @@ void codeplugChannelSetOptionalDMRID(struct_codeplugChannel_t *channelBuf, uint3
 		tmpID = dmrID;
 	}
 
-	setChannelFlag(&channelBuf->LibreDMR_flag1, CODEPLUG_CHANNEL_LIBREDMR_FLAG1_OPTIONAL_DMRID, dmrIDIsValid);
+	codeplugChannelSetFlag(channelBuf, CHANNEL_FLAG_OPTIONAL_DMRID, (dmrIDIsValid ? 1 : 0));
 
 	channelBuf->rxSignaling = (tmpID >> 16) & 0xFF;
 	channelBuf->artsInterval = (tmpID >> 8) & 0xFF;
 	channelBuf->encrypt = tmpID & 0xFF;
 }
 
-bool codeplugChannelIsFlagSet(struct_codeplugChannel_t *channelBuf, ChannelFlag_t flag)
+// -----------------------------------
+// -- Codeplug channel flag helpers --
+// -----------------------------------
+typedef uint8_t *(*flagGetter_t)(struct_codeplugChannel_t *chan);
+static uint8_t *_getLDMRFlag1(struct_codeplugChannel_t *chan)
 {
-	bool ret = false;
-
-	switch (flag)
-	{
-		case CHANNEL_FLAG_OPTIONAL_DMRID:
-			ret = ((channelBuf->LibreDMR_flag1 & CODEPLUG_CHANNEL_LIBREDMR_FLAG1_OPTIONAL_DMRID) != 0x00);
-			break;
-		case CHANNEL_FLAG_NO_BEEP:
-			ret = ((channelBuf->LibreDMR_flag1 & CODEPLUG_CHANNEL_LIBREDMR_FLAG1_NO_BEEP) != 0x00);
-			break;
-		case CHANNEL_FLAG_NO_ECO:
-			ret = ((channelBuf->LibreDMR_flag1 & CODEPLUG_CHANNEL_LIBREDMR_FLAG1_NO_ECO) != 0x00);
-			break;
-#if defined(PLATFORM_MD9600)
-		case CHANNEL_FLAG_OUT_OF_BAND:
-			ret = ((channelBuf->LibreDMR_flag1 & CODEPLUG_CHANNEL_LIBREDMR_FLAG1_OUT_OF_BAND) != 0x00);
-			break;
-#endif
-		case CHANNEL_FLAG_TIMESLOT_TWO:
-			ret = ((channelBuf->flag2 & CODEPLUG_CHANNEL_FLAG2_TIMESLOT_TWO) != 0x00);
-			break;
-		case CHANNEL_FLAG_DISABLE_ALL_LEDS:
-			ret = ((channelBuf->flag3 & CODEPLUG_CHANNEL_FLAG3_DISABLE_ALL_LEDS) != 0x00);
-			break;
-		case CHANNEL_FLAG_POWER:
-			ret = ((channelBuf->flag4 & CODEPLUG_CHANNEL_FLAG4_POWER) != 0x00);
-			break;
-		case CHANNEL_FLAG_VOX:
-			ret = ((channelBuf->flag4 & CODEPLUG_CHANNEL_FLAG4_VOX) != 0x00);
-			break;
-		case CHANNEL_FLAG_ZONE_SKIP:
-			ret = ((channelBuf->flag4 & CODEPLUG_CHANNEL_FLAG4_ZONE_SKIP) != 0x00);
-			break;
-		case CHANNEL_FLAG_ALL_SKIP:
-			ret = ((channelBuf->flag4 & CODEPLUG_CHANNEL_FLAG4_ALL_SKIP) != 0x00);
-			break;
-		case CHANNEL_FLAG_RX_ONLY:
-			ret = ((channelBuf->flag4 & CODEPLUG_CHANNEL_FLAG4_RX_ONLY) != 0x00);
-			break;
-		case CHANNEL_FLAG_BW_25K:
-			ret = ((channelBuf->flag4 & CODEPLUG_CHANNEL_FLAG4_BW_25K) != 0x00);
-			break;
-		case CHANNEL_FLAG_SQUELCH:
-			ret = ((channelBuf->flag4 & CODEPLUG_CHANNEL_FLAG4_SQUELCH) != 0x00);
-			break;
-	}
-
-	return ret;
+	return &chan->LibreDMR_flag1;
+}
+static uint8_t *_getFlag2(struct_codeplugChannel_t *chan)
+{
+	return &chan->flag2;
+}
+static uint8_t *_getFlag3(struct_codeplugChannel_t *chan)
+{
+	return &chan->flag3;
+}
+static uint8_t *_getFlag4(struct_codeplugChannel_t *chan)
+{
+	return &chan->flag4;
 }
 
-void codeplugChannelSetFlag(struct_codeplugChannel_t *channelBuf, ChannelFlag_t flag, bool enabled)
+struct
 {
-	switch (flag)
-	{
-		case CHANNEL_FLAG_OPTIONAL_DMRID:
-			setChannelFlag(&channelBuf->LibreDMR_flag1, CODEPLUG_CHANNEL_LIBREDMR_FLAG1_OPTIONAL_DMRID, enabled);
-			break;
-		case CHANNEL_FLAG_NO_BEEP:
-			setChannelFlag(&channelBuf->LibreDMR_flag1, CODEPLUG_CHANNEL_LIBREDMR_FLAG1_NO_BEEP, enabled);
-			break;
-		case CHANNEL_FLAG_NO_ECO:
-			setChannelFlag(&channelBuf->LibreDMR_flag1, CODEPLUG_CHANNEL_LIBREDMR_FLAG1_NO_ECO, enabled);
-			break;
-#if defined(PLATFORM_MD9600)
-		case CHANNEL_FLAG_OUT_OF_BAND:
-			setChannelFlag(&channelBuf->LibreDMR_flag1, CODEPLUG_CHANNEL_LIBREDMR_FLAG1_OUT_OF_BAND, enabled);
-			break;
-#endif
-		case CHANNEL_FLAG_TIMESLOT_TWO:
-			setChannelFlag(&channelBuf->flag2, CODEPLUG_CHANNEL_FLAG2_TIMESLOT_TWO, enabled);
-			break;
-		case CHANNEL_FLAG_DISABLE_ALL_LEDS:
-			setChannelFlag(&channelBuf->flag3, CODEPLUG_CHANNEL_FLAG3_DISABLE_ALL_LEDS, enabled);
-			break;
-		case CHANNEL_FLAG_POWER:
-			setChannelFlag(&channelBuf->flag4, CODEPLUG_CHANNEL_FLAG4_POWER, enabled);
-			break;
-		case CHANNEL_FLAG_VOX:
-			setChannelFlag(&channelBuf->flag4, CODEPLUG_CHANNEL_FLAG4_VOX, enabled);
-			break;
-		case CHANNEL_FLAG_ZONE_SKIP:
-			setChannelFlag(&channelBuf->flag4, CODEPLUG_CHANNEL_FLAG4_ZONE_SKIP, enabled);
-			break;
-		case CHANNEL_FLAG_ALL_SKIP:
-			setChannelFlag(&channelBuf->flag4, CODEPLUG_CHANNEL_FLAG4_ALL_SKIP, enabled);
-			break;
-		case CHANNEL_FLAG_RX_ONLY:
-			setChannelFlag(&channelBuf->flag4, CODEPLUG_CHANNEL_FLAG4_RX_ONLY, enabled);
-			break;
-		case CHANNEL_FLAG_BW_25K:
-			setChannelFlag(&channelBuf->flag4, CODEPLUG_CHANNEL_FLAG4_BW_25K, enabled);
-			break;
-		case CHANNEL_FLAG_SQUELCH:
-			setChannelFlag(&channelBuf->flag4, CODEPLUG_CHANNEL_FLAG4_SQUELCH, enabled);
-			break;
-	}
+		flagGetter_t getter;
+		uint8_t      mask;
+		uint8_t      shift;
+} flagAccessor[] = // The order of this array HAS to follow ChannelFlag_t enum
+{
+		// LibreDMR_flag1
+		{ _getLDMRFlag1, CODEPLUG_CHANNEL_LIBREDMR_FLAG1_OPTIONAL_DMRID, 7 }, // CHANNEL_FLAG_OPTIONAL_DMRID
+		{ _getLDMRFlag1, CODEPLUG_CHANNEL_LIBREDMR_FLAG1_NO_BEEP,        6 }, // CHANNEL_FLAG_NO_BEEP,
+		{ _getLDMRFlag1, CODEPLUG_CHANNEL_LIBREDMR_FLAG1_NO_ECO,         5 }, // CHANNEL_FLAG_NO_ECO,
+		{ _getLDMRFlag1, CODEPLUG_CHANNEL_LIBREDMR_FLAG1_OUT_OF_BAND,    4 }, // CHANNEL_FLAG_OUT_OF_BAND,
+		{ _getLDMRFlag1, CODEPLUG_CHANNEL_LIBREDMR_FLAG1_USE_LOCATION,   3 }, // CHANNEL_FLAG_USE_LOCATION
+		// flag2
+		{ _getFlag2,     CODEPLUG_CHANNEL_FLAG2_TIMESLOT_TWO,            6 }, // CHANNEL_FLAG_TIMESLOT_TWO,
+		// flag3
+		{ _getFlag3,     CODEPLUG_CHANNEL_FLAG3_STE,                     6 }, // CODEPLUG_CHANNEL_FLAG3_STE,
+		{ _getFlag3,     CODEPLUG_CHANNEL_FLAG3_NON_STE,                 5 }, // CODEPLUG_CHANNEL_FLAG3_NON_STE,
+		// flag4
+		{ _getFlag4,     CODEPLUG_CHANNEL_FLAG4_POWER,                   7 }, // CHANNEL_FLAG_POWER,
+		{ _getFlag4,     CODEPLUG_CHANNEL_FLAG4_VOX,                     6 }, // CHANNEL_FLAG_VOX,
+		{ _getFlag4,     CODEPLUG_CHANNEL_FLAG4_ZONE_SKIP,               5 }, // CHANNEL_FLAG_ZONE_SKIP,
+		{ _getFlag4,     CODEPLUG_CHANNEL_FLAG4_ALL_SKIP,                4 }, // CHANNEL_FLAG_ALL_SKIP,
+		// Talkaround is unused (bit #3)
+		{ _getFlag4,     CODEPLUG_CHANNEL_FLAG4_RX_ONLY,                 2 }, // CHANNEL_FLAG_RX_ONLY,
+		{ _getFlag4,     CODEPLUG_CHANNEL_FLAG4_BW_25K,                  1 }, // CHANNEL_FLAG_BW_25K,
+		{ _getFlag4,     CODEPLUG_CHANNEL_FLAG4_SQUELCH,                 0 }  // CHANNEL_FLAG_SQUELCH,
+};
+
+//
+// Returns 0, 1 or the value (e.g. CODEPLUG_CHANNEL_FLAG3_STE), right shifted
+//
+uint8_t codeplugChannelGetFlag(struct_codeplugChannel_t *channelBuf, ChannelFlag_t flag)
+{
+	return ((*flagAccessor[flag].getter(channelBuf) & flagAccessor[flag].mask) >> flagAccessor[flag].shift);
 }
+
+//
+// Returns unshifted value
+//
+uint8_t codeplugChannelSetFlag(struct_codeplugChannel_t *channelBuf, ChannelFlag_t flag, uint8_t value)
+{
+	uint8_t *data = flagAccessor[flag].getter(channelBuf);
+
+	*data &= ~flagAccessor[flag].mask;
+
+	if (value)
+	{
+		*data |= (value << flagAccessor[flag].shift);
+	}
+
+	return value;
+}
+// ----------------------------------------
+// -- END: Codeplug channel flag helpers --
+// ----------------------------------------
 
 void codeplugChannelGetDataWithOffsetAndLengthForIndex(int index, struct_codeplugChannel_t *channelBuf, uint8_t offset, int length)
 {
@@ -628,6 +615,7 @@ void codeplugChannelGetDataForIndex(int index, struct_codeplugChannel_t *channel
 	channelBuf->txTone = codeplugCSSToInt(channelBuf->txTone);
 	channelBuf->rxTone = codeplugCSSToInt(channelBuf->rxTone);
 	channelBuf->NOT_IN_CODEPLUG_flag = 0x00;
+	channelBuf->NOT_IN_CODEPLUG_CALCULATED_DISTANCE_X10 = -1;
 
 	// Sanity check the sql value, because its not used by the official firmware and may contain random value e.g. 255
 	if (channelBuf->sql > 21)
@@ -871,7 +859,7 @@ int codeplugContactIndexByTGorPCFromNumber(int number, uint32_t tgorpc, uint32_t
 				// Just read the reserve1 byte for now
 				codeplugContactGetReserve1ByteForIndex(codeplugContactsCache.contactsLookupCache[i].index, contact);
 
-				if (((contact->reserve1 & 0x01) == 0x00) && (((contact->reserve1 & 0x02) >> 1) == (optionalTS - 1)))
+				if (((contact->reserve1 & CODEPLUG_CONTACT_FLAG_NO_TS_OVERRIDE) == 0x00) && (((contact->reserve1 & CODEPLUG_CONTACT_FLAG_TS_OVERRIDE_TIMESLOT_MASK) >> 1) == (optionalTS - 1)))
 				{
 					codeplugContactGetDataForIndex(codeplugContactsCache.contactsLookupCache[i].index, contact);
 					return i;
@@ -927,7 +915,8 @@ static void codeplugInitContactsCache(void)
 {
 	struct_codeplugContact_t contact;
 	uint8_t                  c;
-	int codeplugNumContacts = 0;
+	int                      codeplugNumContacts = 0;
+
 	codeplugContactsCache.numTGContacts = 0;
 	codeplugContactsCache.numPCContacts = 0;
 	codeplugContactsCache.numALLContacts = 0;
@@ -954,6 +943,7 @@ static void codeplugInitContactsCache(void)
 				{
 					codeplugContactsCache.numALLContacts++;
 				}
+
 				codeplugNumContacts++;
 			}
 		}
@@ -963,7 +953,9 @@ static void codeplugInitContactsCache(void)
 	{
 		if (EEPROM_Read(CODEPLUG_ADDR_DTMF_CONTACTS + (i * CODEPLUG_DTMF_CONTACT_DATA_STRUCT_SIZE), (uint8_t *)&c, 1))
 		{
-			if (c != 0xFF)
+			// Empty DTMF contacts normally begin with 0xFF, but when expanding to use 64 DTMF contacts, the old Zone
+			// basic data is in the last contact and this contains 0x00 in the first byte, until the codeplug is updated
+			if ((c != 0xFF) && (c != 0x00))
 			{
 				codeplugContactsCache.contactsDTMFLookupCache[codeplugContactsCache.numDTMFContacts++].index = i + 1; // Contacts are numbered from 1 to 32
 			}
@@ -1183,10 +1175,10 @@ int codeplugContactSaveDataForIndex(int index, struct_codeplugContact_t *contact
 	int flashSector;
 	int flashEndSector;
 	int bytesToWriteInCurrentSector = CODEPLUG_CONTACT_DATA_SIZE;
+	uint32_t unconvertedTgNumber = contact->tgNumber;
 
 	index--;
 	contact->tgNumber = byteSwap32(int2bcd(contact->tgNumber));
-
 
 	flashWritePos += index * CODEPLUG_CONTACT_DATA_SIZE;// go to the position of the specific index
 
@@ -1205,7 +1197,7 @@ int codeplugContactSaveDataForIndex(int index, struct_codeplugContact_t *contact
 	retVal = SPI_Flash_eraseSector(FLASH_ADDRESS_OFFSET + (flashSector * 4096));
 	if (!retVal)
 	{
-		return false;
+		goto hasFailed;
 	}
 
 	for (int i = 0; i < 16; i++)
@@ -1213,7 +1205,7 @@ int codeplugContactSaveDataForIndex(int index, struct_codeplugContact_t *contact
 		retVal = SPI_Flash_writePage(FLASH_ADDRESS_OFFSET + (flashSector * 4096) + (i * 256), SPI_Flash_sectorbuffer + (i * 256));
 		if (!retVal)
 		{
-			return false;
+			goto hasFailed;
 		}
 	}
 
@@ -1229,15 +1221,16 @@ int codeplugContactSaveDataForIndex(int index, struct_codeplugContact_t *contact
 
 		if (!retVal)
 		{
-			return false;
+			goto hasFailed;
 		}
+
 		for (int i = 0; i < 16; i++)
 		{
 			retVal = SPI_Flash_writePage(FLASH_ADDRESS_OFFSET + (flashEndSector * 4096) + (i * 256), SPI_Flash_sectorbuffer + (i * 256));
 
 			if (!retVal)
 			{
-				return false;
+				goto hasFailed;
 			}
 		}
 
@@ -1251,6 +1244,13 @@ int codeplugContactSaveDataForIndex(int index, struct_codeplugContact_t *contact
 		codeplugContactsCacheUpdateOrInsertContactAt(index + 1, contact);
 		//initCodeplugContactsCache();// Update the cache
 	}
+
+
+	hasFailed:
+
+	// Restore contact's TG number
+	contact->tgNumber = unconvertedTgNumber;
+
 	return retVal;
 }
 
@@ -1310,20 +1310,8 @@ void codeplugGetBootScreenData(char *line1, char *line2, uint8_t *displayType)
 	EEPROM_Read(CODEPLUG_ADDR_BOOT_INTRO_SCREEN, displayType, 1);// read the display type
 }
 
-
-
 void codeplugGetVFO_ChannelData(struct_codeplugChannel_t *vfoBuf, Channel_t VFONumber)
 {
-
-/*
-	settingsStorageReadVFO(vfoBuf,VFONumber);
-
-	if (vfoBuf->magicNumber == VFO_MAGIC_NUMBER)
-	{
-		return;// VFO data in battery RAM appears to be valid, so use it.
-	}
-*/
-
 	EEPROM_Read(CODEPLUG_ADDR_VFO_A_CHANNEL + (CODEPLUG_CHANNEL_DATA_STRUCT_SIZE * (int)VFONumber), (uint8_t *)vfoBuf, CODEPLUG_CHANNEL_DATA_STRUCT_SIZE);
 
 	// Convert the the legacy codeplug tx and rx freq values into normal integers
@@ -1333,17 +1321,17 @@ void codeplugGetVFO_ChannelData(struct_codeplugChannel_t *vfoBuf, Channel_t VFON
 	vfoBuf->txTone = codeplugCSSToInt(vfoBuf->txTone);
 	vfoBuf->rxTone = codeplugCSSToInt(vfoBuf->rxTone);
 	vfoBuf->NOT_IN_CODEPLUG_flag = ((VFONumber == CHANNEL_VFO_A) ? 0x01 : ((VFONumber == CHANNEL_VFO_B) ? 0x03 : 0x00));
-	vfoBuf->magicNumber = VFO_MAGIC_NUMBER;
+	vfoBuf->NOT_IN_CODEPLUG_CALCULATED_DISTANCE_X10 = -1;
 
-	//settingsStorageWriteVFO(vfoBuf, VFONumber);	// data was not in settings storage, so save it there for next time.
+	if (vfoBuf->sql > 21U)
+	{
+		vfoBuf->sql = 10U;
+	}
 }
 
 void codeplugSetVFO_ChannelData(struct_codeplugChannel_t *vfoBuf, Channel_t VFONumber)
 {
 	struct_codeplugChannel_t tmpChannel;
-
-	vfoBuf->magicNumber = VFO_MAGIC_NUMBER;
-	//settingsStorageWriteVFO(vfoBuf,VFONumber);
 
 	memcpy(&tmpChannel, vfoBuf, CODEPLUG_CHANNEL_DATA_STRUCT_SIZE);// save current VFO data as we need to modify
 
@@ -1377,45 +1365,96 @@ void codeplugInitChannelsPerZone(void)
 	}
 }
 
-typedef struct
+static uint32_t codeplugGetOpenGD77CustomDataStartAddressForType(codeplugCustomDataType_t dataType, codeplugCustomDataBlockHeader_t *blockHeader)
 {
-	int dataType;
-	int dataLength;
-} codeplugCustomDataBlockHeader_t;
-
-bool codeplugGetOpenGD77CustomData(codeplugCustomDataType_t dataType, uint8_t *dataBuf)
-{
+	const uint32_t MAX_BLOCK_ADDRESS = 0x10000;
+	uint32_t dataHeaderAddress = 12;
 	uint8_t tmpBuf[12];
-	int dataHeaderAddress = 12;
-	const int MAX_BLOCK_ADDRESS = 0x10000;
 
 	SPI_Flash_read(FLASH_ADDRESS_OFFSET + 0, tmpBuf, 12);
 
 	if (memcmp("OpenGD77", tmpBuf, 8) == 0)
 	{
-		codeplugCustomDataBlockHeader_t blockHeader;
 		do
 		{
-			SPI_Flash_read(FLASH_ADDRESS_OFFSET + dataHeaderAddress, (uint8_t *)&blockHeader, sizeof(codeplugCustomDataBlockHeader_t));
-			if (blockHeader.dataType == dataType)
+			SPI_Flash_read(FLASH_ADDRESS_OFFSET + dataHeaderAddress, (uint8_t *)blockHeader, sizeof(codeplugCustomDataBlockHeader_t));
+
+			if (blockHeader->dataType == dataType)
 			{
-				SPI_Flash_read(FLASH_ADDRESS_OFFSET + dataHeaderAddress + sizeof(codeplugCustomDataBlockHeader_t), dataBuf, blockHeader.dataLength);
-				return true;
+				return dataHeaderAddress;
 			}
 
-			if (blockHeader.dataLength == 0)
+			if ((blockHeader->dataLength == 0) || (blockHeader->dataLength == 0xFFFFFFFF))
 			{
-				return false;
+				return 0;
 			}
 
-			dataHeaderAddress += sizeof(codeplugCustomDataBlockHeader_t) + blockHeader.dataLength;
+			dataHeaderAddress += sizeof(codeplugCustomDataBlockHeader_t) + blockHeader->dataLength;
 
 		} while (dataHeaderAddress < MAX_BLOCK_ADDRESS);
-
 	}
+
+	return 0;
+}
+
+static uint32_t codeplugGetOpenGD77CustomDataFirstEmptySlot(int len)
+{
+	const uint32_t MAX_BLOCK_ADDRESS = 0x10000;
+	codeplugCustomDataBlockHeader_t blockHeader;
+	uint32_t dataHeaderAddress;
+
+	if ((dataHeaderAddress = codeplugGetOpenGD77CustomDataStartAddressForType(CODEPLUG_CUSTOM_DATA_TYPE_EMPTY, &blockHeader)) > 0)
+	{
+		if ((blockHeader.dataLength == 0xFFFFFFFF) &&
+				((dataHeaderAddress + sizeof(codeplugCustomDataBlockHeader_t) + len) < MAX_BLOCK_ADDRESS))
+		{
+			return dataHeaderAddress;
+		}
+	}
+
+	return 0;
+}
+
+bool codeplugGetOpenGD77CustomData(codeplugCustomDataType_t dataType, uint8_t *dataBuf)
+{
+	codeplugCustomDataBlockHeader_t blockHeader;
+	uint32_t dataHeaderAddress;
+
+	if ((dataHeaderAddress = codeplugGetOpenGD77CustomDataStartAddressForType(dataType, &blockHeader)) > 0)
+	{
+		SPI_Flash_read(FLASH_ADDRESS_OFFSET + dataHeaderAddress + sizeof(codeplugCustomDataBlockHeader_t), dataBuf, blockHeader.dataLength);
+		return true;
+	}
+
 	return false;
 }
 
+bool codeplugSetOpenGD77CustomData(codeplugCustomDataType_t dataType, uint8_t *dataBuf, int len)
+{
+	codeplugCustomDataBlockHeader_t blockHeader;
+	uint32_t dataHeaderAddress;
+
+	if ((dataHeaderAddress = codeplugGetOpenGD77CustomDataStartAddressForType(dataType, &blockHeader)) == 0)
+	{
+		if ((dataHeaderAddress = codeplugGetOpenGD77CustomDataFirstEmptySlot(len)) == 0)
+		{
+			return false;
+		}
+
+		// We got a location for this new storage, validate the header.
+		blockHeader.dataType = dataType;
+		blockHeader.dataLength = len;
+	}
+
+	if (blockHeader.dataLength == len) // it's not permitted to change the block size, it has to be equal.
+	{
+		SPI_Flash_write(FLASH_ADDRESS_OFFSET + dataHeaderAddress, (uint8_t *)&blockHeader, sizeof(codeplugCustomDataBlockHeader_t));
+		SPI_Flash_write(FLASH_ADDRESS_OFFSET + dataHeaderAddress + sizeof(codeplugCustomDataBlockHeader_t), dataBuf, len);
+		return true;
+	}
+
+	return false;
+}
 
 bool codeplugGetGeneralSettings(struct_codeplugGeneralSettings_t *generalSettingsBuffer)
 {
@@ -1522,16 +1561,43 @@ int codeplugGetRepeaterWakeAttempts(void)
 	return 4;// Hard coded. In the future we may read this from the codeplug.
 }
 
+static void codeplugAPRSInitCache(void)
+{
+	codeplugAPRS_Config_t aprsBuff;
+	int aprsIdx = 1;
+
+	do
+	{
+		memset(&aprsBuff, 0x00, sizeof(codeplugAPRS_Config_t));
+
+		codeplugAPRSCache.numOfConfigs = aprsIdx; // Cheating the read function
+
+		if (codeplugAPRSGetDataForIndex(aprsIdx, &aprsBuff) == false)
+		{
+			break;
+		}
+
+		aprsIdx++;
+		codeplugAPRSCache.numOfConfigs++;
+
+	} while(aprsIdx <= 8);
+
+	codeplugAPRSCache.numOfConfigs = (aprsIdx - 1);
+}
+
 void codeplugInitCaches(void)
 {
 	codeplugInitContactsCache();
 
 	codeplugAllChannelsInitCache();
-	allChannelsTotalNumOfChannels = codeplugAllChannelsGetCount();
 
 	codeplugZonesInitCache();
 	codeplugRxGroupInitCache();
 	codeplugQuickKeyInitCache();
+
+	codeplugInitLastUsedChannelInZone();
+
+	codeplugAPRSInitCache();
 }
 
 // Returns pin length or 0 if no pin. Pin code is passed as pointer to int32_t
@@ -1564,4 +1630,152 @@ int codeplugGetPasswordPin(int32_t *pinCode)
 		}
 	}
 	return pinLength;
+}
+
+void codeplugSetTATxForTS(struct_codeplugChannel_t *channelBuf, uint8_t ts, taTxEnum_t taTxValue)
+{
+	bool isTS1 = (ts == 0);
+
+	channelBuf->flag1 &= (isTS1 ? 0xFC : 0xF3);
+	channelBuf->flag1 |= (taTxValue << (isTS1 ? 0 : 2));
+}
+
+taTxEnum_t codeplugGetTATxForTS(struct_codeplugChannel_t *channelBuf, uint8_t ts)
+{
+	return (channelBuf->flag1 >> ((ts == 0) ? 0 : 2)) & 0x03;
+}
+
+void codeplugInitLastUsedChannelInZone(void)
+{
+#if ! defined(PLATFORM_RD5R)
+	uint8_t tmpBuf[4];
+
+	EEPROM_Read(CODEPLUG_ADDR_LUCZ, tmpBuf, 4);
+
+	if (memcmp("LUCZ", tmpBuf, 4) == 0) // Check for the header tag
+	{
+		EEPROM_Read((CODEPLUG_ADDR_LUCZ + 4), (uint8_t *)&lastUsedChannelInZoneData, sizeof(lastUsedChannelInZoneData));
+	}
+	else
+#endif
+	{
+		// There is no CustomData available, set all last channels to 0
+		memset(&lastUsedChannelInZoneData, 0, sizeof(lastUsedChannelInZoneData));
+
+#if defined(PLATFORM_RD5R)
+		codeplugSetLastUsedChannelInZone(-1, nonVolatileSettings.currentChannelIndexInAllZone);
+		codeplugSetLastUsedChannelInZone(nonVolatileSettings.currentZone, nonVolatileSettings.currentChannelIndexInZone);
+#endif
+	}
+}
+
+int16_t codeplugGetLastUsedChannelInZone(int zoneNum)
+{
+	int offset = SAFE_MIN(zoneNum, (CODEPLUG_ALL_ZONES_MAX - 1));
+	uint8_t *p = (uint8_t *)&lastUsedChannelInZoneData[offset];
+
+	return ((zoneNum >= 0) ? ((int16_t)*p) : (*((int16_t *)p) + 1));
+}
+
+int16_t codeplugGetLastUsedChannelInCurrentZone(void)
+{
+	return (codeplugGetLastUsedChannelInZone(currentZone.NOT_IN_CODEPLUGDATA_indexNumber));
+}
+
+int16_t codeplugGetLastUsedChannelNumberInCurrentZone(void)
+{
+	int16_t index = codeplugGetLastUsedChannelInZone(currentZone.NOT_IN_CODEPLUGDATA_indexNumber);
+
+	return ((currentZone.NOT_IN_CODEPLUGDATA_indexNumber >= 0) ? currentZone.channels[index] : index);
+}
+
+int16_t codeplugSetLastUsedChannelInZone(int zoneNum, int16_t channelNum)
+{
+	int offset = SAFE_MIN(zoneNum, (CODEPLUG_ALL_ZONES_MAX - 1));
+	uint8_t *p = (uint8_t *)&lastUsedChannelInZoneData[offset];
+
+	if (zoneNum >= 0) // Channels 0..79
+	{
+		*p = (uint8_t)channelNum;
+#if defined(PLATFORM_RD5R)
+		settingsSet(nonVolatileSettings.currentChannelIndexInZone, (int16_t) channelNum);
+#endif
+	}
+	else // AllChannels (channels 1..1024)
+	{
+		*((int16_t *)p) = (channelNum - 1);
+#if defined(PLATFORM_RD5R)
+		settingsSet(nonVolatileSettings.currentChannelIndexInAllZone, (int16_t) channelNum);
+#endif
+	}
+
+	lastUsedChannelInZoneHasChanged = true;
+
+	return channelNum;
+}
+
+int16_t codeplugSetLastUsedChannelInCurrentZone(int16_t channelNum)
+{
+	return (codeplugSetLastUsedChannelInZone(currentZone.NOT_IN_CODEPLUGDATA_indexNumber, channelNum));
+}
+
+bool codeplugSaveLastUsedChannelInZone(void)
+{
+#if ! defined(PLATFORM_RD5R)
+	if (lastUsedChannelInZoneHasChanged)
+	{
+		uint8_t header[4] = { 'L', 'U', 'C', 'Z' };
+
+		lastUsedChannelInZoneHasChanged = ! (EEPROM_Write(CODEPLUG_ADDR_LUCZ, (uint8_t *)&header, 4) &&
+				EEPROM_Write(CODEPLUG_ADDR_LUCZ + 4,
+						(uint8_t *)&lastUsedChannelInZoneData, sizeof(lastUsedChannelInZoneData)));
+
+		return !lastUsedChannelInZoneHasChanged;
+	}
+#endif
+
+	return true;
+}
+
+int codeplugAPRSConfigGetCount(void)
+{
+	return codeplugAPRSCache.numOfConfigs;
+}
+
+bool codeplugAPRSGetDataForIndex(int index, codeplugAPRS_Config_t *APRS_Buf)
+{
+	if ((index > 0) && (index <= codeplugAPRSCache.numOfConfigs))
+	{
+		index--;
+		EEPROM_Read(CODEPLUG_ADDR_APRS_CONFIGS + (index * sizeof(codeplugAPRS_Config_t)), (uint8_t *)APRS_Buf, sizeof(codeplugAPRS_Config_t));
+	}
+	else
+	{
+		memset(APRS_Buf, 0x00, sizeof(codeplugAPRS_Config_t));
+	}
+
+	return !((APRS_Buf->name[0] == 0xFF) || (APRS_Buf->magicVer != APRS_MAGIC_VERSION));
+}
+
+int codeplugAPRSGetIndexOfName(char *configName)
+{
+	uint8_t APRSConfigName[8];
+	char convertedConfigName[8];
+
+	codeplugUtilConvertStringToBuf(configName, convertedConfigName, 8);
+
+	for(int i = 0; i < codeplugAPRSCache.numOfConfigs; i++)
+	{
+		if (!EEPROM_Read(CODEPLUG_ADDR_APRS_CONFIGS + (i * sizeof(codeplugAPRS_Config_t)), (uint8_t *) &APRSConfigName, sizeof(APRSConfigName)))
+		{
+			return 0;
+		}
+
+		if (memcmp(APRSConfigName, convertedConfigName, 8) == 0)
+		{
+			return (i + 1);
+		}
+	}
+
+	return 0;
 }

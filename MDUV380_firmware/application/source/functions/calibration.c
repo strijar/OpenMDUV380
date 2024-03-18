@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2019      Kai Ludwig, DG4KLU
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -170,8 +170,7 @@ static __attribute__((section(".ccmram"))) CalibrationData_t calibrationData;
 #define CALIBRATION_TABLE_LOCAL_COPY_ADDRESS  0x10000        //Flash address for local calibration copy.
 
 const int MARKER_BYTES_LENGTH = 8;													//	we will use the 8 bytes of the first UHF calibration frequency as a marker
-const uint8_t MARKER_BYTES[] = {0x00 ,0x25 ,0x00 ,0x40, 0x00, 0x45, 0x01, 0x40};	//  400.02500   400.145
-
+const uint8_t MARKER_BYTES[] = {0x00, 0x25, 0x00, 0x40, 0x00, 0x45, 0x01, 0x40};	//  400.02500   400.145
 
 void calibrationInit(void)
 {
@@ -196,16 +195,16 @@ void calibrationSaveLocal(void)
 
 void calibrationReadFactory(void)
 {
-	(SPI_Flash_readSecurityRegisters(0,(uint8_t *)&calibrationData, CALIBRATION_TABLE_LENGTH));
+	(SPI_Flash_readSecurityRegisters(0, (uint8_t *)&calibrationData, CALIBRATION_TABLE_LENGTH));
 
     memcpy(calibrationData.UHFCalFreqs[0] , MARKER_BYTES , MARKER_BYTES_LENGTH);			//add the marker bytes just in case they are different in this radio.
     //Generate very low power calibration points by applying arbitrary reduction to the low power value
-    for(int i = 0;i<9;i++)
+    for(int i = 0; i < 9; i++)
     {
     	calibrationData.UHFVeryLowPowerCal[i] = calibrationData.UHFLowPowerCal[i] - 20;
     }
 
-    for(int i = 0;i<5;i++)
+    for(int i = 0; i < 5 ; i++)
     {
     	calibrationData.VHFVeryLowPowerCal[i] = calibrationData.VHFLowPowerCal[i] - 20;
     }
@@ -444,8 +443,6 @@ uint8_t calibrationGetDigitalQGainForFrequency(int freq)
 
 }
 
-
-
 int interpolate(int lowerpoint, int upperpoint, int numerator, int denominator)
 {
 	return lowerpoint + (((upperpoint - lowerpoint) * numerator) / denominator);
@@ -579,22 +576,24 @@ int8_t calibrationGetMod2Offset(int band)
 	}
 }
 
+void calibrationSetMod2Offset(int band, int8_t value)
+{
+	if (band == RADIO_BAND_VHF)
+	{
+		calibrationData.VHFOscRefTune = (int)value + 128;
+	}
+	else
+	{
+		calibrationData.UHFOscRefTune = (int)value + 128;
+	}
+}
+
 //(Not Used)
 bool calibrationGetRSSIMeterParams(calibrationRSSIMeter_t *rssiMeterValues)
 {
 	rssiMeterValues->minVal = calibrationData.RSSI120;
 	rssiMeterValues->rangeVal = calibrationData.RSSI70;
     return true;
-}
-
-uint8_t calibrationGetUHFOscTune(void)
-{
-	return calibrationData.UHFOscRefTune;
-}
-
-void calibrationPutUHFOscTune(uint8_t val)
-{
-	calibrationData.UHFOscRefTune = val;
 }
 
 uint8_t calibrationGetVHFOscTune(void)
@@ -691,3 +690,9 @@ void calibrationPutPower(int freqindex , int powerindex, uint8_t val)
 			}
 		}
 }
+
+uint8_t *calibrationGetLocalDataPointer(void)
+{
+	return (uint8_t *)&calibrationData;
+}
+

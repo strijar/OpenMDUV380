@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -54,15 +54,15 @@ static struct_codeplugContact_t     contact;
 static struct_codeplugDTMFContact_t dtmfContact;
 
 static contactListContactType_t contactListType = MENU_CONTACT_LIST_CONTACT_DIGITAL;
-static uint32_t contactCallType;
-static contactListState_t contactListDisplayState;
+static uint32_t contactCallType = CONTACT_CALLTYPE_TG;
+static contactListState_t contactListDisplayState = MENU_CONTACT_LIST_DISPLAY;
 static contactListState_t contactListOverrideState = MENU_CONTACT_LIST_DISPLAY;
-static int menuContactListTimeout; // Action result screen autohide timeout (or it will instantly disappear if RED or GREEN is pressed)
+static int menuContactListTimeout = 0; // Action result screen autohide timeout (or it will instantly disappear if RED or GREEN is pressed)
 static menuStatus_t menuContactListExitCode = MENU_STATUS_SUCCESS;
 static menuStatus_t menuContactListSubMenuExitCode = MENU_STATUS_SUCCESS;
 
 
-static const char * const *calltypeVoices[3] = { NULL, NULL, NULL };
+static const char *calltypeVoices[3] = { NULL, NULL, NULL };
 
 // Apply contact + its TS on selection for TX (contact list of quick list).
 static void overrideWithSelectedContact(void)
@@ -70,9 +70,9 @@ static void overrideWithSelectedContact(void)
 	menuPrivateCallClear();
 	setOverrideTGorPC(contactListContactData.tgNumber, (contactListContactData.callType == CONTACT_CALLTYPE_PC));
 	// Contact has a TS override set
-	if ((contactListContactData.reserve1 & 0x01) == 0x00)
+	if ((contactListContactData.reserve1 & CODEPLUG_CONTACT_FLAG_NO_TS_OVERRIDE) == 0x00)
 	{
-		int ts = ((contactListContactData.reserve1 & 0x02) >> 1);
+		int ts = ((contactListContactData.reserve1 & CODEPLUG_CONTACT_FLAG_TS_OVERRIDE_TIMESLOT_MASK) >> 1);
 		trxSetDMRTimeSlot(ts, true);
 		tsSetManualOverride(((menuSystemGetRootMenuNumber() == UI_CHANNEL_MODE) ? CHANNEL_CHANNEL : (CHANNEL_VFO_A + nonVolatileSettings.currentVFONumber)), (ts + 1));
 	}
@@ -102,11 +102,15 @@ menuStatus_t menuContactList(uiEvent_t *ev, bool isFirstRun)
 {
 	if (isFirstRun)
 	{
-		calltypeVoices[0] = &currentLanguage->group_call;
-		calltypeVoices[1] = &currentLanguage->private_call;
-		calltypeVoices[2] = &currentLanguage->all_call;
+		calltypeVoices[0] = currentLanguage->group_call;
+		calltypeVoices[1] = currentLanguage->private_call;
+		calltypeVoices[2] = currentLanguage->all_call;
 
-		menuContactListTimeout = 0;
+		// Do not override the timeout on error (e.g. "already in tg list")
+		if (contactListOverrideState != MENU_CONTACT_LIST_TG_IN_RXGROUP)
+		{
+			menuContactListTimeout = 0;
+		}
 
 		if (contactListOverrideState == MENU_CONTACT_LIST_DISPLAY)
 		{
@@ -142,13 +146,13 @@ menuStatus_t menuContactList(uiEvent_t *ev, bool isFirstRun)
 			{
 				if (contactListType == MENU_CONTACT_LIST_CONTACT_DIGITAL)
 				{
-					voicePromptsAppendLanguageString(&currentLanguage->dmr_contacts);
+					voicePromptsAppendLanguageString(currentLanguage->dmr_contacts);
 					voicePromptsAppendPrompt(PROMPT_SILENCE);
 					voicePromptsAppendLanguageString(calltypeVoices[contactCallType]);
 				}
 				else
 				{
-					voicePromptsAppendLanguageString(&currentLanguage->dtmf_contact_list);
+					voicePromptsAppendLanguageString(currentLanguage->dtmf_contact_list);
 				}
 				voicePromptsAppendPrompt(PROMPT_SILENCE);
 			}
@@ -171,8 +175,10 @@ menuStatus_t menuContactList(uiEvent_t *ev, bool isFirstRun)
 			{
 				codeplugDTMFContactGetDataForIndex(uiDataGlobal.currentSelectedContactIndex, &contactListDTMFContactData);
 			}
+
 			contactListDisplayState = contactListOverrideState;
 			contactListOverrideState = MENU_CONTACT_LIST_DISPLAY;
+
 		}
 
 		updateScreen(true);
@@ -210,9 +216,11 @@ static void updateScreen(bool isFirstRun)
 
 			if (menuDataGlobal.numItems == 0)
 			{
-				displayPrintCentered((DISPLAY_SIZE_Y / 2), currentLanguage->empty_list, FONT_SIZE_3);
+				displayThemeApply(THEME_ITEM_FG_WARNING_NOTIFICATION, THEME_ITEM_BG);
+				displayPrintCentered((DISPLAY_SIZE_Y / 2), currentLanguage->list_empty, FONT_SIZE_3);
+				displayThemeResetToDefault();
 
-				voicePromptsAppendLanguageString(&currentLanguage->empty_list);
+				voicePromptsAppendLanguageString(currentLanguage->list_empty);
 			}
 			else
 			{
@@ -235,7 +243,7 @@ static void updateScreen(bool isFirstRun)
 					if (idx > 0)
 					{
 						codeplugUtilConvertBufToString(((contactListType == MENU_CONTACT_LIST_CONTACT_DIGITAL) ? contact.name : dtmfContact.name), nameBuf, 16); // need to convert to zero terminated string
-						menuDisplayEntry(i, mNum, (char*) nameBuf);
+						menuDisplayEntry(i, mNum, (char*) nameBuf, 0, THEME_ITEM_FG_CHANNEL_CONTACT, THEME_ITEM_COLOUR_NONE, THEME_ITEM_BG);
 					}
 
 					if (i == 0)
@@ -246,9 +254,9 @@ static void updateScreen(bool isFirstRun)
 						}
 						else
 						{
-							voicePromptsAppendLanguageString(&currentLanguage->name);
+							voicePromptsAppendLanguageString(currentLanguage->name);
 							voicePromptsAppendPrompt(PROMPT_SILENCE);
-							voicePromptsAppendLanguageString(&currentLanguage->none);
+							voicePromptsAppendLanguageString(currentLanguage->none);
 						}
 					}
 				}
@@ -256,22 +264,25 @@ static void updateScreen(bool isFirstRun)
 			}
 			promptsPlayNotAfterTx();
 			break;
+
 		case MENU_CONTACT_LIST_CONFIRM:
 			codeplugUtilConvertBufToString(contactListContactData.name, nameBuf, 16);
 			menuDisplayTitle(nameBuf);
 			displayPrintCentered(16, currentLanguage->delete_contact_qm, FONT_SIZE_3);
 			displayDrawChoice(CHOICE_YESNO, false);
 			break;
+
 		case MENU_CONTACT_LIST_DELETED:
 			codeplugUtilConvertBufToString(contactListContactData.name, nameBuf, 16);
 			displayPrintCentered(16, currentLanguage->contact_deleted, FONT_SIZE_3);
 			displayDrawChoice(CHOICE_DISMISS, false);
 			break;
+
 		case MENU_CONTACT_LIST_TG_IN_RXGROUP:
 			codeplugUtilConvertBufToString(contactListContactData.name, nameBuf, 16);
 			menuDisplayTitle(nameBuf);
 			displayPrintCentered(16, currentLanguage->contact_used, FONT_SIZE_3);
-			displayPrintCentered((DISPLAY_SIZE_Y/2), currentLanguage->in_rx_group, FONT_SIZE_3);
+			displayPrintCentered((DISPLAY_SIZE_Y/2), currentLanguage->in_tg_list, FONT_SIZE_3);
 			displayDrawChoice(CHOICE_DISMISS, false);
 			break;
 	}
@@ -287,6 +298,12 @@ static void handleEvent(uiEvent_t *ev)
 		{
 			return;
 		}
+	}
+
+	if ((ev->events & FUNCTION_EVENT) && (ev->function == FUNC_REDRAW))
+	{
+		updateScreen(false);
+		return;
 	}
 
 	// DTMF sequence is playing, stop it.
@@ -413,19 +430,20 @@ static void handleEvent(uiEvent_t *ev)
 			{
 				memset(contact.name, 0xff, 16);
 				contact.tgNumber = 0;
-				contact.callType = 0xFF;
+				contact.callType = 0xff;
 				codeplugContactSaveDataForIndex(uiDataGlobal.currentSelectedContactIndex, &contact);
 				uiDataGlobal.currentSelectedContactIndex = 0;
 				menuContactListTimeout = 2000;
 				contactListDisplayState = MENU_CONTACT_LIST_DELETED;
 				reloadContactList(contactListType);
 				updateScreen(false);
-				voicePromptsAppendLanguageString(&currentLanguage->contact_deleted);
+				voicePromptsAppendLanguageString(currentLanguage->contact_deleted);
 				voicePromptsPlay();
 			}
 			else if (KEYCHECK_SHORTUP(ev->keys, KEY_RED))
 			{
 				contactListDisplayState = MENU_CONTACT_LIST_DISPLAY;
+				voicePromptsInit(); // flush the VP buffer
 				reloadContactList(contactListType);
 				updateScreen(false);
 			}
@@ -433,11 +451,18 @@ static void handleEvent(uiEvent_t *ev)
 
 		case MENU_CONTACT_LIST_DELETED:
 		case MENU_CONTACT_LIST_TG_IN_RXGROUP:
-			menuContactListTimeout--;
+			// Countdown after the VP has finished to play, if VP is enabled.
+			if (((nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_THRESHOLD) && (voicePromptsIsPlaying() == false)) ||
+					(nonVolatileSettings.audioPromptMode < AUDIO_PROMPT_MODE_VOICE_THRESHOLD))
+			{
+				menuContactListTimeout -= ((menuContactListTimeout > 0) ? 1 : 0);
+			}
+
 			if ((menuContactListTimeout == 0) || KEYCHECK_SHORTUP(ev->keys, KEY_GREEN) || KEYCHECK_SHORTUP(ev->keys, KEY_RED))
 			{
 				menuContactListTimeout = 0;
 				contactListDisplayState = MENU_CONTACT_LIST_DISPLAY;
+				voicePromptsInit(); // flush the VP buffer
 				reloadContactList(contactListType);
 				updateScreen(false);
 			}
@@ -457,7 +482,7 @@ static void updateSubMenuScreen(void)
 {
 	int mNum = 0;
 	char buf[SCREEN_LINE_BUFFER_SIZE];
-	char * const *langTextConst = NULL;// initialise to please the compiler
+	const char *langTextConst = NULL;// initialise to please the compiler
 
 	voicePromptsInit();
 
@@ -483,19 +508,21 @@ static void updateSubMenuScreen(void)
 		switch(mNum)
 		{
 			case CONTACT_LIST_QUICK_MENU_SELECT:
-				langTextConst = (char * const *)&currentLanguage->select_tx;
+				langTextConst = currentLanguage->select_tx;
 				break;
+
 			case CONTACT_LIST_QUICK_MENU_EDIT:
-				langTextConst = (contactListType == MENU_CONTACT_LIST_CONTACT_DIGITAL) ? (char * const *)&currentLanguage->edit_contact : NULL;
+				langTextConst = (contactListType == MENU_CONTACT_LIST_CONTACT_DIGITAL) ? currentLanguage->edit_contact : NULL;
 				break;
+
 			case CONTACT_LIST_QUICK_MENU_DELETE:
-				langTextConst = (contactListType == MENU_CONTACT_LIST_CONTACT_DIGITAL) ? (char * const *)&currentLanguage->delete_contact : NULL;
+				langTextConst = (contactListType == MENU_CONTACT_LIST_CONTACT_DIGITAL) ? currentLanguage->delete_contact : NULL;
 				break;
 		}
 
 		if (langTextConst != NULL)
 		{
-			strncpy(buf, *langTextConst, SCREEN_LINE_BUFFER_SIZE);
+			strncpy(buf, langTextConst, SCREEN_LINE_BUFFER_SIZE);
 		}
 		else
 		{
@@ -504,11 +531,11 @@ static void updateSubMenuScreen(void)
 
 		if ((i == 0) && (langTextConst != NULL))
 		{
-			voicePromptsAppendLanguageString((const char * const *)langTextConst);
+			voicePromptsAppendLanguageString(langTextConst);
 			promptsPlayNotAfterTx();
 		}
 
-		menuDisplayEntry(i, mNum, buf);
+		menuDisplayEntry(i, mNum, buf, 0, THEME_ITEM_FG_MENU_ITEM, THEME_ITEM_COLOUR_NONE, THEME_ITEM_BG);
 	}
 
 	displayRender();
@@ -522,6 +549,12 @@ static void handleSubMenuEvent(uiEvent_t *ev)
 		{
 			return;
 		}
+	}
+
+	if ((ev->events & FUNCTION_EVENT) && (ev->function == FUNC_REDRAW))
+	{
+		updateSubMenuScreen();
+		return;
 	}
 
 	// DTMF sequence is playing, stop it.
@@ -566,12 +599,14 @@ static void handleSubMenuEvent(uiEvent_t *ev)
 					dtmfSequencePrepare(contactListDTMFContactData.code, true);
 				}
 				break;
+
 			case CONTACT_LIST_QUICK_MENU_EDIT:
 				if (contactListType == MENU_CONTACT_LIST_CONTACT_DIGITAL)
 				{
 					menuSystemSetCurrentMenu(MENU_CONTACT_DETAILS);
 				}
 				break;
+
 			case CONTACT_LIST_QUICK_MENU_DELETE:
 				if (uiDataGlobal.currentSelectedContactIndex > 0)
 				{
@@ -583,13 +618,13 @@ static void handleSubMenuEvent(uiEvent_t *ev)
 						{
 							menuContactListTimeout = 2000;
 							contactListOverrideState = MENU_CONTACT_LIST_TG_IN_RXGROUP;
-							voicePromptsAppendLanguageString(&currentLanguage->contact_used);
-							voicePromptsAppendLanguageString(&currentLanguage->in_rx_group);
+							voicePromptsAppendLanguageString(currentLanguage->contact_used);
+							voicePromptsAppendLanguageString(currentLanguage->in_tg_list);
 						}
 						else
 						{
 							contactListOverrideState = MENU_CONTACT_LIST_CONFIRM;
-							voicePromptsAppendLanguageString(&currentLanguage->delete_contact_qm);
+							voicePromptsAppendLanguageString(currentLanguage->delete_contact_qm);
 						}
 						voicePromptsPlay();
 					}

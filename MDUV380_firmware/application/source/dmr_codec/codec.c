@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2019 Kai Ludwig, DG4KLU
- *           (C) 2020-2022 Roger Clark, VK3KYY / G4KYF
+ *           (C) 2020-2023 Roger Clark, VK3KYY / G4KYF
  *
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions
@@ -1167,14 +1167,15 @@ static void codecRLE_Decode(uint8_t *decodeBuf_out, const uint8_t *encBuf_in, in
 
 	while(len > 0)
 	{
-		val   =  *encBuf_in++;
-		count  =  (*encBuf_in++) + 1;
+		val = *encBuf_in++;
+		count = (*encBuf_in++) + 1;
+		len -= 2;
+
 		do
 		{
 			*decodeBuf++ = val;
 			count--;
-			len--;
-		} while(count > 0 && len > 0);
+		} while(count > 0);
 	}
 }
 
@@ -1263,6 +1264,6 @@ void codecEncode(uint8_t *outdata_ptr, int numbBlocks)
 	for (int i = 0; i < numbBlocks; i++)
 	{
 		codecEncodeBlock(outdata_ptr);
-		outdata_ptr+=9;
+		outdata_ptr += 9;
 	}
 }

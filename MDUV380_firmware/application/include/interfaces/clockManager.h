@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2020-2023 Roger Clark, VK3KYY / G4KYF
  *
  * Using some code from NXP examples
  *
@@ -80,13 +80,17 @@ extern app_power_mode_t clockManagerCurrentRunMode;
  *
  * See data sheet for max clock rates in both Run and HS Run modes.
  * */
-enum { CLOCK_MANAGER_SPEED_RUN = 0x0603	 ,CLOCK_MANAGER_SPEED_HS_RUN = 0x0205, CLOCK_MANAGER_RUN_SUSPEND_MODE = 0x1F00, CLOCK_MANAGER_RUN_ECO_POWER_MODE = 0x1F00};
+typedef enum
+{
+	CLOCK_MANAGER_SPEED_UNDEF         = 0x0000,
+	CLOCK_MANAGER_SPEED_RUN           = 0x0603,
+	CLOCK_MANAGER_SPEED_HS_RUN        = 0x0205,
+	CLOCK_MANAGER_RUN_SUSPEND_MODE    = 0x1F00,
+	CLOCK_MANAGER_RUN_ECO_POWER_MODE  = 0x1F00,
+} clockManagerSpeedSetting_t;
 
 void clockManagerInit(void);
-void clockManagerSetRunMode(uint8_t targetConfigIndex, uint32_t clockSpeedSetting);
-uint32_t clockManagerGetRunMode(void);
-
-
-
+void clockManagerSetRunMode(uint8_t targetConfigIndex, clockManagerSpeedSetting_t clockSpeedSetting);
+clockManagerSpeedSetting_t clockManagerGetRunMode(void);
 
 #endif /* _POWER_MANAGER_H_ */

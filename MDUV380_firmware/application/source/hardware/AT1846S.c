@@ -384,3 +384,13 @@ void AT1846SSetTxCSS_DCS(uint16_t tone)
 	}
 	taskEXIT_CRITICAL();
 }
+
+bool AT1846SWriteTone1Reg(uint16_t toneFreqVal)
+{
+	uint8_t reg = 0x35;// Tone 1 is reg 0x35
+    uint8_t val1 = (toneFreqVal >> 8) & 0xff;
+	uint8_t val2 = (toneFreqVal & 0xff);
+	uint8_t data[] = { reg, val1, val2 };
+
+	return (HAL_I2C_Master_Transmit(&hi2c3, AT1846S_I2C_MASTER_SLAVE_ADDR_7BIT, data, 3, HAL_MAX_DELAY) == HAL_OK);
+}

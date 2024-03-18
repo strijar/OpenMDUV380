@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2020-2023 Roger Clark, VK3KYY / G4KYF
  *
  * Using some code from NXP examples
  *
@@ -31,16 +31,17 @@
 #include <interfaces/clockManager.h>
 #include "interfaces/hr-c6000_spi.h"
 #include "interfaces/i2c.h"
-
 #include "usbd_def.h"
-extern USBD_HandleTypeDef hUsbDeviceFS;
 
-volatile uint32_t currentClockSpeedSetting = 0;
+extern USBD_HandleTypeDef hUsbDeviceFS;
+extern volatile bool usbIsResetting;
+
+volatile clockManagerSpeedSetting_t currentClockSpeedSetting = CLOCK_MANAGER_SPEED_UNDEF;
 
 /*
 static void clockManagerSetHSI(void)
 {
-  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0}
 
   // -1- Select HSI as system clock source
   RCC_ClkInitStruct.ClockType       = RCC_CLOCKTYPE_SYSCLK;
@@ -49,88 +50,85 @@ static void clockManagerSetHSI(void)
   RCC_ClkInitStruct.APB1CLKDivider  = RCC_HCLK_DIV1;
   HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0);
 }
-*/
+ */
 
 static bool clockManagerSetHSE(bool isEco)
 {
-	  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-	  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+	RCC_OscInitTypeDef RCC_OscInitStruct = { 0 };
+	RCC_ClkInitTypeDef RCC_ClkInitStruct = { 0 };
 
-	  /** Initializes the RCC Oscillators according to the specified parameters
-	  * in the RCC_OscInitTypeDef structure.
-	  */
-	  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE|RCC_OSCILLATORTYPE_LSE;
-	  RCC_OscInitStruct.HSEState = RCC_HSE_BYPASS;
-	  RCC_OscInitStruct.LSEState = RCC_LSE_ON;
-	  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-	  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+	/** Initializes the RCC Oscillators according to the specified parameters
+	 * in the RCC_OscInitTypeDef structure.
+	 */
+	RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE | RCC_OSCILLATORTYPE_LSE;
+	RCC_OscInitStruct.HSEState = RCC_HSE_BYPASS;
+	RCC_OscInitStruct.LSEState = RCC_LSE_ON;
+	RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+	RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
 
-	  htim1.Instance = TIM1;
-	  htim1.Init.Prescaler = 0;
-	  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-	  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-	  htim1.Init.RepetitionCounter = 0;
-	  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+	htim1.Instance = TIM1;
+	htim1.Init.Prescaler = 0;
+	htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
+	htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+	htim1.Init.RepetitionCounter = 0;
+	htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
 
-	  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-	                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-	  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
-	  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+	RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
+	RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+	RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
 
-	  RCC_OscInitStruct.PLL.PLLM = 4;
-	  RCC_OscInitStruct.PLL.PLLN = 72;
-	  RCC_OscInitStruct.PLL.PLLQ = 3;
+	RCC_OscInitStruct.PLL.PLLM = 4;
+	RCC_OscInitStruct.PLL.PLLN = 72;
+	RCC_OscInitStruct.PLL.PLLQ = 3;
 
-	  if (isEco)
-	  {
-		  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV6;
-		  htim1.Init.Period = 4000;// change this to 4000 later to prevent display backlight flashing
-	  }
-	  else
-	  {
-		  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
-		  htim1.Init.Period = 7100;
-	  }
+	if (isEco)
+	{
+		RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV6;
+		htim1.Init.Period = 4000;// change this to 4000 later to prevent display backlight flashing
+	}
+	else
+	{
+		RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
+		htim1.Init.Period = 7100;
+	}
 
-	  if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
-	  {
-	    return false;
-	  }
+	if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
+	{
+		return false;
+	}
 
-	  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-	  {
-	    return false;
-	  }
+	if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+	{
+		return false;
+	}
 
-	  //Initializes the CPU, AHB and APB buses clocks
+	//Initializes the CPU, AHB and APB buses clocks
 
-	  if (isEco)
-	  {
-		  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
-		  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
-		  {
-		    return false;
-		  }
-	  }
-	  else
-	  {
-		  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
-		  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_3) != HAL_OK)
-		  {
-		    return false;
-		  }
-	  }
+	if (isEco)
+	{
+		RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+		if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+		{
+			return false;
+		}
+	}
+	else
+	{
+		RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
+		if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_3) != HAL_OK)
+		{
+			return false;
+		}
+	}
 
-	  return true;
+	return true;
 }
 
-
-uint32_t clockManagerGetRunMode(void)
+clockManagerSpeedSetting_t clockManagerGetRunMode(void)
 {
 	return currentClockSpeedSetting;
 }
 
-extern volatile bool usbIsResetting;
 void clockManagerUsbRequired(void)
 {
 	if (usbIsResetting && (clockManagerGetRunMode() != CLOCK_MANAGER_SPEED_RUN))
@@ -139,12 +137,11 @@ void clockManagerUsbRequired(void)
 	}
 }
 
-void clockManagerSetRunMode(uint8_t targetConfigIndex, uint32_t clockSpeedSetting)
+void clockManagerSetRunMode(uint8_t targetConfigIndex, clockManagerSpeedSetting_t clockSpeedSetting)
 {
-
-	if (currentClockSpeedSetting !=clockSpeedSetting)
+	if (currentClockSpeedSetting != clockSpeedSetting)
 	{
-		if ((hUsbDeviceFS.dev_state == USBD_STATE_CONFIGURED) && (clockSpeedSetting && CLOCK_MANAGER_RUN_ECO_POWER_MODE))
+		if ((hUsbDeviceFS.dev_state == USBD_STATE_CONFIGURED) && (clockSpeedSetting == CLOCK_MANAGER_RUN_ECO_POWER_MODE))
 		{
 			return;
 		}
@@ -153,15 +150,17 @@ void clockManagerSetRunMode(uint8_t targetConfigIndex, uint32_t clockSpeedSettin
 
 		switch(clockSpeedSetting)
 		{
-		case CLOCK_MANAGER_RUN_ECO_POWER_MODE:
-			clockManagerSetHSE(true);
-			break;
-		case CLOCK_MANAGER_SPEED_RUN:
-		case CLOCK_MANAGER_SPEED_HS_RUN:
-			clockManagerSetHSE(false);
-		default:
-			break;
+			case CLOCK_MANAGER_RUN_ECO_POWER_MODE:
+				clockManagerSetHSE(true);
+				break;
+
+			case CLOCK_MANAGER_SPEED_RUN:
+			case CLOCK_MANAGER_SPEED_HS_RUN:
+				clockManagerSetHSE(false);
+			default:
+				break;
 		}
+
 		currentClockSpeedSetting = clockSpeedSetting;
 	}
 }

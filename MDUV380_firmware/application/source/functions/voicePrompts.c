@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -34,11 +34,19 @@
 #include "hardware/radioHardwareInterface.h"
 
 const uint32_t VOICE_PROMPTS_DATA_MAGIC = 0x5056;//'VP'
-const uint32_t VOICE_PROMPTS_DATA_VERSION = 0x0006; // Version 6 TOC increased to 320. Added PROMOT_VOX and PROMPT_UNUSED_1 to PROMPT_UNUSED_10
+const uint32_t VOICE_PROMPTS_DATA_VERSION =
+#if defined(HAS_COLOURS)
+											0x0009; // Version 9 TOC increased to 368 (10 slots free)
+													// Version 7 TOC increased to 350.
+#define VOICE_PROMPTS_TOC_SIZE 				368
+#else
+											0x0008; // Version 8 TOC increased to 331 (10 slots free)
+													// Version 6 TOC increased to 320. Added PROMOT_VOX and PROMPT_UNUSED_1 to PROMPT_UNUSED_10
+#define VOICE_PROMPTS_TOC_SIZE 				331
+#endif
 													// Version 5 TOC increased to 300
 													// Version 4 does not have unused items
                                                     // Version 3 does not have the PROMPT_TBD items in it
-#define VOICE_PROMPTS_TOC_SIZE 320
 
 typedef struct
 {
@@ -46,8 +54,8 @@ typedef struct
 	uint32_t version;
 } VoicePromptsDataHeader_t;
 
-const uint32_t VOICE_PROMPTS_FLASH_HEADER_ADDRESS       = 0x8F400 + FLASH_ADDRESS_OFFSET;
-const uint32_t VOICE_PROMPTS_FLASH_OLD_HEADER_ADDRESS   = 0xE0000 + FLASH_ADDRESS_OFFSET;
+const uint32_t VOICE_PROMPTS_FLASH_HEADER_ADDRESS     = 0x8F400 + FLASH_ADDRESS_OFFSET;
+const uint32_t VOICE_PROMPTS_FLASH_OLD_HEADER_ADDRESS = 0xE0000 + FLASH_ADDRESS_OFFSET;
 static uint32_t voicePromptsFlashDataAddress;// = VOICE_PROMPTS_FLASH_HEADER_ADDRESS + sizeof(VoicePromptsDataHeader_t) + sizeof(uint32_t)*VOICE_PROMPTS_TOC_SIZE ;
 // 76 x 27 byte ambe frames
 #define AMBE_DATA_BUFFER_SIZE  2052
@@ -89,7 +97,7 @@ void voicePromptsCacheInit(void)
 	if (voicePromptsCheckMagicAndVersion((uint32_t *)&header))
 	{
 		voicePromptDataIsLoaded = SPI_Flash_read(VOICE_PROMPTS_FLASH_HEADER_ADDRESS + sizeof(VoicePromptsDataHeader_t), (uint8_t *)&tableOfContents, sizeof(uint32_t) * VOICE_PROMPTS_TOC_SIZE);
-		voicePromptsFlashDataAddress =  VOICE_PROMPTS_FLASH_HEADER_ADDRESS + sizeof(VoicePromptsDataHeader_t) + sizeof(uint32_t)*VOICE_PROMPTS_TOC_SIZE ;
+		voicePromptsFlashDataAddress = VOICE_PROMPTS_FLASH_HEADER_ADDRESS + sizeof(VoicePromptsDataHeader_t) + (sizeof(uint32_t) * VOICE_PROMPTS_TOC_SIZE);
 	}
 
 	if (!voicePromptDataIsLoaded)
@@ -98,7 +106,7 @@ void voicePromptsCacheInit(void)
 		if (voicePromptsCheckMagicAndVersion((uint32_t *)&header))
 		{
 			voicePromptDataIsLoaded = SPI_Flash_read(VOICE_PROMPTS_FLASH_OLD_HEADER_ADDRESS + sizeof(VoicePromptsDataHeader_t), (uint8_t *)&tableOfContents, sizeof(uint32_t) * VOICE_PROMPTS_TOC_SIZE);
-			voicePromptsFlashDataAddress =  VOICE_PROMPTS_FLASH_OLD_HEADER_ADDRESS + sizeof(VoicePromptsDataHeader_t) + sizeof(uint32_t)*VOICE_PROMPTS_TOC_SIZE ;
+			voicePromptsFlashDataAddress = VOICE_PROMPTS_FLASH_OLD_HEADER_ADDRESS + sizeof(VoicePromptsDataHeader_t) + (sizeof(uint32_t) * VOICE_PROMPTS_TOC_SIZE);
 		}
 	}
 
@@ -109,7 +117,7 @@ void voicePromptsCacheInit(void)
 	}
 
 	// is data is not loaded change prompt mode back to beep.
-	if ((nonVolatileSettings.audioPromptMode > AUDIO_PROMPT_MODE_BEEP) && (voicePromptDataIsLoaded == false))
+	if ((nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_THRESHOLD) && (voicePromptDataIsLoaded == false))
 	{
 		settingsSet(nonVolatileSettings.audioPromptMode, AUDIO_PROMPT_MODE_BEEP);
 	}
@@ -218,7 +226,7 @@ void voicePromptsTerminateNoTail(void)
 
 void voicePromptsInit(void)
 {
-	if ((nonVolatileSettings.audioPromptMode < AUDIO_PROMPT_MODE_VOICE_LEVEL_1) && !temporaryOverride)
+	if ((nonVolatileSettings.audioPromptMode < AUDIO_PROMPT_MODE_VOICE_THRESHOLD) && !temporaryOverride)
 	{
 		return;
 	}
@@ -240,7 +248,7 @@ void voicePromptsInitWithOverride(void)
 
 void voicePromptsAppendPrompt(voicePrompt_t prompt)
 {
-	if ((nonVolatileSettings.audioPromptMode < AUDIO_PROMPT_MODE_VOICE_LEVEL_1) && !temporaryOverride)
+	if ((nonVolatileSettings.audioPromptMode < AUDIO_PROMPT_MODE_VOICE_THRESHOLD) && !temporaryOverride)
 	{
 		return;
 	}
@@ -257,9 +265,9 @@ void voicePromptsAppendPrompt(voicePrompt_t prompt)
 	}
 }
 
-void voicePromptsAppendString(char *promptString)
+void voicePromptsAppendString(const char *promptString)
 {
-	if ((nonVolatileSettings.audioPromptMode < AUDIO_PROMPT_MODE_VOICE_LEVEL_1) && !temporaryOverride)
+	if ((nonVolatileSettings.audioPromptMode < AUDIO_PROMPT_MODE_VOICE_THRESHOLD) && !temporaryOverride)
 	{
 		return;
 	}
@@ -328,18 +336,25 @@ void voicePromptsAppendInteger(int32_t value)
 	voicePromptsAppendString(buf);
 }
 
-void voicePromptsAppendLanguageString(const char * const *languageStringAdd)
+void voicePromptsAppendLanguageString(const char *languageStringAdd)
 {
-	if (((nonVolatileSettings.audioPromptMode < AUDIO_PROMPT_MODE_VOICE_LEVEL_1) && !temporaryOverride) || (languageStringAdd == NULL))
+	if (((nonVolatileSettings.audioPromptMode < AUDIO_PROMPT_MODE_VOICE_THRESHOLD) && !temporaryOverride) || (languageStringAdd == NULL))
 	{
 		return;
 	}
-	voicePromptsAppendPrompt(NUM_VOICE_PROMPTS + (languageStringAdd - &currentLanguage->LANGUAGE_NAME));
+
+	voicePromptsAppendPrompt(NUM_VOICE_PROMPTS +
+			((languageStringAdd - currentLanguage->LANGUAGE_NAME)
+#if ! defined(HAS_COLOURS)
+					- ((languageStringAdd >= currentLanguage->theme_chooser) ?
+							((currentLanguage->theme_colour_picker_blue - currentLanguage->theme_chooser) + LANGUAGE_TEXTS_LENGTH) : 0)
+#endif
+			) / LANGUAGE_TEXTS_LENGTH);
 }
 
 void voicePromptsPlay(void)
 {
-	if ((nonVolatileSettings.audioPromptMode < AUDIO_PROMPT_MODE_VOICE_LEVEL_1) && !temporaryOverride)
+	if ((nonVolatileSettings.audioPromptMode < AUDIO_PROMPT_MODE_VOICE_THRESHOLD) && !temporaryOverride)
 	{
 		return;
 	}
@@ -365,6 +380,12 @@ void voicePromptsPlay(void)
 		int promptNumber = voicePromptsCurrentSequence.Buffer[0];
 
 		voicePromptsCurrentSequence.Pos = 0;
+
+		if ((tableOfContents[promptNumber + 1] == 0) || (tableOfContents[promptNumber] == 0))
+		{
+			promptNumber = PROMPT_SILENCE;
+		}
+
 		currentPromptLength = tableOfContents[promptNumber + 1] - tableOfContents[promptNumber];
 		getAmbeData(tableOfContents[promptNumber], currentPromptLength);
 

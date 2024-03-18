@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -26,9 +26,11 @@
  *
  */
 #include "user_interface/menuSystem.h"
-#include "interfaces/batteryAndPowerManagement.h"
 #include "user_interface/uiLocalisation.h"
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#include "interfaces/batteryAndPowerManagement.h"
 #include "hardware/radioHardwareInterface.h"
+#endif
 
 static void updateScreen(void);
 static void handleEvent(uiEvent_t *ev);
@@ -39,10 +41,7 @@ menuStatus_t uiPowerOff(uiEvent_t *ev, bool isFirstRun)
 {
 	if (isFirstRun)
 	{
-		if (!BUTTONCHECK_DOWN(ev, BUTTON_SK2))
-		{
-			updateScreen();
-		}
+		updateScreen();
 		initialEventTime = ev->time;
 	}
 	else
@@ -55,16 +54,28 @@ menuStatus_t uiPowerOff(uiEvent_t *ev, bool isFirstRun)
 static void updateScreen(void)
 {
 	displayClearBuf();
+	displayThemeApply(THEME_ITEM_FG_DECORATION, THEME_ITEM_BG_NOTIFICATION);
+	displayDrawRoundRectWithDropShadow(4, 4, 120 + DISPLAY_H_EXTRA_PIXELS, DISPLAY_SIZE_Y - 6, 5, true);
+
+	displayThemeApply(THEME_ITEM_FG_WARNING_NOTIFICATION, THEME_ITEM_BG_NOTIFICATION);
 	displayPrintCentered(((DISPLAY_SIZE_Y / 3) - (FONT_SIZE_3_HEIGHT / 2)), currentLanguage->power_off, FONT_SIZE_3);
 	displayPrintCentered((((DISPLAY_SIZE_Y / 3) * 2) - (FONT_SIZE_3_HEIGHT / 2)), "73", FONT_SIZE_3);
+	displayThemeResetToDefault();
 	displayRender();
 }
 
 static void handleEvent(uiEvent_t *ev)
 {
-	bool suspend = false;
-
-	if ((LedRead(LED_GREEN) == 0) && (batteryVoltage > CUTOFF_VOLTAGE_LOWER_HYST))
+	if (
+#if defined(PLATFORM_MD9600)
+			(LedRead(LED_GREEN) == 0) &&
+#elif defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+			powerRotarySwitchIsOn() &&
+#elif defined(PLATFORM_GD77) || defined(PLATFORM_GD77S) || defined(PLATFORM_DM1801) || defined(PLATFORM_DM1801A) // not for RD5R
+			(GPIO_PinRead(GPIO_Power_Switch, Pin_Power_Switch) == 0) &&
+#endif
+			(batteryVoltage > CUTOFF_VOLTAGE_LOWER_HYST)
+	)
 	{
 		// I think this is to handle if the power button is turned back on during shutdown
 		menuSystemPopPreviousMenu();
@@ -72,28 +83,9 @@ static void handleEvent(uiEvent_t *ev)
 		return;
 	}
 
-#if !defined(PLATFORM_RD5R) && !defined(PLATFORM_GD77S)
-	suspend = settingsIsOptionBitSet(BIT_POWEROFF_SUSPEND);
-
-	// Suspend bit is set, but user pressed the SK2, asking for a real poweroff
-	if (suspend && BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+	if ((ev->time - initialEventTime) > POWEROFF_DURATION_MILLISECONDS)
 	{
-		suspend = false;
-	} // Suspend bit is NOT set, but user pressed the SK2, asking for a suspend
-	else if ((suspend == false) && BUTTONCHECK_DOWN(ev, BUTTON_SK2))
-	{
-		suspend = true;
-	}
-#endif
-
-	if (suspend || ((ev->time - initialEventTime) > POWEROFF_DURATION_MILLISECONDS))
-	{
-		powerOffFinalStage(suspend, false);
-#if !defined(PLATFORM_RD5R) && !defined(PLATFORM_GD77S)
-		menuSystemPopPreviousMenu();
-		initialEventTime = 0; // Reset timeout
-		return;
-#endif
+		powerOffFinalStage(false, false);
 	}
 
 }

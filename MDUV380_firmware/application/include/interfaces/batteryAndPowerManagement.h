@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2021-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -30,29 +30,38 @@
 #define _BATTERYANDPOWERMANAGEMENT_H_
 
 #include "functions/ticks.h"
+#include "user_interface/menuSystem.h"
 
 #if defined(PLATFORM_MD9600)
 #define RADIO_IN_STANDBY_FLAG_PATTERN  0x00FF
 #endif
 
 extern volatile int batteryVoltage;
+extern volatile uint16_t micLevel;
+extern volatile uint16_t potLevel;
+extern volatile uint16_t temperatureLevel;
+extern volatile int lastValidBatteryVoltage;
 extern volatile float averageBatteryVoltage;
+extern volatile uint32_t resumeTicks;
 
 #if !defined(PLATFORM_GD77S)
 extern ticksTimer_t apoTimer;
 #endif
 
+
+#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+bool powerRotarySwitchIsOn(void);
+#endif
 void showLowBattery(void);
 bool batteryIsLowWarning(void);
 bool batteryIsLowVoltageWarning(void);
-bool batteryIsLowCriticalVoltage(bool isSuspended);
-bool batteryLastReadingIsCritical(bool isSuspended);
-void batteryChecking(void);
+bool batteryIsLowCriticalVoltage(void);
+bool batteryLastReadingIsCritical(void);
+void batteryChecking(uiEvent_t *ev);
 void batteryUpdate(void);
 void die(bool usbMonitoring, bool maintainRTC, bool forceSuspend);
 void wakeFromSleep(void);
 void powerOffFinalStage(bool maintainRTC, bool forceSuspend);
-void powerOff();
 void powerDown(bool doNotSavePowerOffState);
 void apoTick(bool eventFromOperator);
 

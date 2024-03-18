@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2019      Kai Ludwig, DG4KLU
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Colin, G4EML
  *                         Daniel Caujolle-Bert, F1RMB
  *
@@ -35,6 +35,8 @@
 //#include "interfaces/i2c.h"
 #include "functions/calibration.h"
 #include "functions/codeplug.h"
+
+#define RSSI_NOISE_SAMPLE_PERIOD_PIT  25U// 25 milliseconds
 
 // AT1846S defines
 
@@ -179,12 +181,11 @@ void trxInvalidateCurrentFrequency(void);
 void trxActivateDMRTx(void);
 void trxFastDMRTx(bool tx);
 
-void setTxDMRID(uint32_t id);
-
 int trxGetRSSIdBm(void);
 int trxGetNoisedBm(void);
 int trxGetSNRMargindBm(void);
 uint16_t convertCSSNative2BinaryCodedOctal(uint16_t nativeCSS);
-
+void trxSelectVoiceChannel(uint8_t channel);
+void trxConfigurePA_DAC_ForFrequencyBand(void);
 
 #endif /* _OPENGD77_TRX_H_ */

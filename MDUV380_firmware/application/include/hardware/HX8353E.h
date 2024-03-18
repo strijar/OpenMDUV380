@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -29,6 +29,7 @@
 #ifndef _OPENGD77_HX8353E_H_
 #define _OPENGD77_HX8353E_H_
 
+#include "main.h"
 #include <stdbool.h>
 #include <math.h>
 #include <FreeRTOS.h>
@@ -62,6 +63,49 @@ typedef enum
 	CHOICES_OKARROWS,// QuickKeys
 	CHOICES_NUM
 } ucChoice_t;
+
+typedef enum
+{
+	THEME_ITEM_FG_DEFAULT,              // default text foreground colour.
+	THEME_ITEM_BG,                      // global background colour.
+	THEME_ITEM_FG_DECORATION,           // like borders/drop-shadow/menu line separator/etc.
+	THEME_ITEM_FG_TEXT_INPUT,           // foreground colour of text input.
+	THEME_ITEM_FG_SPLASHSCREEN,         // foreground colour of SplashScreen.
+	THEME_ITEM_BG_SPLASHSCREEN,         // background colour of SplashScreen.
+	THEME_ITEM_FG_NOTIFICATION,         // foreground colour of notification text (+ squelch bargraph).
+	THEME_ITEM_FG_WARNING_NOTIFICATION, // foreground colour of warning notification/messages.
+	THEME_ITEM_FG_ERROR_NOTIFICATION,   // foreground colour of error notification/messages.
+	THEME_ITEM_BG_NOTIFICATION,         // foreground colour of notification background.
+	THEME_ITEM_FG_MENU_NAME,            // foreground colour of menu name (header).
+	THEME_ITEM_BG_MENU_NAME,            // background colour of menu name (header).
+	THEME_ITEM_FG_MENU_ITEM,            // foreground colour of menu entries.
+	THEME_ITEM_BG_MENU_ITEM_SELECTED,   // foreground colour of selected menu entry.
+	THEME_ITEM_FG_OPTIONS_VALUE,        // foreground colour for settings values (options/quickmenus/channel details/etc).
+	THEME_ITEM_FG_HEADER_TEXT,          // foreground colour of Channel/VFO header (radio mode/PWR/battery/etc).
+	THEME_ITEM_BG_HEADER_TEXT,          // background colour of Channel/VFO header (radio mode/PWR/battery/etc).
+	THEME_ITEM_FG_RSSI_BAR,             // foreground colour of RSSI bars <= S9 (Channel/VFO/RSSI screen/Satellite).
+	THEME_ITEM_FG_RSSI_BAR_S9P,         // foreground colour of RSSI bars at > S9 (Channel/VFO/RSSI screen).
+	THEME_ITEM_FG_CHANNEL_NAME,         // foreground colour of the channel name.
+	THEME_ITEM_FG_CHANNEL_CONTACT,      // foreground colour of the contact name (aka TG/PC).
+	THEME_ITEM_FG_CHANNEL_CONTACT_INFO, // foreground colour of contact info (DB/Ct/TA).
+	THEME_ITEM_FG_ZONE_NAME,            // foreground colour of zone name.
+	THEME_ITEM_FG_RX_FREQ,              // foreground colour of RX frequency.
+	THEME_ITEM_FG_TX_FREQ,              // foreground colour of TX frequency.
+	THEME_ITEM_FG_CSS_SQL_VALUES,       // foreground colour of CSS & Squelch values in Channel/VFO screens.
+	THEME_ITEM_FG_TX_COUNTER,           // foreground colour of timer value in TX screen.
+	THEME_ITEM_FG_POLAR_DRAWING,        // foreground colour of the polar drawing in the satellite/GPS screens.
+	THEME_ITEM_FG_SATELLITE_COLOUR,     // foreground colour of the satellites spots in the satellite screen.
+	THEME_ITEM_FG_GPS_NUMBER,           // foreground colour of the GPS number in the GPS screen.
+	THEME_ITEM_FG_GPS_COLOUR,           // foreground colour of the GPS bar and spots in the GPS screens.
+	THEME_ITEM_FG_BD_COLOUR,            // foreground colour of the BEIDOU bar and spots in the GPS screens.
+	THEME_ITEM_MAX,
+	THEME_ITEM_COLOUR_NONE              // special none colour, used when colour has not to be changed.
+} themeItem_t;
+
+#if defined(HAS_COLOURS)
+extern DayTime_t themeDaytime;
+extern uint16_t themeItems[NIGHT + 1][THEME_ITEM_MAX]; // Theme storage
+#endif
 
 
 #define HX8583_CMD_NOP          0x00 // No Operation
@@ -120,13 +164,32 @@ typedef enum
 #define LCD_FSMC_ADDR_COMMAND 0x60000000
 #define LCD_FSMC_ADDR_DATA    0x60040000
 
+#define FONT_SIZE_2_HEIGHT                       8
 #define FONT_SIZE_3_HEIGHT                       16
 #define FONT_SIZE_4_HEIGHT                       32
 #define DISPLAY_SIZE_Y                          128
 #define DISPLAY_SIZE_X                          160
 #define DISPLAY_NUMBER_OF_ROWS  (DISPLAY_SIZE_Y / 8)
 
-void displayBegin(bool isInverted);
+#if defined(HAS_COLOURS)
+// Platform format could be RGB565 or BGR565
+#define RGB888_TO_PLATFORM_COLOUR_FORMAT(x) ((displayLCD_Type & DIPLAYLCD_TYPE_RGB) \
+		? ((uint16_t) (((x & 0xf80000) >> 8) + ((x & 0xfc00) >> 5) + ((x & 0xf8) >> 3))) \
+		: ((uint16_t) (((x & 0xf80000) >> 19) + ((x & 0xfc00) >> 5) + ((x & 0xf8) << 8))))
+#define PLATFORM_COLOUR_FORMAT_TO_RGB888(x) ((displayLCD_Type & DIPLAYLCD_TYPE_RGB) \
+		? ((uint32_t) (((x & 0xf800) << 8) + ((x & 0x7e0) << 5) + ((x & 0x1f) << 3))) \
+		: ((uint32_t) (((x & 0x1f) << 19) + ((x & 0x7e0) << 5) + ((x & 0xf800) >> 8))))
+#define PLATFORM_COLOUR_FORMAT_SWAP_BYTES(n) (((n & 0xFF) << 8) | ((n & 0xFF00) >> 8))
+#endif // HAS_COLOURS
+
+#ifndef DEG_TO_RAD
+#define DEG_TO_RAD  0.017453292519943295769236907684886f
+#endif
+#ifndef RAD_TO_DEG
+#define RAD_TO_DEG 57.295779513082320876798154814105f
+#endif
+
+void displayBegin(bool isInverted, bool SPIFlashAvailable);
 void displayClearBuf(void);
 void displayClearRows(int16_t startRow, int16_t endRow, bool isInverted);
 void displayRenderWithoutNotification(void);
@@ -136,39 +199,38 @@ void displayPrintCentered(uint16_t y, const char *text, ucFont_t fontSize);
 void displayPrintAt(uint16_t x, uint16_t y, const  char *text, ucFont_t fontSize);
 int displayPrintCore(int16_t x, int16_t y, const char *szMsg, ucFont_t fontSize, ucTextAlign_t alignment, bool isInverted);
 
-int16_t displaySetPixel(int16_t x, int16_t y, bool color);
+int16_t displaySetPixel(int16_t x, int16_t y, bool isInverted);
 
-void displayDrawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1, bool color);
-void displayDrawFastVLine(int16_t x, int16_t y, int16_t h, bool color);
-void displayDrawFastHLine(int16_t x, int16_t y, int16_t w, bool color);
+void displayDrawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1, bool isInverted);
+void displayDrawFastVLine(int16_t x, int16_t y, int16_t h, bool isInverted);
+void displayDrawFastHLine(int16_t x, int16_t y, int16_t w, bool isInverted);
 
-void displayDrawCircleHelper(int16_t x0, int16_t y0, int16_t r, uint8_t cornername, bool color);
-void displayDrawCircle(int16_t x0, int16_t y0, int16_t r, bool color);
-void displayFillCircleHelper(int16_t x0, int16_t y0, int16_t r, uint8_t cornername, int16_t delta, bool color);
-void displayFillCircle(int16_t x0, int16_t y0, int16_t r, bool color);
+void displayDrawCircleHelper(int16_t x0, int16_t y0, int16_t r, uint8_t cornername, bool isInverted);
+void displayDrawCircle(int16_t x0, int16_t y0, int16_t r, bool isInverted);
+void displayFillCircleHelper(int16_t x0, int16_t y0, int16_t r, uint8_t cornername, int16_t delta, bool isInverted);
+void displayFillCircle(int16_t x0, int16_t y0, int16_t r, bool isInverted);
 
-void displayDrawEllipse(int16_t x0, int16_t y0, int16_t x1, int16_t y1, bool color);
+void displayDrawEllipse(int16_t x0, int16_t y0, int16_t x1, int16_t y1, bool isInverted);
 
-void displayDrawTriangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t x2, int16_t y2, bool color);
-void displayFillTriangle ( int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t x2, int16_t y2, bool color);
+void displayDrawTriangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t x2, int16_t y2, bool isInverted);
+void displayFillTriangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t x2, int16_t y2, bool isInverted);
 
-void displayFillArc(uint16_t x, uint16_t y, uint16_t radius, uint16_t thickness, float start, float end, bool color);
+void displayFillArcOffsetted(uint16_t cx, uint16_t cy, uint16_t radius, uint16_t thickness, float start, float end, bool isInverted);
+void displayFillArc(uint16_t x, uint16_t y, uint16_t radius, uint16_t thickness, float start, float end, bool isInverted);
 
-void displayDrawRoundRect(int16_t x, int16_t y, int16_t w, int16_t h, int16_t r, bool color);
-void displayFillRoundRect(int16_t x, int16_t y, int16_t w, int16_t h, int16_t r, bool color);
-void displayDrawRoundRectWithDropShadow(int16_t x, int16_t y, int16_t w, int16_t h, int16_t r, bool color);
+void displayDrawRoundRect(int16_t x, int16_t y, int16_t w, int16_t h, int16_t r, bool isInverted);
+void displayFillRoundRect(int16_t x, int16_t y, int16_t w, int16_t h, int16_t r, bool isInverted);
+void displayDrawRoundRectWithDropShadow(int16_t x, int16_t y, int16_t w, int16_t h, int16_t r, bool isInverted);
 
-void displayDrawRect(int16_t x, int16_t y, int16_t w, int16_t h, bool color);
+void displayDrawRect(int16_t x, int16_t y, int16_t w, int16_t h, bool isInverted);
 void displayFillRect(int16_t x, int16_t y, int16_t width, int16_t height, bool isInverted);
-void displayDrawRectWithDropShadow(int16_t x, int16_t y, int16_t w, int16_t h, bool color);
+void displayDrawRectWithDropShadow(int16_t x, int16_t y, int16_t w, int16_t h, bool isInverted);
 
-void displayDrawBitmap(int16_t x, int16_t y, uint8_t *bitmap, int16_t w, int16_t h, bool color);
-void displayDrawXBitmap(int16_t x, int16_t y, const uint8_t *bitmap, int16_t w, int16_t h, bool color);
+void displayDrawBitmap(int16_t x, int16_t y, uint8_t *bitmap, int16_t w, int16_t h, bool isInverted);
+void displayDrawXBitmap(int16_t x, int16_t y, const uint8_t *bitmap, int16_t w, int16_t h, bool isInverted);
 
 void displaySetContrast(uint8_t contrast);
 void displaySetInverseVideo(bool isInverted);
-uint16_t displayGetForegroundColour(void);
-uint16_t displayGetBackgroundColour(void);
 
 void displaySetDisplayPowerMode(bool wake);
 
@@ -179,9 +241,31 @@ void displayRestorePrimaryScreenBuffer(void);
 uint16_t *displayGetPrimaryScreenBuffer(void);
 void displayOverrideScreenBuffer(uint16_t *buffer);
 
-void displaySetForegroundColour(uint32_t R8G8B8);
-void displaySetBackgroundColour(uint32_t R8G8B8);
-uint16_t displayR8G8B8ToNative(uint32_t R8G8B8);
 void displayConvertGD77ImageData(uint8_t *dataBuf);
+
+#if defined(HAS_COLOURS)
+uint16_t displayConvertRGB888ToNative(uint32_t RGB888);
+#endif
+
+//
+// Native color format (swapped RGB565/BGR565, swapped bytes) functions
+//
+void displaySetForegroundAndBackgroundColours(uint16_t fgColour, uint16_t bgColour);
+void displayGetForegroundAndBackgroundColours(uint16_t *fgColour, uint16_t *bgColour);
+
+#if defined(HAS_COLOURS)
+void themeInitToDefaultValues(DayTime_t daytime, bool invert);
+void themeInit(bool SPIFlashAvailable);
+void displayThemeApply(themeItem_t fgItem, themeItem_t bgItem);
+void displayThemeResetToDefault(void);
+bool displayThemeIsForegroundColourEqualTo(themeItem_t fgItem);
+void displayThemeGetForegroundAndBackgroundItems(themeItem_t *fgItem, themeItem_t *bgItem);
+bool displayThemeSaveToFlash(DayTime_t daytime);
+#else
+#define themeInit(x) do {} while(0)
+#define displayThemeApply(x, y) do {} while(0)
+#define displayThemeResetToDefault() do {} while(0)
+#define displayThemeGetForegroundAndBackgroundItems(x, y) do { UNUSED_PARAMETER(x); UNUSED_PARAMETER(y); } while(0)
+#endif
 
 #endif /* _OPENGD77_HX8353E_H_ */

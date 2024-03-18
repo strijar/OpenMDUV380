@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2019      Kai Ludwig, DG4KLU
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions
@@ -32,26 +32,24 @@
 #include <FreeRTOS.h>
 #include <task.h>
 
-#define NO_ADC_CHANNEL_OVERRIDE    0
-
 extern const int CUTOFF_VOLTAGE_UPPER_HYST;
 extern const int CUTOFF_VOLTAGE_LOWER_HYST;
 extern const int BATTERY_MAX_VOLTAGE;
+extern const int POWEROFF_VOLTAGE_THRESHOLD;
 extern const int TEMPERATURE_DECIMAL_RESOLUTION;
 
-#define NUM_ADC_CHANNELS	4
+#define NO_ADC_CHANNEL_OVERRIDE                0
+#define NUM_ADC_CHANNELS	                   4
+#define BATTERY_VOLTAGE_STABILISATION_TIME  1500U // time in PIT ticks for the battery voltage from the ADC to stabilize
 
-extern volatile uint8_t adcIndex;
 extern volatile uint16_t adcVal[NUM_ADC_CHANNELS];
 
 void adcTriggerConversion(int channelOverride);
-void adcInit(void);
-void ADC0_IRQHandler(void);
+void adcStartDMA(void);
 int adcGetBatteryVoltage(void);
 int adcGetVOX(void);
 int getTemperature(void);
-int getVolumeControl(void);
-void adcStartDMA(void);
+int8_t getVolumeControl(void);
 
 
 #endif /* _OPENGD77_ADC_H_ */

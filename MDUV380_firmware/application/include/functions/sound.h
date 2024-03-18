@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2019      Kai Ludwig, DG4KLU
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions
@@ -36,33 +36,33 @@
 
 extern Task_t beepTask;
 
-extern int melody_generic[512];
-extern const int MELODY_POWER_ON[];
-extern const int MELODY_PRIVATE_CALL[];
-extern const int MELODY_KEY_BEEP[];
-extern const int MELODY_KEY_LONG_BEEP[];
-extern const int MELODY_ACK_BEEP[];
-extern const int MELODY_NACK_BEEP[];
-extern const int MELODY_ERROR_BEEP[];
-extern const int MELODY_TX_TIMEOUT_BEEP[];
-extern const int MELODY_DMR_TX_START_BEEP[];
-extern const int MELODY_DMR_TX_STOP_BEEP[];
-extern const int MELODY_KEY_BEEP_FIRST_ITEM[];
-extern const int MELODY_LOW_BATTERY[];
-extern const int MELODY_APO_TRIGGERED[];
-extern const int MELODY_QUICKKEYS_CLEAR_ACK_BEEP[];
-extern const int MELODY_RX_TGTSCC_WARNING_BEEP[];
-extern const int MELODY_RX_BEEP_BEGIN_BEEP[];
-extern const int MELODY_RX_BEEP_END_BEEP[];
-extern const int MELODY_RX_BEEP_CALLER_BEGIN_BEEP[];
-extern const int MELODY_RX_BEEP_CALLER_END_BEEP[];
-extern const int MELODY_1750[];
-extern const int MELODY_DTMF[];
-extern const int MELODY_SK2_BEEP[];
-extern const int MELODY_NSK2_BEEP[];
+extern int16_t melody_generic[512];
+extern const int16_t MELODY_POWER_ON[];
+extern const int16_t MELODY_PRIVATE_CALL[];
+extern const int16_t MELODY_KEY_BEEP[];
+extern const int16_t MELODY_KEY_LONG_BEEP[];
+extern const int16_t MELODY_ACK_BEEP[];
+extern const int16_t MELODY_NACK_BEEP[];
+extern const int16_t MELODY_ERROR_BEEP[];
+extern const int16_t MELODY_TX_TIMEOUT_BEEP[];
+extern const int16_t MELODY_DMR_TX_START_BEEP[];
+extern const int16_t MELODY_DMR_TX_STOP_BEEP[];
+extern const int16_t MELODY_KEY_BEEP_FIRST_ITEM[];
+extern const int16_t MELODY_LOW_BATTERY[];
+extern const int16_t MELODY_APO_TRIGGERED[];
+extern const int16_t MELODY_QUICKKEYS_CLEAR_ACK_BEEP[];
+extern const int16_t MELODY_RX_TGTSCC_WARNING_BEEP[];
+extern const int16_t MELODY_RX_BEEP_BEGIN_BEEP[];
+extern const int16_t MELODY_RX_BEEP_END_BEEP[];
+extern const int16_t MELODY_RX_BEEP_CALLER_BEGIN_BEEP[];
+extern const int16_t MELODY_RX_BEEP_CALLER_END_BEEP[];
+extern const int16_t MELODY_1750[];
+extern const int16_t MELODY_DTMF[];
+extern const int16_t MELODY_SK2_BEEP[];
+extern const int16_t MELODY_NSK2_BEEP[];
 
-extern volatile int *melody_play;
-extern volatile int melody_idx;
+extern volatile int16_t *melody_play;
+extern volatile int16_t melody_idx;
 extern volatile int micAudioSamplesTotal;
 extern int soundBeepVolumeDivider;
 extern volatile float dmrRxAGCrxPeakAverage;
@@ -82,15 +82,15 @@ extern union sharedDataBuffer
 	volatile uint8_t rawBuffer[HOTSPOT_BUFFER_COUNT * HOTSPOT_BUFFER_SIZE]; // 2400
 } audioAndHotspotDataBuffer;
 
-extern volatile int wavbuffer_read_idx;
-extern volatile int wavbuffer_write_idx;
-extern volatile int wavbuffer_count;
+extern volatile int16_t wavbuffer_read_idx;
+extern volatile int16_t wavbuffer_write_idx;
+extern volatile int16_t wavbuffer_count;
 extern volatile uint8_t *currentWaveBuffer;
 
 
 void soundInit(void);
 void soundTerminateSound(void);
-void soundSetMelody(const int *melody);
+void soundSetMelody(const int16_t *melody);
 void soundCreateSong(const uint8_t *melody);
 void soundInitBeepTask(void);
 

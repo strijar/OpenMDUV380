@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -35,7 +35,7 @@
 #include "functions/voicePrompts.h"
 
 
-#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380)  || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
 #define MENU_MAX_DISPLAYED_ENTRIES 7 // Should be an odd value
 #else
 #define MENU_MAX_DISPLAYED_ENTRIES 3 // Should be an odd value
@@ -49,14 +49,18 @@
 #define BUTTONCHECK_EXTRALONGDOWN(e, sk) (((e)->keys.key == 0) && ((e)->buttons & sk ## _EXTRA_LONG_DOWN))
 // SK*/ORANGE button is down, regardless event status
 #define BUTTONCHECK_DOWN(e, sk) (((e)->buttons & sk))
+// SK*/ORANGE button is the only one down, regardless event status.
+#define BUTTONCHECK_UNIQUE_DOWN(e, sk) (((e)->buttons & sk) && (((e)->buttons & ~(sk | sk ## _SHORT_UP | sk ## _LONG_DOWN | sk ## _EXTRA_LONG_DOWN)) == 0))
+
 
 typedef enum
 {
-	NO_EVENT       = 0,
-	KEY_EVENT      = (1 << 0),
-	BUTTON_EVENT   = (1 << 1),
-	FUNCTION_EVENT = (1 << 2),
-	ROTARY_EVENT   = (1 << 3)
+	NO_EVENT        = 0,
+	KEY_EVENT       = (1 << 0),
+	BUTTON_EVENT    = (1 << 1),
+	FUNCTION_EVENT  = (1 << 2),
+	ROTARY_EVENT    = (1 << 3),
+	SYNTHETIC_EVENT = (1 << 7)
 } uiEventInput_t;
 
 typedef enum
@@ -85,6 +89,9 @@ typedef enum
 {
 	NOTIFICATION_TYPE_SQUELCH = 0,
 	NOTIFICATION_TYPE_POWER,
+#if defined(HAS_SOFT_VOLUME)
+	NOTIFICATION_TYPE_VOLUME,
+#endif
 	NOTIFICATION_TYPE_MESSAGE,
 	NOTIFICATION_TYPE_MAX
 } uiNotificationType_t;
@@ -93,13 +100,15 @@ typedef enum
 {
 	NOTIFICATION_ID_NONE = 0,
 	NOTIFICATION_ID_SQUELCH,
+#if defined(HAS_SOFT_VOLUME)
+	NOTIFICATION_ID_VOLUME,
+#endif
 	NOTIFICATION_ID_POWER,
 	NOTIFICATION_ID_MESSAGE,
 	NOTIFICATION_ID_USER /* Could use _USER, _USER + 1, + 2, etc... */
 } uiNotificationID_t;
 
 #define NOTIFICATION_ID_USER_APO (NOTIFICATION_ID_USER)
-
 
 typedef struct
 {
@@ -112,11 +121,13 @@ typedef struct
 	uint32_t        		time;
 } uiEvent_t;
 
-
 typedef menuStatus_t (*menuFunctionPointer_t)(uiEvent_t *, bool); // Typedef for menu function pointers.  Functions are passed the key, the button and the event data. Event can be a Key or a button or both. Last arg is for when the function is only called to initialise and display its screen.
+typedef void (*menuExitCallback_t)(void *data);
 typedef struct
 {
 	const menuFunctionPointer_t	function;
+	menuExitCallback_t			exitCallback;
+	void					   *data;
 	int							lastItemIndex;
 } menuFunctionData_t;
 
@@ -141,7 +152,7 @@ typedef struct
 
 
 void menuDisplayTitle(const char *title);
-void menuDisplayEntry(int loopOffset, int focusedItem,const char *entryText);
+void menuDisplayEntry(int loopOffset, int focusedItem, const char *entryText, int32_t optStart, themeItem_t fgItem, themeItem_t fgOptItem, themeItem_t bgItem);
 
 // menuGetMenuOffset() return values
 #define MENU_OFFSET_BEFORE_FIRST_ENTRY -1
@@ -149,8 +160,12 @@ void menuDisplayEntry(int loopOffset, int focusedItem,const char *entryText);
 int menuGetMenuOffset(int maxMenuItems, int loopOffset);
 
 void uiChannelModeUpdateScreen(int txTimeSecs);
+void uiChannelModeLoadChannelData(bool useChannelDataInMemory, bool loadVoicePromptAnnouncement);
+
 void uiChannelModeColdStart(void);
 void uiVFOModeUpdateScreen(int txTimeSecs);
+void uiVFOModeloadChannelData(bool forceAPRSReset);
+
 void uiVFOLoadContact(struct_codeplugContact_t *contact);
 bool uiVFOModeIsTXFocused(void);
 void uiVFOModeStopScanning(void);
@@ -166,17 +181,19 @@ void uiChannelInitializeCurrentZone(void);
 
 void uiCPSUpdate(uiCPSCommand_t command, int x, int y, ucFont_t fontSize, ucTextAlign_t alignment, bool isInverted, char *szMsg);
 
-void menuSystemInit(void);
+void menuSystemInit(time_t_custom UTCdateTimeInSecs);
 void menuSystemLanguageHasChanged(void);
 void displayLightTrigger(bool fromKeyEvent);
 void displayLightOverrideTimeout(int timeout);
 int menuSystemGetLastItemIndex(int stackPos);
+void menuSystemCallExitCallback(void);
+void menuSystemRegisterExitCallback(menuExitCallback_t f, void *data);
 void menuSystemPushNewMenu(int menuNumber);
 
 void menuSystemSetCurrentMenu(int menuNumber);
 int menuSystemGetCurrentMenuNumber(void);
 int menuSystemGetPreviousMenuNumber(void);
-int menuSystemGetPreviouslyPushedMenuNumber(void);
+int menuSystemGetPreviouslyPushedMenuNumber(bool keepIt);
 
 int menuSystemGetRootMenuNumber(void);
 
@@ -210,7 +227,7 @@ void menuTxScreenHandleTxTermination(uiEvent_t *ev, txTerminationReason_t reason
 void menuSatelliteScreenClearPredictions(bool reloadKeps);
 bool menuSatelliteIsDisplayingHeader(void);
 void menuSatelliteTxScreen(uint32_t txTimeSecs);
-
+void menuSatelliteSetFullReload(void);
 void menuSystemMenuIncrement(int32_t *O, int32_t M);
 void menuSystemMenuDecrement(int32_t *O, int32_t M);
 
@@ -232,6 +249,9 @@ void uiNotificationHide(bool immediateRender);
 uiNotificationID_t uiNotificationGetId(void);
 
 
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+extern const uint8_t MENU_GENERAL_OPTIONS_GPS_ENTRY_NUMBER;
+#endif
 
 //
 //  ---- Menu internals ----
@@ -260,18 +280,24 @@ enum MENU_SCREENS
 	MENU_DISPLAY,// Display options
 	MENU_SOUND,// Sound options
 	MENU_SATELLITE,
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
 	MENU_GPS,
+#endif
 	MENU_CONTACT_LIST,
 	MENU_DTMF_CONTACT_LIST,
 	MENU_CONTACT_QUICKLIST,
 	MENU_CONTACT_LIST_SUBMENU,
 	MENU_CONTACT_DETAILS,
 	MENU_LANGUAGE,
+	MENU_CALIBRATION,
+#if defined(HAS_COLOURS)
+	MENU_THEME,
+#endif
 	UI_CHANNEL_QUICK_MENU,
 	UI_VFO_QUICK_MENU,
-	MENU_CALIBRATION,
 	MENU_CHANNEL_DETAILS,
 	MENU_FIRMWARE_INFO,
+	MENU_APRS,
 	// *** Add new menus to be accessed using quickkey (ID: 0..31) above this line ***
 	UI_MESSAGE_BOX,
 	UI_HOTSPOT_MODE,
@@ -285,6 +311,10 @@ enum MENU_SCREENS
 	UI_LOCK_SCREEN,
 	UI_PRIVATE_CALL,
 	MENU_CONTACT_NEW,
+#if defined(HAS_COLOURS)
+	MENU_THEME_ITEMS_BROWSER,
+	MENU_COLOUR_PICKER,
+#endif
 	NUM_MENU_ENTRIES
 };
 
@@ -298,6 +328,8 @@ enum CHANNEL_SCREEN_QUICK_MENU_ITEMS
 	CH_SCREEN_QUICK_MENU_FILTER_DMR,
 	CH_SCREEN_QUICK_MENU_DMR_CC_SCAN,
 	CH_SCREEN_QUICK_MENU_FILTER_DMR_TS,
+	CH_SCREEN_QUICK_MENU_TALKAROUND,
+	CH_SCREEN_QUICK_MENU_DISTANCE_SORT,
 	NUM_CH_SCREEN_QUICK_MENU_ITEMS
 };
 
@@ -362,13 +394,24 @@ typedef struct
 	const menuItemsList_t	*data[];
 } menuDataGlobal_t;
 
-enum { RADIO_INFOS_BATTERY_LEVEL = 0, RADIO_INFOS_CURRENT_TIME, RADIO_INFOS_DATE, RADIO_INFOS_LOCATION,
-	RADIO_INFOS_TEMPERATURE_LEVEL, RADIO_INFOS_BATTERY_GRAPH, NUM_RADIO_INFOS_MENU_ITEMS, RADIO_INFOS_UP_TIME, RADIO_INFOS_TIME_ALARM };
+enum
+{
+	RADIO_INFOS_BATTERY_LEVEL = 0,
+	RADIO_INFOS_CURRENT_TIME,
+	RADIO_INFOS_DATE,
+	RADIO_INFOS_LOCATION,
+	RADIO_INFOS_TEMPERATURE_LEVEL,
+	RADIO_INFOS_BATTERY_GRAPH,
+	NUM_RADIO_INFOS_MENU_ITEMS,
+	RADIO_INFOS_UP_TIME,
+	RADIO_INFOS_TIME_ALARM
+};
 
 extern menuDataGlobal_t 		menuDataGlobal;
 extern const menuItemsList_t 	menuDataMainMenu;
 extern const menuItemsList_t 	menuDataContact;
 extern const menuItemsList_t 	menuDataOptions;
+extern bool lockscreenIsRearming;
 
 menuStatus_t uiVFOMode(uiEvent_t *event, bool isFirstRun);
 menuStatus_t uiVFOModeQuickMenu(uiEvent_t *event, bool isFirstRun);
@@ -401,7 +444,17 @@ menuStatus_t menuLanguage(uiEvent_t *event, bool isFirstRun);
 menuStatus_t menuPrivateCall(uiEvent_t *event, bool isFirstRun);
 menuStatus_t uiMessageBox(uiEvent_t *event, bool isFirstRun);
 menuStatus_t menuSatelliteScreen(uiEvent_t *ev, bool isFirstRun);
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
 menuStatus_t menuGPS(uiEvent_t *event, bool isFirstRun);
+#endif
 menuStatus_t menuCalibration(uiEvent_t *ev, bool isFirstRun);
+#if !defined(PLATFORM_GD77S)
+menuStatus_t menuAPRSOptions(uiEvent_t *ev, bool isFirstRun);
+#endif
+#if defined(HAS_COLOURS)
+menuStatus_t menuThemeOptions(uiEvent_t *ev, bool isFirstRun);
+menuStatus_t menuThemeItemsBrowser(uiEvent_t *ev, bool isFirstRun);
+menuStatus_t menuColourPicker(uiEvent_t *ev, bool isFirstRun);
+#endif
 
 #endif

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions
@@ -31,7 +31,7 @@
 #include "hardware/SPI_Flash.h"
 #include "functions/codeplug.h"
 
-#define MDUV380_EMLATED_EEPROM_ADDRESS_OFFSET  0x000000
+#define MDUV380_EMULATED_EEPROM_ADDRESS_OFFSET  0x000000
 
 const uint8_t EEPROM_ADDRESS 	= 0x50;
 const uint8_t EEPROM_PAGE_SIZE 	= 128;
@@ -39,10 +39,10 @@ const uint8_t EEPROM_PAGE_SIZE 	= 128;
 
 bool EEPROM_Write(int address, uint8_t *buf, int size)
 {
-	return SPI_Flash_write(address + MDUV380_EMLATED_EEPROM_ADDRESS_OFFSET, buf, size);
+	return SPI_Flash_write(address + MDUV380_EMULATED_EEPROM_ADDRESS_OFFSET, buf, size);
 }
 
 bool EEPROM_Read(int address, uint8_t *buf, int size)
 {
-	return SPI_Flash_read(address + MDUV380_EMLATED_EEPROM_ADDRESS_OFFSET, buf, size);
+	return SPI_Flash_read(address + MDUV380_EMULATED_EEPROM_ADDRESS_OFFSET, buf, size);
 }

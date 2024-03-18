@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -30,7 +30,12 @@
 #include "user_interface/uiUtilities.h"
 #include "user_interface/uiLocalisation.h"
 
+
+#if defined(PLATFORM_DM1701) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD2017)
+static const int DISPLAYED_LINES_MAX = 7;
+#else
 static const int DISPLAYED_LINES_MAX = 3;
+#endif
 
 static bool displayLHDetails = false;
 static menuStatus_t menuLastHeardExitCode;
@@ -118,7 +123,7 @@ void menuLastHeardUpdateScreen(bool showTitleOrHeader, bool displayDetails, bool
 	bool displayTA;
 
 	// Jumping here from <SK2> + 3, with an empty heard list won't announce "Last Heard", handle this here
-	if (isFirstRun && (uiDataGlobal.lastHeardCount == 0) && (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_LEVEL_1))
+	if (isFirstRun && (uiDataGlobal.lastHeardCount == 0) && (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_THRESHOLD))
 	{
 		promptsInit(isFirstRun);
 	}
@@ -132,6 +137,8 @@ void menuLastHeardUpdateScreen(bool showTitleOrHeader, bool displayDetails, bool
 	{
 		uiUtilityRenderHeader(false, false);
 	}
+
+	displayThemeApply(THEME_ITEM_FG_CHANNEL_CONTACT_INFO, THEME_ITEM_BG);
 
 	// skip over the first menuDataGlobal.currentItemIndex in the listing
 	for(int i = 0; i < firstDisplayed; i++)
@@ -148,7 +155,15 @@ void menuLastHeardUpdateScreen(bool showTitleOrHeader, bool displayDetails, bool
 			if (menuDataGlobal.currentItemIndex == (firstDisplayed + numDisplayed))
 			{
 				invertColour = true;
-				displayFillRect(0, 16 + (numDisplayed * MENU_ENTRY_HEIGHT), DISPLAY_SIZE_X, MENU_ENTRY_HEIGHT, false);
+				displayThemeApply(THEME_ITEM_FG_CHANNEL_CONTACT_INFO, THEME_ITEM_BG_MENU_ITEM_SELECTED);
+				displayFillRect(0, 16 + (numDisplayed * MENU_ENTRY_HEIGHT), DISPLAY_SIZE_X, MENU_ENTRY_HEIGHT,
+#if defined(HAS_COLOURS)
+						true
+#else
+						false
+#endif
+						);
+				displayThemeApply(THEME_ITEM_FG_CHANNEL_CONTACT_INFO, THEME_ITEM_BG);
 				selectedItem = item;
 			}
 			else
@@ -194,6 +209,8 @@ void menuLastHeardUpdateScreen(bool showTitleOrHeader, bool displayDetails, bool
 		promptsPlayNotAfterTx();
 	}
 
+	displayThemeResetToDefault();
+
 	displayRender();
 	uiDataGlobal.displayQSOState = QSO_DISPLAY_IDLE;
 }
@@ -211,6 +228,12 @@ void menuLastHeardHandleEvent(uiEvent_t *ev)
 			{
 				return;
 			}
+		}
+
+		if ((ev->events & FUNCTION_EVENT) && (ev->function == FUNC_REDRAW))
+		{
+			menuLastHeardUpdateScreen(true, displayLHDetails, false);
+			return;
 		}
 	}
 
@@ -277,14 +300,16 @@ void menuLastHeardHandleEvent(uiEvent_t *ev)
 		else if ((currentMenu == MENU_LAST_HEARD) && KEYCHECK_SHORTUP(ev->keys, KEY_GREEN))
 		{
 			int timeslot = selectedItem->receivedTS;
+			uint32_t tgOrPC = ((BUTTONCHECK_DOWN(ev, BUTTON_SK2) == 0) ? selectedItem->talkGroupOrPcId : ((PC_CALL_FLAG << 24) | selectedItem->id));
 
-			setOverrideTGorPC(selectedItem->id, true);
+			setOverrideTGorPC(tgOrPC, ((tgOrPC >> 24) == PC_CALL_FLAG));
 
 			if ((timeslot != -1) && (timeslot != trxGetDMRTimeSlot()))
 			{
 				trxSetDMRTimeSlot(timeslot, true);
 				tsSetManualOverride(((menuSystemGetRootMenuNumber() == UI_CHANNEL_MODE) ? CHANNEL_CHANNEL : (CHANNEL_VFO_A + nonVolatileSettings.currentVFONumber)), (timeslot + 1));
 			}
+
 			announceItem(PROMPT_SEQUENCE_CONTACT_TG_OR_PC, PROMPT_THRESHOLD_3);
 			menuSystemPopAllAndDisplayRootMenu();
 			return;
@@ -293,7 +318,7 @@ void menuLastHeardHandleEvent(uiEvent_t *ev)
 		{
 			if (currentMenu == MENU_LAST_HEARD) // Only allowed within LH menu
 			{
-				lastheardInitList();
+				lastHeardInitList();
 				lastHeardClearLastID();
 				menuLastHeardInit();
 				promptsInit(true); // Stack "Empty List" VP.
@@ -331,7 +356,7 @@ void menuLastHeardHandleEvent(uiEvent_t *ev)
 		{
 			menuLastHeardUpdateScreen(true, displayLHDetails, false);// This will also setup the voice prompt
 
-			if (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_LEVEL_1)
+			if (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_THRESHOLD)
 			{
 				voicePromptsPlay();
 			}
@@ -364,13 +389,13 @@ static void promptsInit(bool isFirstRun)
 	if (isFirstRun)
 	{
 		voicePromptsAppendPrompt(PROMPT_SILENCE);
-		voicePromptsAppendLanguageString(&currentLanguage->last_heard);
-		voicePromptsAppendLanguageString(&currentLanguage->menu);
+		voicePromptsAppendLanguageString(currentLanguage->last_heard);
+		voicePromptsAppendLanguageString(currentLanguage->menu);
 
 		if (uiDataGlobal.lastHeardCount == 0)
 		{
 			voicePromptsAppendPrompt(PROMPT_SILENCE);
-			voicePromptsAppendLanguageString(&currentLanguage->empty_list);
+			voicePromptsAppendLanguageString(currentLanguage->list_empty);
 		}
 	}
 }
@@ -397,7 +422,7 @@ static void displayTalkerAlias(uint8_t y, char *text, uint32_t time, uint32_t no
 
 	snprintf(timeBuffer, 6, "%u", heardSince); // Time, without unit
 
-	if (itemIsSelected && (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_LEVEL_1))
+	if (itemIsSelected && (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_THRESHOLD))
 	{
 		promptsInit(isFirstRun);
 	}
@@ -481,7 +506,7 @@ static void displayTalkerAlias(uint8_t y, char *text, uint32_t time, uint32_t no
 			displayPrintCore(0, y, chomp(buffer), FONT_SIZE_3, TEXT_ALIGN_CENTER, itemIsSelected);
 		}
 
-		if (itemIsSelected && (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_LEVEL_1))
+		if (itemIsSelected && (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_THRESHOLD))
 		{
 			voicePromptsAppendString(chomp(buffer));
 			voicePromptsAppendString("  ");
@@ -489,7 +514,7 @@ static void displayTalkerAlias(uint8_t y, char *text, uint32_t time, uint32_t no
 			snprintf(buffer, 37, "%u ", tg);
 			if (isPC)
 			{
-				voicePromptsAppendLanguageString(&currentLanguage->private_call);
+				voicePromptsAppendLanguageString(currentLanguage->private_call);
 				if (tg != trxDMRID)
 				{
 					voicePromptsAppendString(buffer);
@@ -504,7 +529,7 @@ static void displayTalkerAlias(uint8_t y, char *text, uint32_t time, uint32_t no
 			voicePromptsAppendString(timeBuffer);
 			if (inHours)
 			{
-				voicePromptsAppendLanguageString(&currentLanguage->hours);
+				voicePromptsAppendLanguageString(currentLanguage->hours);
 			}
 			else
 			{
@@ -543,6 +568,7 @@ static void displayTalkerAlias(uint8_t y, char *text, uint32_t time, uint32_t no
 
 			displayFillRect((DISPLAY_SIZE_X - (1 * 6) - (4 * 8) - 3), yTS - 1, (6 + 1), 9, itemIsSelected);
 			displayPrintCore((DISPLAY_SIZE_X - (1 * 6) - (4 * 8) - 2), yTS, buffer, FONT_SIZE_1, TEXT_ALIGN_LEFT, !itemIsSelected);
+
 		}
 
 		displayPrintCore((DISPLAY_SIZE_X - (strlen(timeBuffer) * 8) - (1 * 6) - 1), y, timeBuffer, FONT_SIZE_3, TEXT_ALIGN_LEFT, itemIsSelected);

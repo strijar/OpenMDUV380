@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2019      Kai Ludwig, DG4KLU
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -31,17 +31,21 @@
 #define _OPENGD77_DISPLAY_H_
 
 #include <stdbool.h>
+
 #define BACKLIGHT_MIN_USABLE_VALUE 1
+
+#define DIPLAYLCD_TYPE_RGB         (1 << 7)
+#define DISPLAYLCD_GET_TYPE(x)     (x & ~DIPLAYLCD_TYPE_RGB)
+#define DISPLAYLCD_TYPE_IS_RGB(x)  (x & DIPLAYLCD_TYPE_RGB)
 
 extern uint8_t displayLCD_Type;
 
-void displayInit(int32_t foregroundR8G8B8,int32_t backgroundR8G8B8, bool isInverted);
+void displayInit(bool isInverted, bool SPIFlashAvailable);
 void displaySetInvertedState(bool isInverted);
 void displayEnableBacklight(bool enable, int displayBacklightPercentageOff);
 bool displayIsBacklightLit(void);
 void displayWriteCmd(uint8_t cmd);
 void displayWriteData(uint8_t val);
 void displayWriteCmds(uint8_t cmd, size_t len, uint8_t opts[]);
-void displaySetToDefaultForegroundColour(void);
 
 #endif /* _OPENGD77_DISPLAY_H_ */

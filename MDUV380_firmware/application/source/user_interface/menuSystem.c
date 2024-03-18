@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -25,6 +25,7 @@
  * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
+#include "main.h"
 #include "user_interface/menuSystem.h"
 #include "user_interface/uiLocalisation.h"
 #include "user_interface/uiUtilities.h"
@@ -71,17 +72,26 @@ menuDataGlobal_t menuDataGlobal =
 				NULL,// Display options
 				NULL,// Sound options
 				NULL,// SatelliteScreen
+#if defined(HAS_GPS)
 				NULL,// GPS
+#endif
 				NULL,// Contact List
 				NULL,// DTMF Contact List
 				NULL,// Contact Quick List (SK2+#)
 				NULL,// Contact List Quick Menu
 				NULL,// Contact Details
 				NULL,// Language
+				NULL,// Calibration
+#if defined(HAS_COLOURS)
+				NULL,// Theme options
+#endif
 				NULL,// Quick menu - Channel
 				NULL,// Quick menu - VFO
-				NULL,// Calibration
 				NULL,// Channel Details
+				NULL,// Firmwareinfo
+#if !defined(PLATFORM_GD77S)
+				NULL,// APRS options
+#endif
 				// *** Add new menus to be accessed using quickkey (ID: 0..31) above this line ***
 				NULL,// MessageBox
 				NULL,// hotspot mode
@@ -92,53 +102,71 @@ menuDataGlobal_t menuDataGlobal =
 				NULL,// power off
 				NULL,// vfo mode
 				NULL,// channel mode
-				NULL,// Firmwareinfo
 				NULL,// Lock screen
 				NULL,// Private Call
 				NULL,// New Contact
-
+#if defined(HAS_COLOURS)
+				NULL,// Theme items browser
+				NULL,// Colour picker
+#endif
 		}
 };
 
 static menuFunctionData_t menuFunctions[] =
 {
-		{ menuDisplayMenuList,      0 },// display Main menu using the menu display system
-		{ menuDisplayMenuList,      0 },// display Contact menu using the menu display system
-		{ menuZoneList,             0 },
-		{ menuRadioInfos,           0 },
-		{ menuRSSIScreen,           0 },
-		{ menuLastHeard,            0 },
-		{ menuDisplayMenuList,      0 },
-		{ menuGeneralOptions,	    0 },
-		{ menuRadioOptions,			0 },
-		{ menuDisplayOptions,       0 },
-		{ menuSoundOptions,         0 },
-		{ menuSatelliteScreen,      0 },
-		{ menuGPS, 		            0 },
-		{ menuContactList,          0 },
-		{ menuContactList,          0 },
-		{ menuContactList,          0 },
-		{ menuContactListSubMenu,   0 },
-		{ menuContactDetails,       0 },
-		{ menuLanguage,             0 },
-		{ uiChannelModeQuickMenu,   0 },
-		{ uiVFOModeQuickMenu,       0 },
-		{ menuCalibration,          0 },
-		{ menuChannelDetails,       0 },
-		{ menuFirmwareInfoScreen,   0 },
+		{ menuDisplayMenuList,      NULL, NULL, 0 },// display Main menu using the menu display system
+		{ menuDisplayMenuList,      NULL, NULL, 0 },// display Contact menu using the menu display system
+		{ menuZoneList,             NULL, NULL, 0 },
+		{ menuRadioInfos,           NULL, NULL, 0 },
+		{ menuRSSIScreen,           NULL, NULL, 0 },
+		{ menuLastHeard,            NULL, NULL, 0 },
+		{ menuDisplayMenuList,      NULL, NULL, 0 },
+		{ menuGeneralOptions,       NULL, NULL, 0 },
+		{ menuRadioOptions,         NULL, NULL, 0 },
+		{ menuDisplayOptions,       NULL, NULL, 0 },
+		{ menuSoundOptions,         NULL, NULL, 0 },
+#if defined(USING_EXTERNAL_DEBUGGER)
+		{ menuSoundOptions,         NULL, NULL, 0 },// hack to remove satellite screen from the build when external debugger is selected, otherwise there is not enough space in the ROM to build the firmware
+#else
+		{ menuSatelliteScreen,      NULL, NULL, 0 },
+#endif
+#if defined(HAS_GPS)
+		{ menuGPS,                  NULL, NULL, 0 },
+#endif
+		{ menuContactList,          NULL, NULL, 0 },
+		{ menuContactList,          NULL, NULL, 0 },
+		{ menuContactList,          NULL, NULL, 0 },
+		{ menuContactListSubMenu,   NULL, NULL, 0 },
+		{ menuContactDetails,       NULL, NULL, 0 },
+		{ menuLanguage,             NULL, NULL, 0 },
+		{ menuCalibration,          NULL, NULL, 0 },
+#if defined(HAS_COLOURS)
+		{ menuThemeOptions,         NULL, NULL, 0 },
+#endif
+		{ uiChannelModeQuickMenu,   NULL, NULL, 0 },
+		{ uiVFOModeQuickMenu,       NULL, NULL, 0 },
+		{ menuChannelDetails,       NULL, NULL, 0 },
+		{ menuFirmwareInfoScreen,   NULL, NULL, 0 },
+#if !defined(PLATFORM_GD77S)
+		{ menuAPRSOptions,          NULL, NULL, 0 },
+#endif
 		// *** Add new menus to be accessed using quickkey (ID: 0..31) above this line ***
-		{ uiMessageBox,             0 },
-		{ menuHotspotMode,          0 },
-		{ uiCPS,                    0 },
-		{ menuNumericalEntry,       0 },
-		{ menuTxScreen,             0 },
-		{ uiSplashScreen,           0 },
-		{ uiPowerOff,               0 },
-		{ uiVFOMode,                0 },
-		{ uiChannelMode,            0 },
-		{ menuLockScreen,           0 },
-		{ menuPrivateCall,          0 },
-		{ menuContactDetails,       0 }, // Contact New
+		{ uiMessageBox,             NULL, NULL, 0 },
+		{ menuHotspotMode,          NULL, NULL, 0 },
+		{ uiCPS,                    NULL, NULL, 0 },
+		{ menuNumericalEntry,       NULL, NULL, 0 },
+		{ menuTxScreen,             NULL, NULL, 0 },
+		{ uiSplashScreen,           NULL, NULL, 0 },
+		{ uiPowerOff,               NULL, NULL, 0 },
+		{ uiVFOMode,                NULL, NULL, 0 },
+		{ uiChannelMode,            NULL, NULL, 0 },
+		{ menuLockScreen,           NULL, NULL, 0 },
+		{ menuPrivateCall,          NULL, NULL, 0 },
+		{ menuContactDetails,       NULL, NULL, 0 }, // Contact New
+#if defined(HAS_COLOURS)
+		{ menuThemeItemsBrowser,    NULL, NULL, 0 },
+		{ menuColourPicker,         NULL, NULL, 0 },
+#endif
 };
 
 static void menuSystemCheckForFirstEntryAudible(menuStatus_t status)
@@ -148,22 +176,22 @@ static void menuSystemCheckForFirstEntryAudible(menuStatus_t status)
 		// If VP is currently playing, we should not set the next beep, otherwise it
 		// will be played at the wrong time (e.g  entering TG/PC input window, ACK beep will be
 		// played on the next beep playback event
-		if ((nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_LEVEL_1) && voicePromptsIsPlaying())
+		if ((nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_THRESHOLD) && voicePromptsIsPlaying())
 		{
 			return;
 		}
 
 		if (status & MENU_STATUS_ERROR)
 		{
-			nextKeyBeepMelody = (int *)MELODY_ERROR_BEEP;
+			nextKeyBeepMelody = (int16_t *)MELODY_ERROR_BEEP;
 		}
 		else if (((status & MENU_STATUS_LIST_TYPE) && (menuDataGlobal.currentItemIndex == 0)) || (status & MENU_STATUS_FORCE_FIRST))
 		{
-			nextKeyBeepMelody = (int *)MELODY_KEY_BEEP_FIRST_ITEM;
+			nextKeyBeepMelody = (int16_t *)MELODY_KEY_BEEP_FIRST_ITEM;
 		}
 		else if (status & MENU_STATUS_INPUT_TYPE)
 		{
-			nextKeyBeepMelody = (int *)MELODY_ACK_BEEP;
+			nextKeyBeepMelody = (int16_t *)MELODY_ACK_BEEP;
 		}
 	}
 }
@@ -173,7 +201,7 @@ static void menuSystemPushMenuFirstRun(void)
 	uiEvent_t ev = { .buttons = 0, .keys = NO_KEYCODE, .rotary = 0, .function = 0, .events = NO_EVENT, .hasEvent = false, .time = ticksGetMillis() };
 	menuStatus_t status;
 
-	if (uiNotificationIsVisible())
+	if (uiNotificationIsVisible() && uiNotificationHasTimedOut())
 	{
 		uiNotificationHide(false);
 	}
@@ -184,8 +212,22 @@ static void menuSystemPushMenuFirstRun(void)
 	menuDataGlobal.numItems = INT32_MIN;
 	menuDataGlobal.currentMenuList = NULL;
 	menuDataGlobal.currentItemIndex = menuFunctions[menuDataGlobal.controlData.stack[menuDataGlobal.controlData.stackPosition]].lastItemIndex;
+	menuFunctions[menuDataGlobal.controlData.stack[menuDataGlobal.controlData.stackPosition]].exitCallback = NULL;
+	menuFunctions[menuDataGlobal.controlData.stack[menuDataGlobal.controlData.stackPosition]].data = NULL;
 	displayLightTrigger(false);
-	status = menuFunctions[menuDataGlobal.controlData.stack[menuDataGlobal.controlData.stackPosition]].function(&ev, true);
+
+	// This only happens when on Cal Data or Flash init errors.
+	if (menuDataGlobal.controlData.stack[menuDataGlobal.controlData.stackPosition] == MENU_EMPTY)
+	{
+		status = MENU_STATUS_SUCCESS;
+		displayClearBuf();
+		displayPrintCentered(((DISPLAY_SIZE_Y - FONT_SIZE_3_HEIGHT) >> 1), globalFailureMessage, FONT_SIZE_3);
+		displayRender();
+	}
+	else
+	{
+		status = menuFunctions[menuDataGlobal.controlData.stack[menuDataGlobal.controlData.stackPosition]].function(&ev, true);
+	}
 
 	if (menuDataGlobal.numItems == INT32_MIN)
 	{
@@ -214,6 +256,12 @@ int menuSystemGetLastItemIndex(int stackPos)
 	return -1;
 }
 
+void menuSystemRegisterExitCallback(menuExitCallback_t f, void *data)
+{
+	menuFunctions[menuDataGlobal.controlData.stack[menuDataGlobal.controlData.stackPosition]].exitCallback = f;
+	menuFunctions[menuDataGlobal.controlData.stack[menuDataGlobal.controlData.stackPosition]].data = data;
+}
+
 void menuSystemPushNewMenu(int menuNumber)
 {
 	if (menuDataGlobal.controlData.stackPosition < 15)
@@ -232,10 +280,24 @@ void menuSystemPushNewMenu(int menuNumber)
 	}
 }
 
+void menuSystemCallExitCallback(void)
+{
+	if (menuFunctions[menuDataGlobal.controlData.stack[menuDataGlobal.controlData.stackPosition]].exitCallback != NULL)
+	{
+		menuFunctions[menuDataGlobal.controlData.stack[menuDataGlobal.controlData.stackPosition]].exitCallback(menuFunctions[menuDataGlobal.controlData.stack[menuDataGlobal.controlData.stackPosition]].data);
+		menuFunctions[menuDataGlobal.controlData.stack[menuDataGlobal.controlData.stackPosition]].exitCallback = NULL;
+		menuFunctions[menuDataGlobal.controlData.stack[menuDataGlobal.controlData.stackPosition]].data = NULL;
+	}
+}
+
 void menuSystemPopPreviousMenu(void)
 {
 	keyboardReset();
+
 	menuFunctions[menuDataGlobal.controlData.stack[menuDataGlobal.controlData.stackPosition]].lastItemIndex = menuDataGlobal.currentItemIndex;
+
+	menuSystemCallExitCallback();
+
 	// Clear stackPosition + 1 menu trace
 	if (menuDataGlobal.controlData.stackPosition < 15)
 	{
@@ -253,7 +315,15 @@ void menuSystemPopPreviousMenu(void)
 void menuSystemPopAllAndDisplayRootMenu(void)
 {
 	keyboardReset();
+
 	menuFunctions[menuDataGlobal.controlData.stack[menuDataGlobal.controlData.stackPosition]].lastItemIndex = menuDataGlobal.currentItemIndex;
+
+	while (menuDataGlobal.controlData.stackPosition >= 1)
+	{
+		menuSystemCallExitCallback();
+		menuDataGlobal.controlData.stackPosition--;
+	}
+
 	// MENU_EMPTY is equal to -1 (0xFFFFFFFF), hence the following works, even if it's an int32_t array
 	memset(&menuDataGlobal.controlData.stack[1], MENU_EMPTY, sizeof(menuDataGlobal.controlData.stack) - sizeof(int));
 	menuDataGlobal.controlData.stackPosition = 0;
@@ -266,7 +336,15 @@ void menuSystemPopAllAndDisplaySpecificRootMenu(int newRootMenu, bool resetKeybo
 	{
 		keyboardReset();
 	}
+
 	menuFunctions[menuDataGlobal.controlData.stack[menuDataGlobal.controlData.stackPosition]].lastItemIndex = menuDataGlobal.currentItemIndex;
+
+	while (menuDataGlobal.controlData.stackPosition >= 1)
+	{
+		menuSystemCallExitCallback();
+		menuDataGlobal.controlData.stackPosition--;
+	}
+
 	// MENU_EMPTY is equal to -1 (0xFFFFFFFF), hence the following works, even if it's an int32_t array
 	memset(&menuDataGlobal.controlData.stack[1], MENU_EMPTY, sizeof(menuDataGlobal.controlData.stack) - sizeof(int));
 	menuDataGlobal.controlData.stack[0] = newRootMenu;
@@ -296,12 +374,16 @@ int menuSystemGetPreviousMenuNumber(void)
 	return MENU_ANY;
 }
 
-int menuSystemGetPreviouslyPushedMenuNumber(void)
+int menuSystemGetPreviouslyPushedMenuNumber(bool keepIt)
 {
 	if (menuDataGlobal.controlData.stackPosition < 15)
 	{
 		int m = menuDataGlobal.controlData.stack[menuDataGlobal.controlData.stackPosition + 1];
-		menuDataGlobal.controlData.stack[menuDataGlobal.controlData.stackPosition + 1] = MENU_EMPTY;
+
+		if (keepIt == false)
+		{
+			menuDataGlobal.controlData.stack[menuDataGlobal.controlData.stackPosition + 1] = MENU_EMPTY;
+		}
 		return m;
 	}
 
@@ -313,10 +395,17 @@ int menuSystemGetRootMenuNumber(void)
 	return menuDataGlobal.controlData.stack[0];
 }
 
-#define KEY_MAPPING_TYPE_2
-
 static void menuSystemPreProcessEvent(uiEvent_t *ev)
 {
+#if defined(PLATFORM_GD77) || defined(PLATFORM_GD77S) || defined(PLATFORM_DM1801) || defined(PLATFORM_DM1801A) || defined(PLATFORM_RD5R)
+	if (ev->hasEvent || ((uiDataGlobal.displayQSOState == QSO_DISPLAY_CALLER_DATA) && (nonVolatileSettings.backlightMode != BACKLIGHT_MODE_BUTTONS)))
+	{
+		if ((ev->events & SYNTHETIC_EVENT) == 0)
+		{
+			displayLightTrigger(true);
+		}
+	}
+#else // ! MK22
 	if (ev->hasEvent)
 	{
 		if ((!trxIsTransmitting) || (menuSystemGetCurrentMenuNumber() == MENU_CALIBRATION))
@@ -338,39 +427,95 @@ static void menuSystemPreProcessEvent(uiEvent_t *ev)
 				{
 					switch(ev->keys.key)
 					{
+#if defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_MD9600)
 						case KEY_ROTARY_INCREMENT:
 							ev->keys.key = KEY_RIGHT;
 							break;
 						case KEY_ROTARY_DECREMENT:
 							ev->keys.key = KEY_LEFT;
 							break;
+#endif
+#if defined(PLATFORM_MD9600)
+						case KEY_B:
+							ev->keys.key = KEY_RIGHT;
+							break;
+						case KEY_C:
+							ev->keys.key = KEY_LEFT;
+							break;
+						case KEY_A:
+							ev->keys.key = KEY_RED;
+							break;
+#endif
 						case KEY_FRONT_UP:
 							ev->keys.key = KEY_UP;
 							break;
 						case KEY_FRONT_DOWN:
 							ev->keys.key = KEY_DOWN;
 							break;
-
 					}
 				}
-
 			}
 			else
 			{
-#if !defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD9600) || ! (defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)) // This block is for MD9600, MDUV380 or MD380
 				switch(ev->keys.key)
 				{
+#if ! (defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017) || defined(PLATFORM_MD9600))
 					case KEY_UP:
 						ev->keys.key = KEY_LEFT;
 						break;
 					case KEY_DOWN:
 						ev->keys.key = KEY_RIGHT;
 						break;
+#endif
+#if defined(PLATFORM_MD9600)
+					case KEY_B:
+						ev->keys.key = KEY_RIGHT;
+						break;
+					case KEY_C:
+						ev->keys.key = KEY_LEFT;
+						break;
+					case KEY_A:
+						ev->keys.key = KEY_RED;
+						break;
+					case KEY_ROTARY_INCREMENT:
+						ev->keys.key = KEY_UP;
+						break;
+					case KEY_ROTARY_DECREMENT:
+						ev->keys.key = KEY_DOWN;
+						break;
+					case KEY_FRONT_UP:
+						if ((ev->keys.event & (KEY_MOD_DOWN | KEY_MOD_LONG)) == (KEY_MOD_DOWN | KEY_MOD_LONG))
+						{
+							ev->keys.key = KEY_UP;
+						}
+						else
+						{
+							ev->keys.key = KEY_RIGHT;
+						}
+						break;
+					case KEY_FRONT_DOWN:
+						if ((ev->keys.event & (KEY_MOD_DOWN | KEY_MOD_LONG)) == (KEY_MOD_DOWN | KEY_MOD_LONG))
+						{
+							ev->keys.key = KEY_DOWN;
+						}
+						else
+						{
+							ev->keys.key = KEY_LEFT;
+						}
+						break;
+#endif
+#if defined(PLATFORM_MD9600) || ! (defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017))
 				}
+#endif
 #endif
 			}
 		}
-		displayLightTrigger(true);
+
+		if ((ev->events & SYNTHETIC_EVENT) == 0)
+		{
+			displayLightTrigger(true);
+		}
 	}
 	else
 	{
@@ -379,6 +524,7 @@ static void menuSystemPreProcessEvent(uiEvent_t *ev)
 			displayLightTrigger(true);
 		}
 	}
+#endif // ! MK22
 }
 
 static void menuSystemPostProcessEvent(uiEvent_t *ev)
@@ -394,8 +540,21 @@ void menuSystemCallCurrentMenuTick(uiEvent_t *ev)
 	menuStatus_t status;
 
 	menuSystemPreProcessEvent(ev);
-	status = menuFunctions[menuDataGlobal.controlData.stack[menuDataGlobal.controlData.stackPosition]].function(ev, false);
+
+	if (menuDataGlobal.controlData.stack[menuDataGlobal.controlData.stackPosition] == MENU_EMPTY)
+	{
+		status = MENU_STATUS_SUCCESS;
+		displayClearBuf();
+		displayPrintCentered(((DISPLAY_SIZE_Y - FONT_SIZE_3_HEIGHT) >> 1), globalFailureMessage, FONT_SIZE_3);
+		displayRender();
+	}
+	else
+	{
+		status = menuFunctions[menuDataGlobal.controlData.stack[menuDataGlobal.controlData.stackPosition]].function(ev, false);
+	}
+
 	menuSystemPostProcessEvent(ev);
+
 	if (ev->hasEvent)
 	{
 		menuSystemCheckForFirstEntryAudible(status);
@@ -432,9 +591,11 @@ void displayLightOverrideTimeout(int timeout)
 	}
 }
 
-void menuSystemInit(void)
+void menuSystemInit(time_t_custom UTCdateTimeInSecs)
 {
 	uiEvent_t ev = { .buttons = 0, .keys = NO_KEYCODE, .rotary = 0, .function = 0, .events = NO_EVENT, .hasEvent = false, .time = ticksGetMillis() };
+
+	uiSetUTCDateTimeInSecs(UTCdateTimeInSecs);
 
 	menuDataGlobal.lightTimer = -1;
 	menuDataGlobal.controlData.stack[menuDataGlobal.controlData.stackPosition] = UI_SPLASH_SCREEN;// set the very first screen as the splash screen
@@ -476,7 +637,9 @@ const menuItemNewData_t mainMenuItems[] =
 	{   7, MENU_LAST_HEARD      },
 	{ 150, MENU_RADIO_INFOS     },
 	{ 173, MENU_SATELLITE       },
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
 	{ 195, MENU_GPS		        },
+#endif
 };
 
 const menuItemsList_t menuDataMainMenu =
@@ -500,12 +663,16 @@ const menuItemsList_t menuDataContact =
 
 static const menuItemNewData_t optionsMenuItems[] =
 {
-	{ 190, MENU_GENERAL },
-	{ 191, MENU_RADIO },
-	{  10, MENU_DISPLAY },
-	{  11, MENU_SOUND   },
-	{  206, MENU_CALIBRATION},
+	{ 190, MENU_GENERAL         },
+	{ 191, MENU_RADIO           },
+	{  10, MENU_DISPLAY         },
+	{  11, MENU_SOUND           },
 	{  13, MENU_LANGUAGE        },
+	{ 206, MENU_CALIBRATION     },
+#if defined(HAS_COLOURS)
+	{ 218, MENU_THEME           },
+#endif
+	{ 257, MENU_APRS            },
 };
 
 const menuItemsList_t menuDataOptions =
@@ -516,24 +683,68 @@ const menuItemsList_t menuDataOptions =
 
 void menuDisplayTitle(const char *title)
 {
+	themeItem_t fgItem, bgItem;
+
+	displayThemeGetForegroundAndBackgroundItems(&fgItem, &bgItem);
+
+#if defined(HAS_COLOURS)
+	displayThemeApply(THEME_ITEM_BG_MENU_NAME, THEME_ITEM_COLOUR_NONE);
+	displayFillRect(0, 0, DISPLAY_SIZE_X, 14, false);
+#endif
+
+	displayThemeApply(THEME_ITEM_FG_DECORATION, THEME_ITEM_BG);
 	displayDrawFastHLine(0, 13, DISPLAY_SIZE_X, true);
+
+	displayThemeApply(THEME_ITEM_FG_MENU_NAME, THEME_ITEM_BG);
 	displayPrintCore(0, 3, title, FONT_SIZE_2, TEXT_ALIGN_CENTER, false);
+
+	displayThemeApply(fgItem, bgItem);
 }
 
-void menuDisplayEntry(int loopOffset, int focusedItem, const char *entryText)
+// optStart:
+//  - if less than 0, entryText will use fgOptItem colour
+//  - if equal to 0, no coloured option will be handled
+void menuDisplayEntry(int loopOffset, int focusedItem, const char *entryText, int32_t optStart, themeItem_t fgItem, themeItem_t fgOptItem, themeItem_t bgItem)
 {
 	bool focused = (focusedItem == menuDataGlobal.currentItemIndex);
 
 	if (focused)
 	{
-		displayFillRoundRect(DISPLAY_X_POS_MENU_OFFSET, DISPLAY_Y_POS_MENU_ENTRY_HIGHLIGHT + (loopOffset * MENU_ENTRY_HEIGHT), DISPLAY_SIZE_X, MENU_ENTRY_HEIGHT, 2, true);
+		displayThemeApply(THEME_ITEM_BG_MENU_ITEM_SELECTED, bgItem);
+		displayFillRoundRect(DISPLAY_X_POS_MENU_OFFSET, DISPLAY_Y_POS_MENU_ENTRY_HIGHLIGHT
+#if defined(PLATFORM_RD5R)
+				- 1 // Small V offset due to small font usage
+#endif
+				+ (loopOffset * MENU_ENTRY_HEIGHT), DISPLAY_SIZE_X - (DISPLAY_X_POS_MENU_OFFSET * 2), MENU_ENTRY_HEIGHT, 2, true);
 	}
 
-#if 0
-	displayPrintCore(DISPLAY_X_POS_MENU_OFFSET, DISPLAY_Y_POS_MENU_START + (loopOffset * MENU_ENTRY_HEIGHT), entryText, FONT_SIZE_3, TEXT_ALIGN_LEFT, focused);
-#else
-	displayPrintCore(DISPLAY_X_POS_MENU_OFFSET, DISPLAY_Y_POS_MENU_ENTRY_HIGHLIGHT + (loopOffset * MENU_ENTRY_HEIGHT), entryText, FONT_SIZE_3, TEXT_ALIGN_LEFT, focused);
-#endif
+	displayThemeApply(fgItem, bgItem);
+
+	if ((focused == false) && ((optStart < 0) || (optStart > 0)))
+	{
+		char buffer[SCREEN_LINE_BUFFER_SIZE];
+
+		snprintf(buffer, (optStart > 0) ? (optStart + 1) : (strlen(entryText) + 1), "%s", entryText);
+
+		if (optStart < 0)
+		{
+			displayThemeApply(fgOptItem, bgItem);
+		}
+
+		displayPrintCore(DISPLAY_X_POS_MENU_TEXT_OFFSET, DISPLAY_Y_POS_MENU_ENTRY_HIGHLIGHT + (loopOffset * MENU_ENTRY_HEIGHT), buffer, FONT_SIZE_3, TEXT_ALIGN_LEFT, focused);
+
+		if (optStart > 0)
+		{
+			displayThemeApply(fgOptItem, bgItem);
+			displayPrintCore(DISPLAY_X_POS_MENU_TEXT_OFFSET + (optStart * 8), DISPLAY_Y_POS_MENU_ENTRY_HIGHLIGHT + (loopOffset * MENU_ENTRY_HEIGHT), (entryText + optStart), FONT_SIZE_3, TEXT_ALIGN_LEFT, focused);
+		}
+	}
+	else
+	{
+		displayPrintCore(DISPLAY_X_POS_MENU_TEXT_OFFSET, DISPLAY_Y_POS_MENU_ENTRY_HIGHLIGHT + (loopOffset * MENU_ENTRY_HEIGHT), entryText, FONT_SIZE_3, TEXT_ALIGN_LEFT, focused);
+	}
+
+	displayThemeResetToDefault();
 }
 
 // Returns menu offset, -1 if the line is before the first menu item, -2 if the line is after the last menu item
@@ -580,38 +791,57 @@ int menuGetMenuOffset(int maxMenuItems, int loopOffset)
 /*
  * Returns 99 if key is unknown, or not numerical when digitsOnly is true
  */
+#if defined(PLATFORM_MD9600)
+#define NON_NUMERICAL_KEYS 7
+#else
+#define NON_NUMERICAL_KEYS 6
+#endif
 int menuGetKeypadKeyValue(uiEvent_t *ev, bool digitsOnly)
 {
+#if !defined(PLATFORM_GD77S)
 	uint32_t keypadKeys[] =
 	{
+#if defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380)
 			KEY_0, KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8, KEY_9,
 			KEY_FRONT_UP, 0, KEY_FRONT_DOWN, 0 , KEY_STAR, KEY_HASH
+#elif defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+			KEY_0, KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8, KEY_9,
+			KEY_LEFT, KEY_FRONT_UP, KEY_FRONT_DOWN, KEY_RIGHT, KEY_STAR, KEY_HASH
+#elif defined(PLATFORM_MD9600)
+			KEY_0, KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8, KEY_9,
+			KEY_A, KEY_B, KEY_C, KEY_D, KEY_STAR, KEY_HASH, KEY_GREEN
+#else // MK22, minus GD77S
+			KEY_0, KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8, KEY_9,
+			KEY_LEFT, KEY_UP, KEY_DOWN, KEY_RIGHT, KEY_STAR, KEY_HASH
+#endif
 	};
 
-	for (int i = 0; i < ((sizeof(keypadKeys) / sizeof(keypadKeys[0])) - (digitsOnly ? 6 : 0 )); i++)
+	for (int i = 0; i < ((sizeof(keypadKeys) / sizeof(keypadKeys[0])) - (digitsOnly ? NON_NUMERICAL_KEYS : 0 )); i++)
 	{
-		if (KEYCHECK_PRESS(ev->keys, keypadKeys[i]))
+		if (
+#if defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380)
+				(keypadKeys[i] != 0) &&
+#endif
+				KEYCHECK_PRESS(ev->keys, keypadKeys[i]))
 		{
+#if defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380)
 			if (BUTTONCHECK_DOWN(ev, BUTTON_SK1))
 			{
-				if (i == 10)
+				if (i == 10) // Simulate 'B'
 				{
 					return 11;
 				}
-				else
+				else if (i == 12) // Simulate 'D'
 				{
-					if (i == 12)
-					{
-						return 13;
-					}
+					return 13;
 				}
+
 			}
-			else
-			{
-				return i;
-			}
+#endif
+			return i;
 		}
 	}
+#endif // GD77S
 
 	return 99;
 }
@@ -637,7 +867,7 @@ void menuUpdateCursor(int pos, bool moved, bool render)
 
 	if (moved || (m - lastBlink) > 500)
 	{
-		displayDrawFastHLine(pos * 8, MENU_CURSOR_Y, 8, blink);
+		displayDrawFastHLine(((pos * 8) + DISPLAY_X_POS_MENU_TEXT_OFFSET), MENU_CURSOR_Y, 8, blink);
 
 		blink = !blink;
 		lastBlink = m;
@@ -718,18 +948,29 @@ void menuSystemMenuDecrement(int32_t *currentItem, int32_t numItems)
 // For QuickKeys
 void menuDisplaySettingOption(const char *entryText, const char *valueText)
 {
+	displayThemeApply(THEME_ITEM_FG_DECORATION, THEME_ITEM_BG);
 
 #if defined(PLATFORM_RD5R)
 	displayDrawRoundRect(2, DISPLAY_Y_POS_MENU_ENTRY_HIGHLIGHT - MENU_ENTRY_HEIGHT - 6, DISPLAY_SIZE_X - 4, (MENU_ENTRY_HEIGHT * 2) + 8, 2, true);
 	displayFillRoundRect(2, DISPLAY_Y_POS_MENU_ENTRY_HIGHLIGHT - MENU_ENTRY_HEIGHT - 6, DISPLAY_SIZE_X - 4, MENU_ENTRY_HEIGHT + 3, 2, true);
 
-	displayPrintCore(0, DISPLAY_Y_POS_MENU_START - MENU_ENTRY_HEIGHT - 4, entryText, FONT_SIZE_2, TEXT_ALIGN_CENTER, true);
+	displayThemeApply(THEME_ITEM_FG_NOTIFICATION, THEME_ITEM_BG);
+	if (entryText)
+	{
+		displayPrintCore(0, DISPLAY_Y_POS_MENU_START - MENU_ENTRY_HEIGHT - 4, entryText, FONT_SIZE_2, TEXT_ALIGN_CENTER, true);
+	}
 #else
 	displayDrawRoundRect(2, DISPLAY_Y_POS_MENU_ENTRY_HIGHLIGHT - MENU_ENTRY_HEIGHT - 2, DISPLAY_SIZE_X - 4, (MENU_ENTRY_HEIGHT * 2) + 4, 2, true);
 	displayFillRoundRect(2, DISPLAY_Y_POS_MENU_ENTRY_HIGHLIGHT - MENU_ENTRY_HEIGHT - 2, DISPLAY_SIZE_X - 4, MENU_ENTRY_HEIGHT, 2, true);
 
-	displayPrintCore(0, DISPLAY_Y_POS_MENU_START - MENU_ENTRY_HEIGHT + DISPLAY_V_OFFSET + 2, entryText, FONT_SIZE_2, TEXT_ALIGN_CENTER, true);
+	displayThemeApply(THEME_ITEM_FG_NOTIFICATION, THEME_ITEM_BG);
+	if (entryText)
+	{
+		displayPrintCore(0, DISPLAY_Y_POS_MENU_START - MENU_ENTRY_HEIGHT + DISPLAY_V_OFFSET + 2, entryText, FONT_SIZE_2, TEXT_ALIGN_CENTER, true);
+	}
 #endif
 
 	displayPrintCore(0, DISPLAY_Y_POS_MENU_START + DISPLAY_V_OFFSET, valueText, FONT_SIZE_3, TEXT_ALIGN_CENTER, false);
+
+	displayThemeResetToDefault();
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2021-2023 Roger Clark, VK3KYY / G4KYF
  *                         Colin Durbridge, G4EML
  *                         Daniel Caujolle-Bert, F1RMB
  *
@@ -44,6 +44,7 @@
 #include "usb_device.h"
 #include "user_interface/menuSystem.h"
 #include "user_interface/uiUtilities.h"
+#include "user_interface/uiLocalisation.h"
 #include "functions/ticks.h"
 #include "interfaces/batteryAndPowerManagement.h"
 #include "interfaces/gps.h"
@@ -55,16 +56,30 @@
 #include "SeggerRTT/RTT/SEGGER_RTT.h"
 #endif
 
+#define VOLUME_UPDATE_TIMEOUT      5U
+
+// Couldn't declare into aprs.h, due to header cross-dependence.
+void aprsBeaconingTick(uiEvent_t *ev);
+
 volatile bool mainIsRunning = true;
 static bool updateMessageOnScreen = false;
-int lastVolume = 0;
+int8_t lastVolume = 0;
+static bool volumeIsStillChanging = false;
+static int8_t lastDisplayedVolume = 62;
+bool isSuspended = false;
+char globalFailureMessage[SCREEN_LINE_BUFFER_SIZE] = { 0 };
+bool spiFlashInitHasFailed = false;
+
+#if ! defined(PLATFORM_GD77S)
+ticksTimer_t autolockTimer;
+#endif
 
 
 #if (__NVIC_PRIO_BITS != 3)
 #error Files need to be manually after regernation using the STM32Cube configuration tool to support the non-genuine CPU
 
 /*
- * To support the Non-genuine CPU in newer radios, the folling changes must be made
+ * To support the Non-genuine CPU in newer radios, the following changes must be made
  *
  * stm32f405xx.h line 49 needs to be changed to
  * #define __NVIC_PRIO_BITS          3U       // VK3KYY changed this to 3 to fix problem with clone CPU. Genuine STM32F4XX uses 4 Bits for the Priority Levels
@@ -135,7 +150,7 @@ static void keyBeepHandler(uiEvent_t *ev, bool ptttoggleddown)
 			{
 				soundSetMelody(MELODY_KEY_BEEP);
 			}
-			nextKeyBeepMelody = (int *)MELODY_KEY_BEEP;// set back to the default beep
+			nextKeyBeepMelody = (int16_t *)MELODY_KEY_BEEP;// set back to the default beep
 		}
 		else
 		{ 	// Reset the beep sound if we are scanning, otherwise the AudioAssist
@@ -163,7 +178,7 @@ static void keyBeepHandler(uiEvent_t *ev, bool ptttoggleddown)
 				if (nextKeyBeepMelody != MELODY_KEY_BEEP)
 				{
 					soundSetMelody(nextKeyBeepMelody);
-					nextKeyBeepMelody = (int *)MELODY_KEY_BEEP;
+					nextKeyBeepMelody = (int16_t *)MELODY_KEY_BEEP;
 				}
 				else
 				{
@@ -177,7 +192,7 @@ static void keyBeepHandler(uiEvent_t *ev, bool ptttoggleddown)
 static bool rxBeepsMustPlayMelody(uint8_t rxBitOption)
 {
 	return ((nonVolatileSettings.beepOptions & rxBitOption) && (settingsUsbMode != USB_MODE_HOTSPOT) &&
-			((uiDataGlobal.Scan.active == false) || (uiDataGlobal.Scan.active && (uiDataGlobal.Scan.state == SCAN_PAUSED))) &&
+			((uiDataGlobal.Scan.active == false) || (uiDataGlobal.Scan.active && (uiDataGlobal.Scan.state == SCAN_STATE_PAUSED))) &&
 			(nonVolatileSettings.audioPromptMode != AUDIO_PROMPT_MODE_SILENT) && (voicePromptsIsPlaying() == false));
 }
 
@@ -192,7 +207,7 @@ static bool rxBeepsHandler(void)
 	{
 		// Don't clear the RF start beep when scanning, it has to be played, so wait the scan has paused.
 		if ((uiDataGlobal.Scan.active &&
-				((uiDataGlobal.Scan.state == SCAN_SCANNING) || (uiDataGlobal.Scan.state == SCAN_SHORT_PAUSED))) == false)
+				((uiDataGlobal.Scan.state == SCAN_STATE_SCANNING) || (uiDataGlobal.Scan.state == SCAN_STATE_SHORT_PAUSED))) == false)
 		{
 			uiDataGlobal.rxBeepState &= ~RX_BEEP_CARRIER_HAS_STARTED_EXEC;
 		}
@@ -270,7 +285,7 @@ static bool validateUpdateCallback(void)
 
 static void settingsUpdateAudioAlert(void)
 {
-	if (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_LEVEL_1)
+	if (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_THRESHOLD)
 	{
 		voicePromptsInit();
 		voicePromptsAppendPrompt(PROMPT_SETTINGS_UPDATE);
@@ -282,6 +297,20 @@ static void settingsUpdateAudioAlert(void)
 	}
 }
 
+static void updateVolumeGain(int menuScreen)
+{
+	HRC6000SetDmrRxGain(lastVolume);
+
+#if defined(HAS_SOFT_VOLUME)
+	if (settingsIsOptionBitSet(BIT_VISUAL_VOLUME) &&
+			(menuScreen != UI_SPLASH_SCREEN) && (menuScreen != UI_MESSAGE_BOX))
+	{
+		lastDisplayedVolume = lastVolume;
+
+		uiNotificationShow(NOTIFICATION_TYPE_VOLUME, NOTIFICATION_ID_VOLUME, 1000, NULL, true);
+	}
+#endif
+}
 
 void applicationMainTask(void)
 {
@@ -294,13 +323,12 @@ void applicationMainTask(void)
 	int rotary_event = EVENT_ROTARY_NONE;
 	int function_event = 0;
 	bool keyOrButtonChanged = false;
-	int *quickkeyPushedMenuMelody = NULL;
+	int16_t *quickkeyPushedMenuMelody = NULL;
 	int keyFunction;
 	bool wasRestoringDefaultsettings = false;
 	bool hasSignal = false;
-
-
 	uiEvent_t ev = { .buttons = 0, .keys = NO_KEYCODE, .rotary = 0, .function = 0, .events = NO_EVENT, .hasEvent = false, .time = ticksGetMillis() };
+	ticksTimer_t volumeControlTimer = { 0, 0 };
 
 	HAL_GPIO_WritePin(PWR_SW_GPIO_Port, PWR_SW_Pin, GPIO_PIN_SET);// keep the power on
 	batteryRAM_Init();
@@ -310,26 +338,62 @@ void applicationMainTask(void)
 	//osDelay(500);
 	//USB_DEBUG_printf("FW started\n");
 
+#if defined(PLATFORM_DM1701)
+	/* DM-1701
+	 * 		displayLCD_Type:
+	 * 			- 0: "Normal" mode
+	 * 			- 1: 180° rotation
+	 * 			- 2: Vertically flipped
+	 * 			- 3: "Normal" mode (BGR)
+	 */
 	displayLCD_Type = SPI_Flash_readSingleSecurityRegister(0x301D);
 	displayLCD_Type &= 0x03;
 
-
-
-
-	if (!SPI_Flash_init())
+	if (displayLCD_Type == 2) // Normal 3 + RGB
 	{
-		displayInit(0x000000, 0xffffff, settingsIsOptionBitSet(BIT_INVERSE_VIDEO));
-		gpioInitDisplay();
-		displayEnableBacklight(true, 100);
-		displayClearBuf();
-		displayPrintCentered(4,"OpenMDUV380", FONT_SIZE_3);
-		displayPrintCentered(28,"Flash Error", FONT_SIZE_3);
-		displayRender();
-		gpioSetDisplayBacklightIntensityPercentage(100);
-		while(true)
+		displayLCD_Type = (3 | DIPLAYLCD_TYPE_RGB);
+	}
+#elif defined(PLATFORM_MDUV380)
+	/* MD-UV380
+	 * 		displayLCD_Type
+	 * 			- 0: 180° rotation
+	 * 			- 1: "Normal" mode
+	 * 			- 2: Horizontally flipped
+	 * 			- 3: 180° rotation
+	 */
+	displayLCD_Type = SPI_Flash_readSingleSecurityRegister(0x301D);
+	displayLCD_Type &= 0x03;
+	displayLCD_Type |= DIPLAYLCD_TYPE_RGB;
+#else // MD-2017 (ATM unknown)
+	displayLCD_Type = (3 | DIPLAYLCD_TYPE_RGB);
+#endif
+
+	spiFlashInitHasFailed = !SPI_Flash_init();
+	if (spiFlashInitHasFailed)
+	{
+		if (spiFlashInitHasFailed)
 		{
-			osDelay(1000);
+			nonVolatileSettings.batteryCalibration = (0x05) + (0x07 << 4); // needed to get a correct default voltage reading
 		}
+
+		displayInit(settingsIsOptionBitSet(BIT_INVERSE_VIDEO), false);
+		gpioInitDisplay();
+
+		// Theme has't been read, init to default values
+		themeInitToDefaultValues(DAY, false);
+
+		// Since the settings weren't read from the Flash, set backlight percentage
+		nonVolatileSettings.displayBacklightPercentage[DAY] = 100;
+		displayEnableBacklight(true, -1);
+		gpioSetDisplayBacklightIntensityPercentage(100);
+
+		menuDataGlobal.controlData.stack[0] = MENU_EMPTY;
+		menuDataGlobal.currentItemIndex = 0;
+
+		snprintf(globalFailureMessage, SCREEN_LINE_BUFFER_SIZE, "%s", "FLASH MEM ERROR");
+		showErrorMessage(globalFailureMessage);
+
+		die(true, false, false);
 	}
 
 
@@ -340,7 +404,6 @@ void applicationMainTask(void)
 
 	buttonsInit();
 	keyboardInit();
-	rotaryEncoderISR();			//call the ISR once to initialise the variables
 
 	// Operator asked for settings reset.
 	// With the modified frontpanel button Col/Row, it's not
@@ -349,18 +412,10 @@ void applicationMainTask(void)
 
 
 	buttonsCheckButtonsEvent(&buttons, &button_event, false);
-	if (buttons & BUTTON_SK2)
-	{
-		wasRestoringDefaultsettings = true;
-		settingsRestoreDefaultSettings();
-		settingsLoadSettings();
-	}
-	else
-	{
-		wasRestoringDefaultsettings = settingsLoadSettings();
-	}
 
-	displayInit(0x000000, 0xffffff, settingsIsOptionBitSet(BIT_INVERSE_VIDEO));
+	wasRestoringDefaultsettings = settingsLoadSettings(((buttons & BUTTON_SK2) != 0));
+
+	displayInit(settingsIsOptionBitSet(BIT_INVERSE_VIDEO), true);
 	gpioInitDisplay();
 
 	radioPowerOn();
@@ -386,16 +441,14 @@ void applicationMainTask(void)
 
 	soundInitBeepTask();
 
-	lastheardInitList();
+	lastHeardInitList();
 	codeplugInitCaches();
 	dmrIDCacheInit();
 	voicePromptsCacheInit();
 
-	keyboardCheckKeyEvent(&keys, &key_event); // Read keyboard state and event
-
-	if (wasRestoringDefaultsettings || KEYCHECK_DOWN(keys, KEY_HASH))
+	if (wasRestoringDefaultsettings || ((keyboardRead() & KEY_HASH) == KEY_HASH))
 	{
-		enableVoicePromptsIfLoaded(KEYCHECK_DOWN(keys, KEY_HASH));
+		enableVoicePromptsIfLoaded(((keyboardRead() & KEY_HASH) == KEY_HASH));
 	}
 
 	// Need to take care if the user has already been fully notified about the settings update
@@ -406,27 +459,54 @@ void applicationMainTask(void)
 
 	codeplugGetSignallingDTMFDurations(&uiDataGlobal.DTMFContactList.durations);
 
-	uiDataGlobal.dateTimeSecs = getRtcTime_custom();
+#if !defined(PLATFORM_MD9600)
+	if (settingsIsOptionBitSet(BIT_SAFE_POWER_ON) && ((buttons & BUTTON_SK1) != BUTTON_SK1))
+	{
+		powerOffFinalStage(true, true);
+	}
+#endif
 
-	menuSystemInit();
+	menuSystemInit(getRtcTime_custom());
 
-	ticksTimerStart(&apoTimer, ((nonVolatileSettings.apo * 30) * 60000U));
+#if defined(HAS_GPS)
+	gpsInit();
 
-	if (nonVolatileSettings.gps > GPS_MODE_OFF)
+#if defined(LOG_GPS_DATA)
+	if (((keyboardRead() & KEY_5) == KEY_5) && ((buttons & BUTTON_SK1) == BUTTON_SK1))
+	{
+		uiNotificationShow(NOTIFICATION_TYPE_MESSAGE, NOTIFICATION_ID_MESSAGE, 1500, "NMEA Clearing", true);
+		gpsLoggingClear();
+		settingsSet(nonVolatileSettings.gpsLogMemOffset, 0U);
+	}
+#endif
+
+	if (nonVolatileSettings.gps != GPS_MODE_OFF)
 	{
 		gpsOn();
+#if defined(LOG_GPS_DATA)
+		gpsLoggingStart();
+#endif
 	}
 
+#endif
 
-	if (nonVolatileSettings.backlightMode == BACKLIGHT_MODE_MANUAL)
+	ticksTimerStart(&apoTimer, ((nonVolatileSettings.apo * 30) * 60000U));
+	ticksTimerStart(&autolockTimer, (nonVolatileSettings.autolockTimer * 30000U));
+
+	if ((nonVolatileSettings.backlightMode == BACKLIGHT_MODE_MANUAL) || (nonVolatileSettings.backlightMode == BACKLIGHT_MODE_SQUELCH))
 	{
 		displayEnableBacklight(true, 100);
 	}
+
+	aprsBeaconingInit();
+	aprsBeaconingStart();
 
 	/* Infinite loop */
 	for(;;)
 	{
 		uint32_t startTime = ticksGetMillis();
+		bool syntheticEvent = false; // used to not trigger the backlight on faked key/button events
+
 		mainIsRunning = true;
 		keyOrButtonChanged = false;
 
@@ -434,11 +514,34 @@ void applicationMainTask(void)
 		handleTimerCallbacks();
 		batteryUpdate();
 
-		keyboardCheckKeyEvent(&keys, &key_event); // Read keyboard state and event
+		// Ignore any input when APRS is TXing (avoiding changing the channel in the middle of a packet).
+		if ((currentChannelData->aprsConfigIndex == 0) ||
+				((currentChannelData->aprsConfigIndex != 0) && (aprsTxProgress == APRS_TX_IDLE)))
+		{
+			keyboardCheckKeyEvent(&keys, &key_event); // Read keyboard state and event
 
-		buttonsCheckButtonsEvent(&buttons, &button_event, (keys.key != 0)); // Read button state and event
+			buttonsCheckButtonsEvent(&buttons, &button_event, (keys.key != 0)); // Read button state and event
+		}
+		else
+		{
+			if (aprsTxProgress == APRS_TX_FINISHED)
+			{
+				// Force the UI to handle the button release.
+				button_event = EVENT_BUTTON_CHANGE;
+				key_event = EVENT_KEY_CHANGE;
+				keyboardReset();
+				syntheticEvent = true;
+			}
+			else
+			{
+				button_event = EVENT_BUTTON_NONE;
+				key_event = EVENT_KEY_NONE;
+				keyboardReset();
+			}
+		}
 
 		// hack to allow SK1 + Up / Down to be Left / Right
+#if ! (defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)) // top side button IS orange
 		if (buttons & BUTTON_SK1)
 		{
 			bool clearSK1 = false;
@@ -454,7 +557,11 @@ void applicationMainTask(void)
 				clearSK1 = true;
 			}
 */
-			if (keys.key == KEY_GREEN)
+			if ((keys.key == KEY_GREEN)
+#if defined(HAS_COLOURS) // SK1 + GREEN is used in the theme menu to reset theme to default.
+					&& (menuSystemGetCurrentMenuNumber() != MENU_THEME_ITEMS_BROWSER)
+#endif
+			)
 			{
 				// Translate keyboard SK1+GREEN to ORANGE button events
 
@@ -494,6 +601,7 @@ void applicationMainTask(void)
 				}
 			}
 		}
+#endif
 
 		if (((key_event != EVENT_KEY_NONE) && (keys.key != 0)) || (button_event != EVENT_BUTTON_NONE) || (rotary_event != EVENT_ROTARY_NONE))
 		{
@@ -584,7 +692,7 @@ void applicationMainTask(void)
 #if defined(PLATFORM_RD5R)
 					displayFillRect(0, 0, DISPLAY_SIZE_X, 9, true);
 #else
-					displayClearRows(0, 2, false);
+					displayFillRect(0, 0, DISPLAY_SIZE_X, 14, true); // 2 rows are two much (16 pixels), switched to FillRect.
 #endif
 				}
 				uiUtilityRenderHeader(uiVFOModeDualWatchIsScanning(), sweeping);
@@ -598,7 +706,7 @@ void applicationMainTask(void)
 		{
 			if (keypadLocked && ((buttons & BUTTON_PTT) == 0))
 			{
-				if (key_event == EVENT_KEY_CHANGE)
+				if ((key_event == EVENT_KEY_CHANGE) && (syntheticEvent == false))
 				{
 					bool continueToFilterKeys = true;
 
@@ -622,7 +730,7 @@ void applicationMainTask(void)
 						key_event = EVENT_KEY_NONE;
 					}
 
-					if ((nonVolatileSettings.bitfieldOptions & BIT_PTT_LATCH) && PTTToggledDown)
+					if (settingsIsOptionBitSet(BIT_PTT_LATCH) && PTTToggledDown)
 					{
 						PTTToggledDown = false;
 					}
@@ -638,7 +746,7 @@ void applicationMainTask(void)
 
 					button_event = EVENT_BUTTON_NONE;
 
-					if ((nonVolatileSettings.bitfieldOptions & BIT_PTT_LATCH) && PTTToggledDown)
+					if (settingsIsOptionBitSet(BIT_PTT_LATCH) && PTTToggledDown)
 					{
 						PTTToggledDown = false;
 					}
@@ -682,10 +790,17 @@ void applicationMainTask(void)
 			int currentMenu = menuSystemGetCurrentMenuNumber();
 
 			// Longpress RED send back to root menu, it's only available from
-			// any menu but VFO, Channel and CPS
-			if (((currentMenu != UI_CHANNEL_MODE) && (currentMenu != UI_VFO_MODE) && (currentMenu != UI_CPS)) &&
+			// any menu but VFO, Channel, UI_MESSAGE_BOX and CPS
+			if (((currentMenu != UI_CHANNEL_MODE) && (currentMenu != UI_VFO_MODE) && (currentMenu != UI_CPS) && (currentMenu != UI_MESSAGE_BOX)) &&
 					KEYCHECK_LONGDOWN(keys, KEY_RED) && (uiVFOModeIsScanning() == false) && (uiChannelModeIsScanning() == false))
 			{
+				if (currentMenu != MENU_SATELLITE)
+				{
+					// If an option menu is currently running, ensure the
+					// settings copy is reset.
+					resetOriginalSettingsData();
+				}
+
 				uiDataGlobal.currentSelectedContactIndex = 0;
 				menuSystemPopAllAndDisplayRootMenu();
 				soundSetMelody(MELODY_KEY_BEEP);
@@ -705,7 +820,7 @@ void applicationMainTask(void)
 		//
 		// PTT is locked down, but any button, except SK1 or SK2(1750Hz in FM) or DTMF Key in Analog,
 		// or Up/Down with LH on screen in Digital, is pressed, virtually release PTT
-		if (((nonVolatileSettings.bitfieldOptions & BIT_PTT_LATCH) && PTTToggledDown) &&
+		if ((settingsIsOptionBitSet(BIT_PTT_LATCH) && PTTToggledDown) &&
 				(((button_event & EVENT_BUTTON_CHANGE) && (
 #if ! defined(PLATFORM_RD5R)
 						(buttons & BUTTON_ORANGE) ||
@@ -723,7 +838,7 @@ void applicationMainTask(void)
 		}
 
 		// PTT toggle action
-		if (nonVolatileSettings.bitfieldOptions & BIT_PTT_LATCH)
+		if (settingsIsOptionBitSet(BIT_PTT_LATCH))
 		{
 			if (button_event == EVENT_BUTTON_CHANGE)
 			{
@@ -829,8 +944,12 @@ void applicationMainTask(void)
 			}
 			else
 			{
-				displayLightTrigger(true);
+				if (syntheticEvent == false)
+				{
+					displayLightTrigger(true);
+				}
 			}
+
 			if ((buttons & BUTTON_PTT) != 0)
 			{
 				int currentMenu = menuSystemGetCurrentMenuNumber();
@@ -888,9 +1007,16 @@ void applicationMainTask(void)
 						// changed since last above calls
 						if (menuSystemGetCurrentMenuNumber() != UI_MESSAGE_BOX)
 						{
-							rxPowerSavingSetState(ECOPHASE_POWERSAVE_INACTIVE);
+							if (currentChannelData->txFreq != 0)
+							{
+								rxPowerSavingSetState(ECOPHASE_POWERSAVE_INACTIVE);
 
-							menuSystemPushNewMenu(UI_TX_SCREEN);
+								menuSystemPushNewMenu(UI_TX_SCREEN);
+							}
+							else
+							{
+								soundSetMelody(MELODY_NACK_BEEP);
+							}
 						}
 						else
 						{
@@ -1040,9 +1166,9 @@ void applicationMainTask(void)
 								}
 
 								// Contact has a TS override set
-								if ((currentContactData.reserve1 & 0x01) == 0x00)
+								if ((currentContactData.reserve1 & CODEPLUG_CONTACT_FLAG_NO_TS_OVERRIDE) == 0x00)
 								{
-									int ts = ((currentContactData.reserve1 & 0x02) >> 1);
+									int ts = ((currentContactData.reserve1 & CODEPLUG_CONTACT_FLAG_TS_OVERRIDE_TIMESLOT_MASK) >> 1);
 									trxSetDMRTimeSlot(ts, true);
 									tsSetManualOverride(((menuSystemGetRootMenuNumber() == UI_CHANNEL_MODE) ? CHANNEL_CHANNEL : (CHANNEL_VFO_A + nonVolatileSettings.currentVFONumber)), (ts + 1));
 								}
@@ -1060,7 +1186,7 @@ void applicationMainTask(void)
 		ev.buttons = buttons;
 		ev.keys = keys;
 		ev.rotary = rotary;
-		ev.events = function_event | (button_event << 1) | (rotary_event << 3) | key_event;
+		ev.events = function_event | (button_event << 1) | (rotary_event << 3) | key_event | (syntheticEvent ? SYNTHETIC_EVENT : 0);
 		ev.hasEvent = keyOrButtonChanged || (function_event != NO_EVENT);
 		ev.time = ticksGetMillis();
 
@@ -1090,11 +1216,7 @@ void applicationMainTask(void)
 			ev.hasEvent = false;
 		}
 
-
-
-
 		menuSystemCallCurrentMenuTick(&ev);
-
 
 		// Restore the beep built when a menu was pushed by the quickkey above.
 		if (quickkeyPushedMenuMelody)
@@ -1133,12 +1255,31 @@ void applicationMainTask(void)
 			uiNotificationHide(true);
 		}
 
-		batteryChecking();
+		batteryChecking(&ev);
 
 #if !defined(PLATFORM_GD77S)
 		// APO checkings
 		apoTick((keyOrButtonChanged || (function_event != NO_EVENT) ||
 				(settingsIsOptionBitSet(BIT_APO_WITH_RF) ? (getAudioAmpStatus() & AUDIO_AMP_MODE_RF) : false)));
+
+		// Autolock trigger/reset
+		if (ticksTimerIsEnabled(&autolockTimer))
+		{
+			if (((keyOrButtonChanged || (function_event != NO_EVENT)) && (syntheticEvent == false)) || // key event resets the timer
+					((currentMenu != UI_CHANNEL_MODE) && (currentMenu != UI_VFO_MODE))) // and could only auto locks while in Channel/VFO menus
+			{
+				ticksTimerStart(&autolockTimer, (nonVolatileSettings.autolockTimer * 30000U));
+			}
+			else
+			{
+				if (ticksTimerHasExpired(&autolockTimer))
+				{
+					keypadLocked = PTTLocked = true;
+					ticksTimerReset(&autolockTimer);
+					uiNotificationShow(NOTIFICATION_TYPE_MESSAGE, NOTIFICATION_ID_MESSAGE, 1000, currentLanguage->auto_lock, true);
+				}
+			}
+		}
 #endif
 
 		if (((nonVolatileSettings.backlightMode == BACKLIGHT_MODE_AUTO)
@@ -1162,22 +1303,56 @@ void applicationMainTask(void)
 		soundTickMelody();
 		voxTick();
 		gpsTick();
+		aprsBeaconingTick(&ev);
 		settingsSaveIfNeeded(false);
-		if (!trxTransmissionEnabled && !trxIsTransmitting)
+
+		if (((trxTransmissionEnabled || trxIsTransmitting) == false))
 		{
+#if ! defined(PLATFORM_GD77S)
+			// We got a position fix now, start daytime timer
+			if (currentMenu != MENU_DISPLAY)
+			{
+				if (settingsIsOptionBitSet(BIT_AUTO_NIGHT) && (ticksTimerIsEnabled(&daytimeThemeTimer) == false) &&
+						(nonVolatileSettings.locationLat != SETTINGS_UNITIALISED_LOCATION_LAT))
+				{
+					daytimeThemeChangeUpdate(false);
+				}
+
+				if (ticksTimerIsEnabled(&daytimeThemeTimer) && ticksTimerHasExpired(&daytimeThemeTimer))
+				{
+					daytimeThemeTick();
+
+					ticksTimerStart(&daytimeThemeTimer, DAYTIME_THEME_TIMER_INTERVAL);
+				}
+			}
+#endif
+
 			rxPowerSavingTick(&ev, hasSignal);
 		}
-		int latestVolume = getVolumeControl();
+
+		int8_t latestVolume = getVolumeControl();
 		if (latestVolume != lastVolume)
 		{
+			volumeIsStillChanging = true;
+
 			lastVolume = latestVolume;
-			HRC6000SetDmrRxGain(latestVolume);
-			//USB_DEBUG_printf("%d\n",s);
+
+			ticksTimerStart(&volumeControlTimer, VOLUME_UPDATE_TIMEOUT);
+
+			if (abs(lastDisplayedVolume - lastVolume) >= 6)
+			{
+				updateVolumeGain(currentMenu);
+			}
+		}
+		else if (volumeIsStillChanging && ticksTimerHasExpired(&volumeControlTimer))
+		{
+			volumeIsStillChanging = false;
+			updateVolumeGain(currentMenu);
 		}
 
 		while(ticksGetMillis() < startTime + 1)				// ensure this Task runs at 1ms intervals. Regardless of clock speed.
 		{
-		vTaskDelay(0);
+			vTaskDelay(0);
 		}
 	}
 }

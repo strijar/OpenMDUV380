@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2020-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -31,27 +31,29 @@
 #include "functions/sound.h"
 #include "functions/settings.h"
 #include "functions/ticks.h"
+#include "interfaces/batteryAndPowerManagement.h" // for micLevel decl
 #include "utils.h"
 
-
 #define PIT_COUNTS_PER_MS  1U
+#define VOX_UPDATE_MS 4U
 
 
-static const uint32_t VOX_TAIL_TIME_UNIT = (PIT_COUNTS_PER_MS * 500); // 500ms tail unit
-static const uint16_t VOX_SETTLE_TIME = 4000; // Countdown before doing first real sampling;
+static const uint32_t VOX_TAIL_TIME_UNIT = (PIT_COUNTS_PER_MS * 500U); // 500ms tail unit
+static const uint16_t VOX_SETTLE_TIME = (6000U / VOX_UPDATE_MS); // Countdown before doing first real sampling;
 
 typedef struct
 {
-	bool     triggered;
-	uint8_t  preTrigger;
-	uint8_t  threshold; // threshold is a super low value, 8 bits are enough
-	uint16_t sampled;
-	uint16_t averaged;
-	uint16_t noiseFloor;
+	uint16_t     sampled;
+	uint16_t     averaged;
+	uint16_t     noiseFloor;
+	uint16_t     sampledNoise;
 	ticksTimer_t nextTimeSamplingTimer;
-	uint8_t  tailUnits;
+	ticksTimer_t preTriggeringTimer;
 	ticksTimer_t tailTimer;
-	uint16_t settleCount;
+	uint16_t     settleCount;
+	uint8_t      threshold; // threshold is a super low value, 8 bits are enough
+	uint8_t      tailUnits;
+	bool         triggered;
 } voxData_t;
 
 static voxData_t vox;
@@ -59,9 +61,9 @@ static voxData_t vox;
 void voxInit(void)
 {
 	voxReset();
-	vox.threshold = 0;
-	vox.noiseFloor = 0;
-	vox.tailUnits = 1;
+	vox.threshold = 0U;
+	vox.noiseFloor = 0U;
+	vox.tailUnits = 1U;
 	vox.settleCount = VOX_SETTLE_TIME;
 }
 
@@ -77,7 +79,7 @@ void voxSetParameters(uint8_t threshold, uint8_t tailHalfSecond)
 
 bool voxIsEnabled(void)
 {
-	return (codeplugChannelIsFlagSet(currentChannelData, CHANNEL_FLAG_VOX) && (settingsUsbMode != USB_MODE_HOTSPOT));
+	return ((codeplugChannelGetFlag(currentChannelData, CHANNEL_FLAG_VOX) != 0) && (settingsUsbMode != USB_MODE_HOTSPOT));
 }
 
 bool voxIsTriggered(void)
@@ -88,83 +90,81 @@ bool voxIsTriggered(void)
 void voxReset(void)
 {
 	vox.triggered = false;
-	vox.sampled = 0;
-	vox.averaged = 0;
-	ticksTimerStart(&vox.nextTimeSamplingTimer, PIT_COUNTS_PER_MS); // now + 1ms
+	vox.sampled = 0U;
+	vox.averaged = 0U;
+	ticksTimerStart(&vox.nextTimeSamplingTimer, VOX_UPDATE_MS);
 	ticksTimerReset(&vox.tailTimer);
-	vox.settleCount = VOX_SETTLE_TIME >> 1;
-	vox.preTrigger = 0;
+	ticksTimerReset(&vox.preTriggeringTimer);
+	vox.settleCount = (VOX_SETTLE_TIME >> 1);
+	vox.sampledNoise = 0U;
 }
 
 void voxTick(void)
 {
-	static uint16_t sampledNoise = 0;
-	static bool noiseFloorValid = false;
-	static int noiseCount = 0;
-
 	if (voxIsEnabled())
 	{
 		if (ticksTimerHasExpired(&vox.nextTimeSamplingTimer))
 		{
-			if ((getAudioAmpStatus() & (AUDIO_AMP_MODE_RF | AUDIO_AMP_MODE_BEEP)))
+			if ((getAudioAmpStatus() & (AUDIO_AMP_MODE_RF | AUDIO_AMP_MODE_BEEP | AUDIO_AMP_MODE_PROMPT)))
 			{
 				voxReset();
 			}
 			else
 			{
-				uint16_t sample = adcGetVOX();
+				uint16_t sample = micLevel; // NOTE: not using adcGetVOX(), but direct (and valid) ADC value.
 
 				if (vox.settleCount > 0)
 				{
 					vox.settleCount--;
-					noiseFloorValid = false;
 					return;
 				}
 
+				vox.sampled += sample;
+				vox.averaged = (vox.sampled + (1 << (2 - 1))) >> 2;
+				vox.sampled -= vox.averaged;
 
-
-					vox.sampled += sample;
-					vox.averaged = (vox.sampled + (1 << (2 - 1))) >> 2;
-					vox.sampled -= vox.averaged;
-
-				if ((vox.averaged >= (vox.noiseFloor + vox.threshold)) & noiseFloorValid)
+				if ((vox.averaged > 0) && (vox.noiseFloor > 0) && (vox.averaged >= (vox.noiseFloor + vox.threshold)))
 				{
-					vox.preTrigger = SAFE_MIN((vox.preTrigger + 1), 100);
+					if (ticksTimerIsEnabled(&vox.preTriggeringTimer) == false)
+					{
+						ticksTimerStart(&vox.preTriggeringTimer, 100U);
+					}
 
-					// We need 100ms of level above the noise to trigger the VOX
-					if (vox.preTrigger >= 100)
+					// We need at least 100ms of level above the noise to trigger the VOX
+					if (ticksTimerHasExpired(&vox.preTriggeringTimer))
 					{
 						vox.triggered = true;
-						ticksTimerStart(&vox.tailTimer, (vox.tailUnits * VOX_TAIL_TIME_UNIT));
+						ticksTimerStart(&vox.tailTimer, ((vox.tailUnits * VOX_TAIL_TIME_UNIT) + VOX_UPDATE_MS));
 					}
 				}
 				else
 				{
+					// it was pre-triggered, but not long enough to trigger the vox, reset the pre-trigger timer
+					if (ticksTimerIsEnabled(&vox.preTriggeringTimer) && ticksTimerHasExpired(&vox.preTriggeringTimer) && (vox.triggered == false))
+					{
+						ticksTimerReset(&vox.preTriggeringTimer);
+					}
+
 					// Noise is sampled all the time, when the transceiver is silent, and not XMitting
-					if (vox.triggered == false)
+					// Except when it's pre-trigged
+					if (ticksTimerIsEnabled(&vox.preTriggeringTimer) == false)
 					{
 						// Noise floor averaging
-						sampledNoise += sample;
-						noiseCount++;
-						if(noiseCount == 1000)
-						{
-							vox.noiseFloor = sampledNoise/noiseCount;
-							sampledNoise=0;
-							noiseFloorValid = true;
-							noiseCount=0;
-						}
+						vox.sampledNoise += sample;
+						vox.noiseFloor = (vox.sampledNoise + (1 << (2 - 1))) >> 2;
+						vox.sampledNoise -= vox.noiseFloor;
 					}
 				}
 			}
 
-			ticksTimerStart(&vox.nextTimeSamplingTimer, PIT_COUNTS_PER_MS); // now + 1ms
+			ticksTimerStart(&vox.nextTimeSamplingTimer, VOX_UPDATE_MS);
 		}
 
-		if ((vox.tailTimer.timeout != 0) && ticksTimerHasExpired(&vox.tailTimer))
+		if (ticksTimerIsEnabled(&vox.tailTimer) && ticksTimerHasExpired(&vox.tailTimer))
 		{
 			vox.triggered = false;
 			ticksTimerReset(&vox.tailTimer);
-			vox.preTrigger = 0;
+			ticksTimerReset(&vox.preTriggeringTimer);
 		}
 	}
 
@@ -172,5 +172,4 @@ void voxTick(void)
 	{
 		voxReset();
 	}
-
 }

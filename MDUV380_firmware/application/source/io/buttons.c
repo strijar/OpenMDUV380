@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2020-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -107,7 +107,7 @@ static void checkMButtonState(uint32_t *buttons, MBUTTON_t mbutton, uint32_t but
 	}
 }
 
-static uint32_t buttonsRead()
+uint32_t buttonsRead(void)
 {
 	GPIO_InitTypeDef GPIO_InitStruct = {0};
 	uint32_t result = BUTTON_NONE;
@@ -116,7 +116,11 @@ static uint32_t buttonsRead()
 	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
 	GPIO_InitStruct.Pull = GPIO_PULLDOWN;
 
-	GPIO_InitStruct.Pin = LCD_D6_Pin | LCD_D7_Pin;
+	GPIO_InitStruct.Pin =
+#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+			LCD_D5_Pin |
+#endif
+			LCD_D6_Pin | LCD_D7_Pin;
 	HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
 	// Set ROW2 (K3) in OUTPUT mode, as keyboard code sets it to floating (avoiding Multiple key press combination problems).
@@ -134,15 +138,18 @@ static uint32_t buttonsRead()
 		// arbitrary settling delay
 	}
 
-#if defined (PLATFORM_MDUV380)
+#if defined(PLATFORM_MDUV380)
 	if (HAL_GPIO_ReadPin(LCD_D7_GPIO_Port, LCD_D7_Pin) == GPIO_PIN_SET)
-#elif defined (PLATFORM_DM1701)
+#elif defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017) // Top side button -> ORANGE
 	if (HAL_GPIO_ReadPin(LCD_D5_GPIO_Port, LCD_D5_Pin) == GPIO_PIN_SET)
 #endif
 	{
 #if defined(PLATFORM_MD380)
 		result |= BUTTON_SK2;
 		checkMButtonState(&result, MBUTTON_SK2, BUTTON_SK2);
+#elif defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+		result |= BUTTON_ORANGE;
+		checkMButtonState(&result, MBUTTON_ORANGE, BUTTON_ORANGE);
 #else
 		result |= BUTTON_SK1;
 		checkMButtonState(&result, MBUTTON_SK1, BUTTON_SK1);
@@ -159,6 +166,14 @@ static uint32_t buttonsRead()
 		checkMButtonState(&result, MBUTTON_SK2, BUTTON_SK2);
 #endif
 	}
+
+#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+	if (HAL_GPIO_ReadPin(LCD_D7_GPIO_Port, LCD_D7_Pin) == GPIO_PIN_SET)
+	{
+		result |= BUTTON_SK1;
+		checkMButtonState(&result, MBUTTON_SK1, BUTTON_SK1);
+	}
+#endif
 
 	//set the row2 pin back to floating. This prevents conflicts between multiple key presses.
 	GPIO_InitStruct.Pin = KEYPAD_ROW2_Pin;
@@ -267,7 +282,7 @@ void buttonsCheckButtonsEvent(uint32_t *buttons, int *event, bool keyIsDown)
 			// Clear stored states
 			setMButtonsStateAndClearLong(buttons, MBUTTON_SK1, BUTTON_SK1);
 			setMButtonsStateAndClearLong(buttons, MBUTTON_SK2, BUTTON_SK2);
-#if ! (defined(PLATFORM_RD5R) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017))
+#if ! (defined(PLATFORM_RD5R) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380))
 			setMButtonsStateAndClearLong(buttons, MBUTTON_ORANGE, BUTTON_ORANGE);
 #endif
 
@@ -287,7 +302,7 @@ void buttonsCheckButtonsEvent(uint32_t *buttons, int *event, bool keyIsDown)
 					// Clear stored states
 					setMButtonsStateAndClearLong(buttons, MBUTTON_SK1, BUTTON_SK1);
 					setMButtonsStateAndClearLong(buttons, MBUTTON_SK2, BUTTON_SK2);
-#if ! (defined(PLATFORM_RD5R) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017))
+#if ! (defined(PLATFORM_RD5R) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380))
 					setMButtonsStateAndClearLong(buttons, MBUTTON_ORANGE, BUTTON_ORANGE);
 #endif
 					prevButtonState = *buttons;
@@ -302,7 +317,7 @@ void buttonsCheckButtonsEvent(uint32_t *buttons, int *event, bool keyIsDown)
 	}
 
 	// Check state for every single button
-#if ! (defined(PLATFORM_RD5R) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017))
+#if ! (defined(PLATFORM_RD5R) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380))
 	checkMButtons(buttons, MBUTTON_ORANGE, BUTTON_ORANGE, BUTTON_ORANGE_SHORT_UP, BUTTON_ORANGE_LONG_DOWN, BUTTON_ORANGE_EXTRA_LONG_DOWN);
 #endif // ! PLATFORM_RD5R
 	checkMButtons(buttons, MBUTTON_SK1, BUTTON_SK1, BUTTON_SK1_SHORT_UP, BUTTON_SK1_LONG_DOWN, BUTTON_SK1_EXTRA_LONG_DOWN);

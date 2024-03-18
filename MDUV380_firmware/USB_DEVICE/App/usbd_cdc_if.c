@@ -25,6 +25,10 @@
 /* USER CODE BEGIN INCLUDE */
 #include "usb/usb_com.h"
 #include "functions/hotspot.h"
+#if defined(HAS_GPS)
+#include "user_interface/uiGlobals.h"
+#include "interfaces/gps.h"
+#endif
 /* USER CODE END INCLUDE */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -415,6 +419,19 @@ static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
 							{
 								if (recvSize >= 3) // The shortest MMDVMHost frame length is 3U
 								{
+#if defined(HAS_GPS)
+									// Turn NMEA output off as soon as possible.
+									// The UI code will do more
+									if (nonVolatileSettings.gps >= GPS_MODE_ON_NMEA)
+									{
+#if defined(LOG_GPS_DATA)
+										gpsLoggingStop();
+#endif
+										gpsDataInputStartStop(false);
+										(void)USBD_LL_FlushEP(&hUsbDeviceFS, CDC_OUT_EP);
+									}
+#endif
+
 									// We can't rely on the MMDVMHost's frame size, so we're managing
 									// the block size ourselves.
 									mmdvmLen = recvSize + 1;

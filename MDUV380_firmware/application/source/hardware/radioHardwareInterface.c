@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2021-2023 Roger Clark, VK3KYY / G4KYF
  *
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions
@@ -49,7 +49,6 @@ const uint16_t HRC_CTCSSTones[] =
 		22910, 25410
 };
 #endif
-static bool audioPathFromFM = true;
 
 
 // AT-1846 native values for Rx
@@ -89,8 +88,8 @@ static const uint8_t DCS_PACKED_DATA[(DCS_PACKED_DATA_NUM * DCS_PACKED_DATA_ENTR
 void radioPowerOn(void)
 {
 	//Turn off Tx Voltages to prevent transmission.
-	HAL_GPIO_WritePin(PA_EN_1_GPIO_Port,PA_EN_1_Pin, GPIO_PIN_RESET);
-	HAL_GPIO_WritePin(PA_EN_2_GPIO_Port,PA_EN_2_Pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(PA_EN_1_GPIO_Port, PA_EN_1_Pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(PA_EN_2_GPIO_Port, PA_EN_2_Pin, GPIO_PIN_RESET);
 
 	//Turn on all receiver voltages. (thats what the TYT firmware does, both receivers are on together)
 
@@ -109,19 +108,19 @@ void radioPowerOn(void)
 
 	//Turn on the Microphone power
 
-	HAL_GPIO_WritePin(MICPWR_SW_GPIO_Port,MICPWR_SW_Pin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(MICPWR_SW_GPIO_Port, MICPWR_SW_Pin, GPIO_PIN_SET);
 }
 
 void radioPowerOff(bool invalidateFrequency)
 {
 	//turn off all of the transmitter and receiver voltages
-	HAL_GPIO_WritePin(PA_EN_1_GPIO_Port,PA_EN_1_Pin, GPIO_PIN_RESET);
-	HAL_GPIO_WritePin(PA_EN_2_GPIO_Port,PA_EN_2_Pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(PA_EN_1_GPIO_Port, PA_EN_1_Pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(PA_EN_2_GPIO_Port, PA_EN_2_Pin, GPIO_PIN_RESET);
 
-	HAL_GPIO_WritePin(R5_V_SW_GPIO_Port,R5_V_SW_Pin, GPIO_PIN_RESET);
-	HAL_GPIO_WritePin(R5_U_SW_GPIO_Port,R5_U_SW_Pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(R5_V_SW_GPIO_Port, R5_V_SW_Pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(R5_U_SW_GPIO_Port, R5_U_SW_Pin, GPIO_PIN_RESET);
 
-	HAL_GPIO_WritePin(MICPWR_SW_GPIO_Port,MICPWR_SW_Pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(MICPWR_SW_GPIO_Port, MICPWR_SW_Pin, GPIO_PIN_RESET);
 
 	HAL_GPIO_WritePin(C6000_PWD_GPIO_Port, C6000_PWD_Pin, GPIO_PIN_SET);// Power Down the C6000
 
@@ -129,12 +128,12 @@ void radioPowerOff(bool invalidateFrequency)
 	if (currentBandWidthIs25kHz)
 	{
 		// 25 kHz settings
-		radioWriteReg2byte( 0x30, 0x70, 0x06); // RX off
+		radioWriteReg2byte(0x30, 0x70, 0x06); // RX off
 	}
 	else
 	{
 		// 12.5 kHz settings
-		radioWriteReg2byte( 0x30, 0x40, 0x06); // RX off
+		radioWriteReg2byte(0x30, 0x40, 0x06); // RX off
 	}
 
 	if (invalidateFrequency)
@@ -161,7 +160,6 @@ void radioSetBandwidth(bool Is25K)
 
 void radioSetMode(int mode) // Called withing trx.c: in task critical sections
 {
-
 	if (mode == RADIO_MODE_ANALOG)
 	{
 		HRC6000SetFMRx();
@@ -175,10 +173,8 @@ void radioSetMode(int mode) // Called withing trx.c: in task critical sections
 
 void radioReadVoxAndMicStrength(void)
 {
-
 	trxTxVox = adcGetVOX();					//MDUV380 Mic is not connected to AT1846 but has dedicated ADC channel like MD9600
 	trxTxMic = trxTxVox;					//MDUV380 doesn't have separate Signals so use Vox for both.
-
 }
 
 static void trxUpdateAT1846SCalibration(void)
@@ -186,18 +182,16 @@ static void trxUpdateAT1846SCalibration(void)
 //Nothing needed on the MDUV380
 }
 
-
 void radioSetFrequency(uint32_t f_in, bool Tx)
 {
-
-// G4EML.  Hack to fix the -3KHz offset on transmit on the MDUV380
-// Believed to be caused by something in the AT1846S configuration.
-// If we ever fix what is causing it then this hack can be removed.
+	// G4EML.  Hack to fix the -3KHz offset on transmit on the MDUV380
+	// Believed to be caused by something in the AT1846S configuration.
+	// If we ever fix what is causing it then this hack can be removed.
 	if(Tx)
 	{
-		f_in=f_in+300;				//add 3Khz to Tx frequency
+		f_in = f_in + 300; //add 3Khz to Tx frequency
 	}
-//
+	//
 
 	if (currentChannelData->libreDMR_Power != 0x00)
 	{
@@ -237,28 +231,28 @@ void radioSetFrequency(uint32_t f_in, bool Tx)
 	if (currentBandWidthIs25kHz)
 	{
 		// 25 kHz settings
-		radioWriteReg2byte( 0x30, 0x70, 0x06); // RX off
+		radioWriteReg2byte(0x30, 0x70, 0x06); // RX off
 	}
 	else
 	{
 		// 12.5 kHz settings
-		radioWriteReg2byte( 0x30, 0x60, 0x06); // RX off
+		radioWriteReg2byte(0x30, 0x60, 0x06); // RX off
 	}
-	radioWriteReg2byte( 0x05, 0x87, 0x63); // select 'normal' frequency mode
+	radioWriteReg2byte(0x05, 0x87, 0x63); // select 'normal' frequency mode
 
-	radioWriteReg2byte( 0x29, fh_h, fh_l);
-	radioWriteReg2byte( 0x2a, fl_h, fl_l);
-	radioWriteReg2byte( 0x49, 0x0C, 0x15); // setting SQ open and shut threshold
+	radioWriteReg2byte(0x29, fh_h, fh_l);
+	radioWriteReg2byte(0x2a, fl_h, fl_l);
+	radioWriteReg2byte(0x49, 0x0C, 0x15); // setting SQ open and shut threshold
 
 	if (currentBandWidthIs25kHz)
 	{
 		// 25 kHz settings
-		radioWriteReg2byte( 0x30, 0x70, 0x26); // RX on
+		radioWriteReg2byte(0x30, 0x70, 0x26); // RX on
 	}
 	else
 	{
 		// 12.5 kHz settings
-		radioWriteReg2byte( 0x30, 0x60, 0x26); // RX on
+		radioWriteReg2byte(0x30, 0x60, 0x26); // RX on
 	}
 
 	trxUpdateAT1846SCalibration();
@@ -279,7 +273,6 @@ void radioSetIF(int band, bool wide)
 	radioSetBandwidth(wide);
 }
 
-
 void radioSetTx(uint8_t band)
 {
 	//Turn off receiver voltages. (thats what the TYT firmware does, both receivers are on or off together)
@@ -294,11 +287,11 @@ void radioSetTx(uint8_t band)
 
 		if (currentBandWidthIs25kHz)
 		{
-			radioWriteReg2byte( 0x30, 0x70, 0x46); // 25 kHz settings // RX on
+			radioWriteReg2byte(0x30, 0x70, 0x46); // 25 kHz settings // RX on
 		}
 		else
 		{
-			radioWriteReg2byte( 0x30, 0x60, 0x46); // 12.5 kHz settings // RX on
+			radioWriteReg2byte(0x30, 0x60, 0x46); // 12.5 kHz settings // RX on
 		}
 
 		trxSelectVoiceChannel(AT1846_VOICE_CHANNEL_MIC);// For 1750 tone burst
@@ -309,7 +302,7 @@ void radioSetTx(uint8_t band)
 	{
 		HRC6000SetDMR();
 
-		radioWriteReg2byte( 0x30, 0x60, 0xC6); // Digital Tx
+		radioWriteReg2byte(0x30, 0x60, 0xC6); // Digital Tx
 
 	}
 
@@ -334,17 +327,15 @@ void radioSetTx(uint8_t band)
 //just enable or disable the RF output . doesn't change back to receive
 void radioFastTx(bool tx)
 {
-
 	if(tx)
 	{
-		radioWriteReg2byte( 0x30, 0x60, 0xC6); // Digital Tx
+		radioWriteReg2byte(0x30, 0x60, 0xC6); // Digital Tx
 
 		HAL_GPIO_WritePin(PA_EN_1_GPIO_Port, PA_EN_1_Pin, GPIO_PIN_SET);
 		HAL_GPIO_WritePin(PA_EN_2_GPIO_Port, PA_EN_2_Pin, GPIO_PIN_SET);
 	}
 	else
 	{
-
 		//Turn off Tx Voltages to prevent transmission.
 
 		HAL_GPIO_WritePin(PA_EN_1_GPIO_Port, PA_EN_1_Pin, GPIO_PIN_RESET);
@@ -353,12 +344,12 @@ void radioFastTx(bool tx)
 		if (currentBandWidthIs25kHz)
 		{
 			// 25 kHz settings
-			radioWriteReg2byte( 0x30, 0x70, 0x26); // RX on
+			radioWriteReg2byte(0x30, 0x70, 0x26); // RX on
 		}
 		else
 		{
 			// 12.5 kHz settings
-			radioWriteReg2byte( 0x30, 0x60, 0x26); // RX on
+			radioWriteReg2byte(0x30, 0x60, 0x26); // RX on
 		}
 	}
 }
@@ -392,12 +383,12 @@ void radioSetRx(uint8_t band)
 	if (currentBandWidthIs25kHz)
 	{
 		// 25 kHz settings
-		radioWriteReg2byte( 0x30, 0x70, 0x26); // RX on
+		radioWriteReg2byte(0x30, 0x70, 0x26); // RX on
 	}
 	else
 	{
 		// 12.5 kHz settings
-		radioWriteReg2byte( 0x30, 0x60, 0x26); // RX on
+		radioWriteReg2byte(0x30, 0x60, 0x26); // RX on
 	}
 
 	if (trxGetMode() == RADIO_MODE_ANALOG)
@@ -414,7 +405,8 @@ void radioSetRx(uint8_t band)
 void radioReadRSSIAndNoiseForBand(uint8_t band)
 {
 	uint8_t val1, val2;
-	(void) band;// not band specific on the MDUV380
+
+	UNUSED_PARAMETER(band);// not band specific on the MDUV380
 
 	if (rxPowerSavingIsRxOn())
 	{
@@ -565,7 +557,17 @@ bool radioCheckCSS(void)
 
 void radioSetTone1(int tonefreq)
 {
-	HRC6000SendTone(tonefreq);
+	if(tonefreq > 0)
+	{
+		trxSelectVoiceChannel(AT1846_VOICE_CHANNEL_TONE1);	//configure AT1846S for tone
+		HRC6000SetMic(false);								//mute the microphone while sending tone.
+	}
+	else
+	{
+		trxSelectVoiceChannel(AT1846_VOICE_CHANNEL_MIC);	//reset At1846S
+		HRC6000SetMic(true);								//enable the mic
+	}
+	AT1846SWriteTone1Reg(tonefreq * 10);
 }
 
 void radioSetMicGainFM(uint8_t gain)
@@ -575,22 +577,13 @@ void radioSetMicGainFM(uint8_t gain)
 
 void radioAudioAmp(bool on)
 {
-	HAL_GPIO_WritePin(AUDIO_AMP_EN_GPIO_Port, AUDIO_AMP_EN_Pin, on?GPIO_PIN_SET:GPIO_PIN_RESET);				//Turn on the audio amp.
-	HAL_GPIO_WritePin(SPK_MUTE_GPIO_Port, SPK_MUTE_Pin, on?GPIO_PIN_RESET:GPIO_PIN_SET);						//Unmute the speaker
+	HAL_GPIO_WritePin(AUDIO_AMP_EN_GPIO_Port, AUDIO_AMP_EN_Pin, (on ? GPIO_PIN_SET : GPIO_PIN_RESET));				//Turn on the audio amp.
+	HAL_GPIO_WritePin(SPK_MUTE_GPIO_Port, SPK_MUTE_Pin, (on ? GPIO_PIN_RESET : GPIO_PIN_SET));						//Unmute the speaker
 }
 
 void radioSetAudioPath(bool fromFM)
 {
-	audioPathFromFM = fromFM;
-	if(audioPathFromFM)
-	{
-	   HRC6000SetFmAudio(true);
-	}
-	else
-	{
-	   HRC6000SetFmAudio(false);
-	}
+	HRC6000SetFmAudio(fromFM);
 }
-
 
 

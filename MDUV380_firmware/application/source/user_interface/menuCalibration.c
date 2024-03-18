@@ -32,40 +32,106 @@
 #include "interfaces/wdog.h"
 #include "utils.h"
 #include "functions/rxPowerSaving.h"
-#include "hardware/radioHardwareInterface.h"
+
 
 static void updateScreen(bool isFirstRun);
 static void handleEvent(uiEvent_t *ev);
-void setRefOscTemp(uint8_t cal);
-void setDACTemp(uint8_t cal);
+static void setRefOscTemp(int8_t cal);
+static void setDACTemp(uint8_t freqIndex, uint8_t powerIndex);
+static void terminateTransmission(void);
+static void applySettings(bool sk2Down);
+static void exitCallback(void *data);
 
 
-static uint8_t freqIndex = 0;
-static int calFreq[] = {13600000,14550000,15500000,16450000,17400000,40000000,41000000,42000000,43000000,44000000,45000000,46000000,47000000,48000000};
 #define NO_OF_CAL_FREQS 14
+static uint8_t freqIndex = 0;
+static int calFreq[NO_OF_CAL_FREQS] =
+{
+		13600000, 14550000, 15500000, 16450000, 17400000,
+		40000000, 41000000, 42000000, 43000000, 44000000,
+		45000000, 46000000, 47000000, 48000000
+};
 
-static uint8_t powerIndex = 0;
-static uint8_t calPower[] = {250,1,2,4};				//power calibration is done at the 250mW 1W 2W and 4W levels
 #define NO_OF_POWER_LEVELS 4
+static uint8_t powerIndex = 0;
+#if defined(PLATFORM_MD9600)
+static const uint8_t calPower[NO_OF_POWER_LEVELS] = { 5, 10, 25, 40 };
+#else
+static const uint8_t calPower[NO_OF_POWER_LEVELS] = { 250, 1, 2, 4 };
+#endif
 
-static uint8_t oscTune[2];						//VHF and UHF osccilator tuning values
-
-
+static int8_t oscTune[2];						//VHF and UHF oscillator tuning values
 static uint8_t powerSetting[NO_OF_CAL_FREQS][NO_OF_POWER_LEVELS];
-
+#ifdef MD9600_ONLY__UNUSED_RX_TUNING
+static uint8_t rxTuning[NO_OF_CAL_FREQS];
+#endif
 static bool calIsTransmitting = false;
-static bool factoryReset = false;
 
 static menuStatus_t menuOptionsExitCode = MENU_STATUS_SUCCESS;
-enum CALIBRATION_MENU_LIST
+enum
 {
 	CALIBRATION_MENU_CAL_FREQUENCY = 0U,
 	CALIBRATION_MENU_POWER_LEVEL,
 	CALIBRATION_MENU_POWER_SET,
-	CALIBRATION_MENU_REF_OSC,
+#ifdef MD9600_ONLY__UNUSED_RX_TUNING
+	CALIBRATION_MENU_RX_TUNE_SET,
+#endif
+	CALIBRATION_MENU_REF_OSC_VHF,
+	CALIBRATION_MENU_REF_OSC_UHF,
 	CALIBRATION_MENU_FACTORY,
 	NUM_CALIBRATION_MENU_ITEMS
 };
+
+typedef enum
+{
+	CALIBRATION_MENU_PAGE_POWER = 0,
+#ifdef MD9600_ONLY__UNUSED_RX_TUNING
+	CALIBRATION_MENU_PAGE_RX_TUNE,
+#endif
+	CALIBRATION_MENU_CAL_PAGE_FREQUENCY_VHF,
+	CALIBRATION_MENU_CAL_PAGE_FREQUENCY_UHF,
+	CALIBRATION_MENU_PAGE_FACTORY_RESET,
+	NUM_CALIBRATION_MENU_PAGES
+} CalibrationMenuPageList_t;
+
+static const int PAGE_ITEMS_OFFSET[] =
+{
+		CALIBRATION_MENU_CAL_FREQUENCY,
+		CALIBRATION_MENU_REF_OSC_VHF,
+		CALIBRATION_MENU_REF_OSC_UHF,
+		CALIBRATION_MENU_FACTORY
+};
+
+static CalibrationMenuPageList_t pageNumber = CALIBRATION_MENU_PAGE_POWER;
+static int numOptionsOnCurrentPage;
+
+//#define HAS_DUMPS_CALIBRATION_TABLE 1
+#if defined(HAS_DUMPS_CALIBRATION_TABLE)
+static void dumpCalibrationTable(void)
+{
+	USB_DEBUG_printf("--Power Calibration Table---\n");
+
+	for (int f = 0; f < NO_OF_CAL_FREQS; f++)
+	{
+		int val_before_dp = calFreq[f] / 100000;
+		int val_after_dp = (calFreq[f] - (val_before_dp * 100000)) / 100;
+
+		USB_DEBUG_printf("%d.%03d MHz\n", val_before_dp, val_after_dp);
+
+		for (int p = 0; p < NO_OF_POWER_LEVELS; p++)
+		{
+			USB_DEBUG_printf("\t%u%s: %u\n", calPower[p], ((p == 0) ? "mW" : "W"), powerSetting[f][p]);
+		}
+
+		osDelay(100U);
+	}
+
+	USB_DEBUG_printf("--145 MHz Frequency Calibration--\n");
+	USB_DEBUG_printf("\t%d\n", oscTune[0]);
+	USB_DEBUG_printf("--435 MHz Frequency Calibration--\n");
+	USB_DEBUG_printf("\t%d\n", oscTune[1]);
+}
+#endif
 
 menuStatus_t menuCalibration(uiEvent_t *ev, bool isFirstRun)
 {
@@ -76,22 +142,27 @@ menuStatus_t menuCalibration(uiEvent_t *ev, bool isFirstRun)
 		menuDataGlobal.newOptionSelected = true;
 		menuDataGlobal.numItems = NUM_CALIBRATION_MENU_ITEMS;
 
-//get the current calibration values from calibration.c
-		oscTune[0]=calibrationGetVHFOscTune();
-		oscTune[1]=calibrationGetUHFOscTune();
-        for(int i=0 ; i < NO_OF_CAL_FREQS ; i++)
-        {
-        	for(int j=0 ; j < NO_OF_POWER_LEVELS ; j++)
-        	{
-            	powerSetting[i][j] = calibrationGetPower(i,j);
-        	}
-        }
+		//get the current calibration values from calibration.c
+		oscTune[0] = calibrationGetMod2Offset(RADIO_BAND_VHF);
+		oscTune[1] = calibrationGetMod2Offset(RADIO_BAND_UHF);
+		for(int i = 0; i < NO_OF_CAL_FREQS; i++)
+		{
+#ifdef MD9600_ONLY__UNUSED_RX_TUNING
+			rxTuning[i] = calibrationGetRxTune(i);
+#endif
+			for(int j = 0; j < NO_OF_POWER_LEVELS; j++)
+			{
+				powerSetting[i][j] = calibrationGetPower(i, j);
+			}
+		}
 
 		voicePromptsInit();
 		voicePromptsAppendPrompt(PROMPT_SILENCE);
-		voicePromptsAppendLanguageString(&currentLanguage->calibration);
-		voicePromptsAppendLanguageString(&currentLanguage->menu);
+		voicePromptsAppendLanguageString(currentLanguage->calibration);
+		voicePromptsAppendLanguageString(currentLanguage->menu);
 		voicePromptsAppendPrompt(PROMPT_SILENCE);
+
+		menuSystemRegisterExitCallback(exitCallback, NULL);
 
 		updateScreen(true);
 
@@ -112,52 +183,76 @@ menuStatus_t menuCalibration(uiEvent_t *ev, bool isFirstRun)
 	return menuOptionsExitCode;
 }
 
+
+
 static void updateScreen(bool isFirstRun)
 {
 	int mNum = 0;
 	char buf[SCREEN_LINE_BUFFER_SIZE];
-	char * const *leftSide = NULL;// initialize to please the compiler
-	char * const *rightSideConst = NULL;// initialize to please the compiler
+	const char *leftSide = NULL;// initialize to please the compiler
+	const char *rightSideConst = NULL;// initialize to please the compiler
 	char rightSideVar[SCREEN_LINE_BUFFER_SIZE];
 	voicePrompt_t rightSideUnitsPrompt;
-	const char * rightSideUnitsStr;
-	int firstline;
-	int lastline;
+	const char *rightSideUnitsStr = NULL;
+	int firstline = 0;
+	int lastline = 0;
+	int menuNumberOffset = 0;
+	int focusNumberOffset = 0;
 
 	displayClearBuf();
-	bool settingOption = uiShowQuickKeysChoices(buf, SCREEN_LINE_BUFFER_SIZE, currentLanguage->calibration);
+	snprintf(buf,SCREEN_LINE_BUFFER_SIZE,"%s %d/%d", currentLanguage->calibration, pageNumber+1 , NUM_CALIBRATION_MENU_PAGES);
+	bool settingOption = uiQuickKeysShowChoices(buf, SCREEN_LINE_BUFFER_SIZE, buf);
 
-	firstline = 1 - ((MENU_MAX_DISPLAYED_ENTRIES - 1) / 2) - 1;
-	lastline = MENU_MAX_DISPLAYED_ENTRIES - ((MENU_MAX_DISPLAYED_ENTRIES - 1) / 2) - 1;
-
-	if(NUM_CALIBRATION_MENU_ITEMS <= MENU_MAX_DISPLAYED_ENTRIES)      //Don't scroll the menu if it will all fit onto the screen
+	switch(pageNumber)
 	{
-		firstline = 0;
-		lastline = NUM_CALIBRATION_MENU_ITEMS -1;
+		case CALIBRATION_MENU_PAGE_POWER:
+			firstline = CALIBRATION_MENU_CAL_FREQUENCY;
+			lastline = CALIBRATION_MENU_POWER_SET;
+			numOptionsOnCurrentPage = 3;
+			menuNumberOffset = 1;
+			focusNumberOffset = 0;
+			break;
+#ifdef MD9600_ONLY__UNUSED_RX_TUNING
+		case CALIBRATION_MENU_PAGE_RX_TUNE:
+			firstline = CALIBRATION_MENU_CAL_FREQUENCY;
+			lastline = CALIBRATION_MENU_RX_TUNE_SET;
+			numOptionsOnCurrentPage = 3;
+			menuNumberOffset = 1;
+			focusNumberOffset = 0;
+			break;
+#endif
+		case CALIBRATION_MENU_CAL_PAGE_FREQUENCY_VHF:
+			firstline = CALIBRATION_MENU_REF_OSC_VHF;
+			lastline = CALIBRATION_MENU_REF_OSC_VHF;
+			numOptionsOnCurrentPage = 1;
+			menuNumberOffset = 3;
+			focusNumberOffset = 3;
+			displayPrintCore(0, DISPLAY_Y_POS_MENU_ENTRY_HIGHLIGHT + (-1 * MENU_ENTRY_HEIGHT), "145MHz", FONT_SIZE_3, TEXT_ALIGN_CENTER, false);
+			break;
+		case CALIBRATION_MENU_CAL_PAGE_FREQUENCY_UHF:
+			firstline = CALIBRATION_MENU_REF_OSC_UHF;
+			lastline = CALIBRATION_MENU_REF_OSC_UHF;
+			numOptionsOnCurrentPage = 1;
+			menuNumberOffset = 4;
+			focusNumberOffset = 4;
+			displayPrintCore(0, DISPLAY_Y_POS_MENU_ENTRY_HIGHLIGHT + (-1 * MENU_ENTRY_HEIGHT), "435MHz", FONT_SIZE_3, TEXT_ALIGN_CENTER, false);
+			break;
+		case CALIBRATION_MENU_PAGE_FACTORY_RESET:
+			firstline = CALIBRATION_MENU_FACTORY;
+			lastline = CALIBRATION_MENU_FACTORY;
+			numOptionsOnCurrentPage = 1;
+			menuNumberOffset = 5;
+			focusNumberOffset = 5;
+			break;
+		default:// to please the compiler
+			break;
 	}
 
 	for(int i = firstline; i <= lastline; i++)
 	{
 		if ((settingOption == false) || (i == 0))
 		{
-			if(NUM_CALIBRATION_MENU_ITEMS <= MENU_MAX_DISPLAYED_ENTRIES)      //Don't scroll the menu if it will all fit onto the screen
-			{
-				mNum = i;
-			}
-			else
-			{
-				mNum = menuGetMenuOffset(NUM_CALIBRATION_MENU_ITEMS, i);
-			}
-
-			if (mNum == MENU_OFFSET_BEFORE_FIRST_ENTRY)
-			{
-				continue;
-			}
-			else if (mNum == MENU_OFFSET_AFTER_LAST_ENTRY)
-			{
-				break;
-			}
-
+			mNum = i;
 			buf[0] = 0;
 			buf[2] = 0;
 			leftSide = NULL;
@@ -168,55 +263,54 @@ static void updateScreen(bool isFirstRun)
 
 			switch(mNum)
 			{
-				case CALIBRATION_MENU_REF_OSC://  Reference Oscillator Tuning
-					leftSide = (char * const *)&currentLanguage->freq_set;
-					snprintf(rightSideVar, SCREEN_LINE_BUFFER_SIZE, "%d", oscTune[freqIndex > 4 ? 1 : 0] - 128);
-					break;
 				case CALIBRATION_MENU_CAL_FREQUENCY:// Calibration Frequency (from cal table)
-					leftSide = (char * const *)&currentLanguage->cal_frequency;
+					leftSide = currentLanguage->cal_frequency;
 					int val_before_dp = calFreq[freqIndex] / 100000;
-					int val_after_dp = (calFreq[freqIndex] - val_before_dp * 100000)/10000;
-					snprintf(rightSideVar, SCREEN_LINE_BUFFER_SIZE, "%d.%01d ", val_before_dp, val_after_dp);
+					int val_after_dp = (calFreq[freqIndex] - (val_before_dp * 100000)) / 100;
+					snprintf(rightSideVar, SCREEN_LINE_BUFFER_SIZE, "%d.%03d ", val_before_dp, val_after_dp);
 					rightSideUnitsPrompt = PROMPT_MEGAHERTZ;
 					rightSideUnitsStr = "MHz";
 					break;
 				case CALIBRATION_MENU_POWER_LEVEL:// Power Level
-					leftSide = (char * const *)&currentLanguage->cal_pwr;
+					leftSide = currentLanguage->cal_pwr;
 					snprintf(rightSideVar, SCREEN_LINE_BUFFER_SIZE, "%d", calPower[powerIndex]);
-					if(powerIndex == 0)
-					{
-						rightSideUnitsPrompt = PROMPT_MILLIWATTS ;
-						rightSideUnitsStr = "mW";
-					}
-					else
-					{
-						rightSideUnitsPrompt = PROMPT_WATTS ;
-						rightSideUnitsStr = "W";
-					}
+#if defined(PLATFORM_MD9600)
+					rightSideUnitsPrompt = PROMPT_WATTS ;
+					rightSideUnitsStr = "W";
+#else
+					rightSideUnitsPrompt =  powerIndex == 0 ? PROMPT_MILLIWATTS: PROMPT_WATTS ;
+					rightSideUnitsStr = powerIndex == 0 ? "mW" : "W";
+#endif
 					break;
 				case CALIBRATION_MENU_POWER_SET:// Power Setting
-					leftSide = (char * const *)&currentLanguage->pwr_set;
-					snprintf(rightSideVar, SCREEN_LINE_BUFFER_SIZE, "%d", powerSetting[freqIndex][powerIndex]);
+					leftSide = currentLanguage->pwr_set;
+					snprintf(rightSideVar, SCREEN_LINE_BUFFER_SIZE, "%d",powerSetting[freqIndex][powerIndex]);
+					break;
+#ifdef MD9600_ONLY__UNUSED_RX_TUNING
+				case CALIBRATION_MENU_RX_TUNE_SET:// Power Setting
+					leftSide = currentLanguage->rx_tune;
+					snprintf(rightSideVar, SCREEN_LINE_BUFFER_SIZE, "%d",rxTuning[freqIndex][powerIndex]);
+					break;
+#endif
+				case CALIBRATION_MENU_REF_OSC_VHF://  Reference Oscillator Tuning
+					leftSide = currentLanguage->freq_set_VHF;
+					snprintf(rightSideVar, SCREEN_LINE_BUFFER_SIZE, "%d", oscTune[0]);
+					break;
+				case CALIBRATION_MENU_REF_OSC_UHF://  Reference Oscillator Tuning
+					leftSide = currentLanguage->freq_set_UHF;
+					snprintf(rightSideVar, SCREEN_LINE_BUFFER_SIZE, "%d", oscTune[1]);
 					break;
 				case CALIBRATION_MENU_FACTORY:// Factory Reset
-					leftSide = (char * const *)&currentLanguage->factory_reset;
-					rightSideConst = (char * const *)(factoryReset ? &currentLanguage->yes : &currentLanguage->no);
+					leftSide = currentLanguage->factory_reset;
 					break;
 			}
 
-			snprintf(buf, SCREEN_LINE_BUFFER_SIZE, "%s:%s", *leftSide, (rightSideVar[0] ? rightSideVar : (rightSideConst ? *rightSideConst : "")));
+			const char *rightSide = (rightSideVar[0] ? rightSideVar : (rightSideConst ? rightSideConst : ""));
+			snprintf(buf, SCREEN_LINE_BUFFER_SIZE, "%s%s%s", leftSide, rightSide[0] ? ":" : "", rightSide);
 
-			int voicetrig;
-			if(NUM_CALIBRATION_MENU_ITEMS <= MENU_MAX_DISPLAYED_ENTRIES)      //Don't scroll the menu if it will all fit onto the screen
-			{
-				voicetrig = menuDataGlobal.currentItemIndex;
-			}
-			else
-			{
-				voicetrig = 0;
-			}
+			int voicetrig = menuDataGlobal.currentItemIndex;
 
-			if (i == voicetrig)
+			if ((i - focusNumberOffset) == voicetrig)
 			{
 				bool wasPlaying = voicePromptsIsPlaying();
 
@@ -225,9 +319,9 @@ static void updateScreen(bool isFirstRun)
 					voicePromptsInit();
 				}
 
-				if (!wasPlaying || menuDataGlobal.newOptionSelected)
+				if (!wasPlaying || (menuDataGlobal.newOptionSelected || (menuDataGlobal.menuOptionsTimeout > 0)))
 				{
-					voicePromptsAppendLanguageString((const char * const *)leftSide);
+					voicePromptsAppendLanguageString(leftSide);
 				}
 
 				if ((rightSideVar[0] != 0) || ((rightSideVar[0] == 0) && (rightSideConst == NULL)))
@@ -236,7 +330,7 @@ static void updateScreen(bool isFirstRun)
 				}
 				else
 				{
-					voicePromptsAppendLanguageString((const char * const *)rightSideConst);
+					voicePromptsAppendLanguageString(rightSideConst);
 				}
 
 				if (rightSideUnitsPrompt != PROMPT_SILENCE)
@@ -262,7 +356,7 @@ static void updateScreen(bool isFirstRun)
 			// QuickKeys
 			if (menuDataGlobal.menuOptionsTimeout > 0)
 			{
-				menuDisplaySettingOption(*leftSide, (rightSideVar[0] ? rightSideVar : *rightSideConst));
+				menuDisplaySettingOption(leftSide, (rightSideVar[0] ? rightSideVar : rightSideConst));
 			}
 			else
 			{
@@ -271,15 +365,7 @@ static void updateScreen(bool isFirstRun)
 					strncat(buf, rightSideUnitsStr, SCREEN_LINE_BUFFER_SIZE);
 				}
 
-				if(NUM_CALIBRATION_MENU_ITEMS <= MENU_MAX_DISPLAYED_ENTRIES)      //Don't scroll the menu if it will all fit onto the screen
-				{
-					menuDisplayEntry(i-((MENU_MAX_DISPLAYED_ENTRIES - 1) / 2), mNum, buf);
-				}
-				else
-				{
-					menuDisplayEntry(i, mNum, buf);
-				}
-
+				menuDisplayEntry((i - menuNumberOffset), (mNum - focusNumberOffset), buf, (strlen(leftSide) + 1), THEME_ITEM_FG_MENU_ITEM, THEME_ITEM_FG_OPTIONS_VALUE, THEME_ITEM_BG);
 			}
 		}
 	}
@@ -293,35 +379,53 @@ static void handleEvent(uiEvent_t *ev)
 	static uint8_t promptSave;
 
 	//if PTT pressed (special case while in the calibration menu)
-	if ((HAL_GPIO_ReadPin(PTT_GPIO_Port, PTT_Pin) == GPIO_PIN_RESET) || (HAL_GPIO_ReadPin(PTT_EXTERNAL_GPIO_Port, PTT_EXTERNAL_Pin) == GPIO_PIN_RESET))
+	if (HAL_GPIO_ReadPin(PTT_GPIO_Port, PTT_Pin) == GPIO_PIN_RESET)
+	{
+		if(!calIsTransmitting)
 		{
-			if(!calIsTransmitting)
-			{
+			uint32_t freq;
+			int oscTuneIndex;
 			rxPowerSavingSetState(ECOPHASE_POWERSAVE_INACTIVE);
 			promptSave = nonVolatileSettings.audioPromptMode;
-		    nonVolatileSettings.audioPromptMode = AUDIO_PROMPT_MODE_SILENT;			    //can't have prompts when adjusting because it interferes when changing the values
+			nonVolatileSettings.audioPromptMode = AUDIO_PROMPT_MODE_SILENT;			    //can't have prompts when adjusting because it interferes when changing the values
 			trxSetModeAndBandwidth(RADIO_MODE_ANALOG, true);
-			trxSetFrequency(calFreq[freqIndex], calFreq[freqIndex], DMR_MODE_AUTO);
-			trxEnableTransmission();
-			setDACTemp(powerSetting[freqIndex][powerIndex]);		  //Temporarily use the current power setting
-			setRefOscTemp(oscTune[freqIndex > 4 ? 1 : 0]);           //temporarily use this value for Osc Tuning
-			calIsTransmitting = true;
-			}
-		}
-		else										//PTT not pressed
-		{
-			if(calIsTransmitting)
+			switch(pageNumber)
 			{
-			trxDisableTransmission();
-			trxTransmissionEnabled = false;
-			calIsTransmitting = false;
-			nonVolatileSettings.audioPromptMode = promptSave; 			//restore prompt mode
+				case CALIBRATION_MENU_CAL_PAGE_FREQUENCY_VHF:
+					freq = 14500000;
+					oscTuneIndex = 0;
+					break;
+				case CALIBRATION_MENU_CAL_PAGE_FREQUENCY_UHF:
+					freq = 43500000;
+					oscTuneIndex = 1;
+					break;
+				default:
+					freq = calFreq[freqIndex];
+					oscTuneIndex = freqIndex > 4 ? 1 : 0;
+					break;
 			}
+
+			trxSetFrequency(freq, freq, DMR_MODE_AUTO);
+			trxEnableTransmission();
+			setDACTemp(freqIndex, powerIndex);		  //Temporarily use the current power setting
+			setRefOscTemp(oscTune[oscTuneIndex]);           //temporarily use this value for Osc Tuning
+			calIsTransmitting = true;
+			HRC6000SetMic(false);
 		}
-
-
-
-
+	}
+	else										//PTT not pressed
+	{
+		if(calIsTransmitting)
+		{
+			terminateTransmission();
+			calIsTransmitting = false;
+			HRC6000SetMic(true);
+#ifdef MD9600_ONLY__UNUSED_RX_TUNING
+			setRxTuneTemp(rxTuning[freqIndex]);			//temporarily use this value for Rx Tuning
+#endif
+			nonVolatileSettings.audioPromptMode = promptSave; 			//restore prompt mode
+		}
+	}
 
 	if (ev->events & BUTTON_EVENT)
 	{
@@ -333,20 +437,31 @@ static void handleEvent(uiEvent_t *ev)
 
 	if ((menuDataGlobal.menuOptionsTimeout > 0) && (!BUTTONCHECK_DOWN(ev, BUTTON_SK2)))
 	{
-		menuDataGlobal.menuOptionsTimeout--;
-		if (menuDataGlobal.menuOptionsTimeout == 0)
+		if (voicePromptsIsPlaying() == false)
 		{
-			menuSystemPopPreviousMenu();
-			return;
+			menuDataGlobal.menuOptionsTimeout--;
+			if (menuDataGlobal.menuOptionsTimeout == 0)
+			{
+				applySettings(false);
+				menuSystemPopPreviousMenu();
+				return;
+			}
 		}
 	}
+
 	if (ev->events & FUNCTION_EVENT)
 	{
 		isDirty = true;
-		if ((QUICKKEY_TYPE(ev->function) == QUICKKEY_MENU) && (QUICKKEY_ENTRYID(ev->function) < NUM_CALIBRATION_MENU_ITEMS))
+		if (ev->function == FUNC_REDRAW)
+		{
+			updateScreen(false);
+			return;
+		}
+		else if ((QUICKKEY_TYPE(ev->function) == QUICKKEY_MENU) && (QUICKKEY_ENTRYID(ev->function) < NUM_CALIBRATION_MENU_ITEMS))
 		{
 			menuDataGlobal.currentItemIndex = QUICKKEY_ENTRYID(ev->function);
 		}
+
 		if ((QUICKKEY_FUNCTIONID(ev->function) != 0))
 		{
 			menuDataGlobal.menuOptionsTimeout = 1000;
@@ -355,94 +470,105 @@ static void handleEvent(uiEvent_t *ev)
 
 	if ((ev->events & KEY_EVENT) && (menuDataGlobal.menuOptionsSetQuickkey == 0) && (menuDataGlobal.menuOptionsTimeout == 0))
 	{
-		if (KEYCHECK_PRESS(ev->keys, KEY_DOWN) && (menuDataGlobal.numItems != 0))
+		if (KEYCHECK_PRESS(ev->keys, KEY_DOWN))
 		{
-			isDirty = true;
-			menuSystemMenuIncrement(&menuDataGlobal.currentItemIndex, NUM_CALIBRATION_MENU_ITEMS);
-			menuDataGlobal.newOptionSelected = true;
-			menuOptionsExitCode |= MENU_STATUS_LIST_TYPE;
+			if (!BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+			{
+				if (menuDataGlobal.currentItemIndex < (numOptionsOnCurrentPage-1))
+				{
+					isDirty = true;
+					menuDataGlobal.currentItemIndex++;
+					menuDataGlobal.newOptionSelected = true;
+					menuOptionsExitCode |= MENU_STATUS_LIST_TYPE;
+				}
+			}
+			else
+			{
+				if (pageNumber < (NUM_CALIBRATION_MENU_PAGES-1))
+				{
+					menuDataGlobal.currentItemIndex = 0;
+					menuDataGlobal.newOptionSelected = true;
+					pageNumber++;
+					isDirty = true;
+				}
+			}
 		}
 		else if (KEYCHECK_PRESS(ev->keys, KEY_UP))
 		{
-			isDirty = true;
-			menuSystemMenuDecrement(&menuDataGlobal.currentItemIndex, NUM_CALIBRATION_MENU_ITEMS);
-			menuDataGlobal.newOptionSelected = true;
-			menuOptionsExitCode |= MENU_STATUS_LIST_TYPE;
+			if (!BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+			{
+				if (menuDataGlobal.currentItemIndex > 0)
+				{
+					isDirty = true;
+					menuDataGlobal.currentItemIndex--;
+					menuDataGlobal.newOptionSelected = true;
+					menuOptionsExitCode |= MENU_STATUS_LIST_TYPE;
+				}
+			}
+			else
+			{
+				if (pageNumber > 0)
+				{
+					menuDataGlobal.currentItemIndex = 0;
+					menuDataGlobal.newOptionSelected = true;
+					pageNumber--;
+					isDirty = true;
+				}
+			}
 		}
 		else if (KEYCHECK_SHORTUP(ev->keys, KEY_GREEN))
 		{
-			//copy the new calibration values to calibration table
-			calibrationPutVHFOscTune(oscTune[0]);
-			calibrationPutUHFOscTune(oscTune[1]);
-			for(int i=0 ; i < NO_OF_CAL_FREQS ; i++)
-				{
-			     for(int j=0 ; j < NO_OF_POWER_LEVELS ; j++)
-			     {
-				   calibrationPutPower(i , j , powerSetting[i][j] );
-				  }
-			     }
-
-			if(BUTTONCHECK_DOWN(ev, BUTTON_SK2))					//only save to flash or factory reset if SK2 + green is pressed.
-			{
-			  if(factoryReset)
-			  {
-				calibrationReadFactory();        //restore the factory values
-			  }
-
-			  calibrationSaveLocal();	        // save as the local copy
-			}
-
-			factoryReset=false;
-
-			trxSetFrequency(currentChannelData->rxFreq + 10, currentChannelData->txFreq + 10, DMR_MODE_AUTO);   //FORCE A SMALL FREQUENCY CHANGE TO TIDY UP
-			trxSetFrequency(currentChannelData->rxFreq, currentChannelData->txFreq, DMR_MODE_AUTO);
-			trxSetModeAndBandwidth(currentChannelData->chMode, codeplugChannelIsFlagSet(currentChannelData, CHANNEL_FLAG_BW_25K));
+			applySettings((BUTTONCHECK_DOWN(ev, BUTTON_SK2) != 0));
 			menuSystemPopAllAndDisplayRootMenu();
 			return;
 		}
 		else if (KEYCHECK_SHORTUP(ev->keys, KEY_RED))
 		{
-			factoryReset=false;
-			trxSetFrequency(currentChannelData->rxFreq + 10, currentChannelData->txFreq + 10, DMR_MODE_AUTO);      //FORCE A SMALL FREQUENCY CHANGE TO TIDY UP
-			trxSetFrequency(currentChannelData->rxFreq, currentChannelData->txFreq, DMR_MODE_AUTO);
-			trxSetModeAndBandwidth(currentChannelData->chMode, codeplugChannelIsFlagSet(currentChannelData, CHANNEL_FLAG_BW_25K));
 			menuSystemPopPreviousMenu();
 			return;
 		}
+#if defined(HAS_DUMPS_CALIBRATION_TABLE)
+		else if (KEYCHECK_SHORTUP(ev->keys, KEY_HASH))
+		{
+			dumpCalibrationTable();
+		}
+#endif
 		else if (KEYCHECK_SHORTUP_NUMBER(ev->keys) && BUTTONCHECK_DOWN(ev, BUTTON_SK2))
 		{
-				menuDataGlobal.menuOptionsSetQuickkey = ev->keys.key;
-				isDirty = true;
+			menuDataGlobal.menuOptionsSetQuickkey = ev->keys.key;
+			isDirty = true;
 		}
 	}
 	if ((ev->events & (KEY_EVENT | FUNCTION_EVENT)) && (menuDataGlobal.menuOptionsSetQuickkey == 0))
 	{
-
 		if (KEYCHECK_PRESS(ev->keys, KEY_RIGHT) || (QUICKKEY_FUNCTIONID(ev->function) == FUNC_RIGHT))
 		{
+			int freqBand = 0;
 			isDirty = true;
 			menuDataGlobal.newOptionSelected = false;
-			switch(menuDataGlobal.currentItemIndex)
+			switch(menuDataGlobal.currentItemIndex + PAGE_ITEMS_OFFSET[pageNumber])
 			{
-				case CALIBRATION_MENU_REF_OSC:
-					if (oscTune[freqIndex > 4 ? 1 : 0] < 255)
+				case CALIBRATION_MENU_REF_OSC_UHF:
+					freqBand = 1;
+					// fall through
+				case CALIBRATION_MENU_REF_OSC_VHF:
+					if (oscTune[freqBand] < 127)
 					{
-						oscTune[freqIndex > 4 ? 1 : 0]++;
-						setRefOscTemp(oscTune[freqIndex > 4 ? 1 : 0]);			//temporarily use this value for Osc Tuning
+						oscTune[freqBand]++;
+						setRefOscTemp(oscTune[freqBand]);			//temporarily use this value for Osc Tuning
 					}
 					break;
 				case CALIBRATION_MENU_CAL_FREQUENCY:
 					if (freqIndex < NO_OF_CAL_FREQS -1)
 					{
 						freqIndex++;
-						trxDisableTransmission();
-						trxTransmissionEnabled = false;
+						terminateTransmission();
 						trxSetFrequency(calFreq[freqIndex], calFreq[freqIndex], DMR_MODE_AUTO);
 						if(calIsTransmitting)
 						{
-						  trxEnableTransmission();
-						  setDACTemp(powerSetting[freqIndex][powerIndex]);		  //Temporarily use the current power setting
-						  setRefOscTemp(oscTune[freqIndex > 4 ? 1 : 0]);           //temporarily use this value for Osc Tuning
+							trxEnableTransmission();
+							setDACTemp(freqIndex, powerIndex);		  //Temporarily use the current power setting
+							setRefOscTemp(oscTune[freqIndex > 4 ? 1 : 0]);           //temporarily use this value for Osc Tuning
 						}
 					}
 					break;
@@ -450,100 +576,103 @@ static void handleEvent(uiEvent_t *ev)
 					if (powerIndex < NO_OF_POWER_LEVELS -1)
 					{
 						powerIndex++;
-						setDACTemp(powerSetting[freqIndex][powerIndex]);		  //Temporarily use the current power setting
+						setDACTemp(freqIndex, powerIndex);		  //Temporarily use the current power setting
 					}
 					break;
 				case CALIBRATION_MENU_POWER_SET:
 					if (powerSetting[freqIndex][powerIndex] < 255)
 					{
-						powerSetting[freqIndex][powerIndex] = powerSetting[freqIndex][powerIndex] + 1;
-						setDACTemp(powerSetting[freqIndex][powerIndex]);		  //Temporarily use the current power setting
+						powerSetting[freqIndex][powerIndex]++;
+						setDACTemp(freqIndex, powerIndex);		  //Temporarily use the current power setting
 					}
 					break;
-				case CALIBRATION_MENU_FACTORY:
-					factoryReset = true;
+#ifdef MD9600_ONLY__UNUSED_RX_TUNING
+				case CALIBRATION_MENU_RX_TUNE_SET:
+					if ((rxTuning[freqIndex][powerIndex] < 255) && !calIsTransmitting)
+					{
+						rxTuning[freqIndex][powerIndex]++;
+						setRxTuneTemp(rxTuning[freqIndex]);			//temporarily use this value for Rx Tuning // setDACTemp(freqIndex, powerIndex);		  //Temporarily use the current power setting
+					}
 					break;
-
+#endif
 			}
 		}
 		else if (KEYCHECK_PRESS(ev->keys, KEY_LEFT) || (QUICKKEY_FUNCTIONID(ev->function) == FUNC_LEFT))
 		{
+			int refOscFreqBand = 0;
 			isDirty = true;
 			menuDataGlobal.newOptionSelected = false;
-			switch(menuDataGlobal.currentItemIndex)
+			switch(menuDataGlobal.currentItemIndex + PAGE_ITEMS_OFFSET[pageNumber])
 			{
-			case CALIBRATION_MENU_REF_OSC:
-				if (oscTune[freqIndex > 4 ? 1 : 0] > 0)
-				{
-					oscTune[freqIndex > 4 ? 1 : 0]--;
-					setRefOscTemp(oscTune[freqIndex > 4 ? 1 : 0]);           //temporarily use this value for Osc Tuning
-				}
-				break;
-			case CALIBRATION_MENU_CAL_FREQUENCY:
-				if (freqIndex > 0)
-				{
-					freqIndex--;
-					trxDisableTransmission();
-					trxTransmissionEnabled = false;
-					trxSetFrequency(calFreq[freqIndex], calFreq[freqIndex], DMR_MODE_AUTO);
-					if(calIsTransmitting)
+				case CALIBRATION_MENU_REF_OSC_UHF:
+					refOscFreqBand = 1;
+					// fall through
+				case CALIBRATION_MENU_REF_OSC_VHF:
+					if (oscTune[refOscFreqBand] > -128)
 					{
-					  trxEnableTransmission();
-					  setDACTemp(powerSetting[freqIndex][powerIndex]);		  //Temporarily use the current power setting
-					  setRefOscTemp(oscTune[freqIndex > 4 ? 1 : 0]);           //temporarily use this value for Osc Tuning
+						oscTune[refOscFreqBand]--;
+						setRefOscTemp(oscTune[refOscFreqBand]);           //temporarily use this value for Osc Tuning
 					}
-				}
-				break;
-			case CALIBRATION_MENU_POWER_LEVEL:
-				if (powerIndex > 0)
-				{
-					powerIndex--;
-					setDACTemp(powerSetting[freqIndex][powerIndex]);		  //Temporarily use the current power setting
-				}
-				break;
-			case CALIBRATION_MENU_POWER_SET:
-				if (powerSetting[freqIndex][powerIndex] > 0)
-				{
-					powerSetting[freqIndex][powerIndex] = powerSetting[freqIndex][powerIndex] -1;
-					setDACTemp(powerSetting[freqIndex][powerIndex]);		  //Temporarily use the current power setting
-				}
-				break;
-			case CALIBRATION_MENU_FACTORY:
-				factoryReset = false;
-				break;
+					break;
+				case CALIBRATION_MENU_CAL_FREQUENCY:
+					if (freqIndex > 0)
+					{
+						freqIndex--;
+						terminateTransmission();
+						trxSetFrequency(calFreq[freqIndex], calFreq[freqIndex], DMR_MODE_AUTO);
+						if(calIsTransmitting)
+						{
+							trxEnableTransmission();
+							setDACTemp(freqIndex, powerIndex);		  //Temporarily use the current power setting
+							setRefOscTemp(oscTune[freqIndex > 4 ? 1 : 0]);           //temporarily use this value for Osc Tuning
+						}
+						else
+						{
+#ifdef MD9600_ONLY__UNUSED_RX_TUNING
+							setRxTuneTemp(rxTuning[freqIndex]);			//temporarily use this value for Rx Tuning
+#endif
+							setRefOscTemp(oscTune[freqIndex > 4 ? 1 : 0]);           //temporarily use this value for Osc Tuning
+						}
+					}
+					break;
+				case CALIBRATION_MENU_POWER_LEVEL:
+					if (powerIndex > 0)
+					{
+						powerIndex--;
+						setDACTemp(freqIndex, powerIndex);		  //Temporarily use the current power setting
+					}
+					break;
+				case CALIBRATION_MENU_POWER_SET:
+					if (powerSetting[freqIndex][powerIndex] > 0)
+					{
+						powerSetting[freqIndex][powerIndex]--;
+						setDACTemp(freqIndex, powerIndex);		  //Temporarily use the current power setting
+					}
+					break;
+#ifdef MD9600_ONLY__UNUSED_RX_TUNING
+				case CALIBRATION_MENU_RX_TUNE_SET:
+					if ((rxTuning[freqIndex][powerIndex] > 0) && !calIsTransmitting)
+					{
+						rxTuning[freqIndex][powerIndex]--;
+						setRxTuneTemp(rxTuning[freqIndex]);			//temporarily use this value for Rx Tuning
+					}
+					break;
+#endif
+
 			}
 		}
 		else if ((ev->keys.event & KEY_MOD_PRESS) && (menuDataGlobal.menuOptionsTimeout > 0))
 		{
 			menuDataGlobal.menuOptionsTimeout = 0;;
+			terminateTransmission();
 			menuSystemPopPreviousMenu();
 			return;
 		}
 	}
 
-	if ((ev->events & KEY_EVENT) && (menuDataGlobal.menuOptionsSetQuickkey != 0) && (menuDataGlobal.menuOptionsTimeout == 0))
+	if (uiQuickKeysIsStoring(ev))
 	{
-		if (KEYCHECK_SHORTUP(ev->keys, KEY_RED))
-		{
-			menuDataGlobal.menuOptionsSetQuickkey = 0;
-			menuDataGlobal.menuOptionsTimeout = 0;
-			menuOptionsExitCode |= MENU_STATUS_ERROR;
-		}
-		else if (KEYCHECK_SHORTUP(ev->keys, KEY_GREEN))
-		{
-			saveQuickkeyMenuIndex(menuDataGlobal.menuOptionsSetQuickkey, menuSystemGetCurrentMenuNumber(), menuDataGlobal.currentItemIndex, 0);
-			menuDataGlobal.menuOptionsSetQuickkey = 0;
-		}
-		else if (KEYCHECK_SHORTUP(ev->keys, KEY_LEFT))
-		{
-			saveQuickkeyMenuIndex(menuDataGlobal.menuOptionsSetQuickkey, menuSystemGetCurrentMenuNumber(), menuDataGlobal.currentItemIndex, FUNC_LEFT);
-			menuDataGlobal.menuOptionsSetQuickkey = 0;
-		}
-		else if (KEYCHECK_SHORTUP(ev->keys, KEY_RIGHT))
-		{
-			saveQuickkeyMenuIndex(menuDataGlobal.menuOptionsSetQuickkey, menuSystemGetCurrentMenuNumber(), menuDataGlobal.currentItemIndex, FUNC_RIGHT);
-			menuDataGlobal.menuOptionsSetQuickkey = 0;
-		}
+		uiQuickKeysStore(ev, &menuOptionsExitCode);
 		isDirty = true;
 	}
 
@@ -554,17 +683,75 @@ static void handleEvent(uiEvent_t *ev)
 }
 
 //Temporarily adjust the Ref Oscillator value
-void setRefOscTemp(uint8_t cal)
+static void setRefOscTemp(int8_t cal)
 {
-	int8_t cal2;
-	cal2 = cal - 128;
-	SPI0WritePageRegByte(0x04, 0x47, cal2);			// Set the reference tuning offset
-	SPI0WritePageRegByte(0x04, 0x48, cal2<0?0x03:0x00) ;
-	SPI0WritePageRegByte(0x04, 0x04, cal2);									//Set MOD 2 Offset (Cal Value)
+	SPI0WritePageRegByte(0x04, 0x47, cal);			// Set the reference tuning offset
+	SPI0WritePageRegByte(0x04, 0x48, cal<0?0x03:0x00) ;
+	SPI0WritePageRegByte(0x04, 0x04, cal);									//Set MOD 2 Offset (Cal Value)
 }
 
 //Temporarily adjust the Tx Power DAC
-void setDACTemp(uint8_t cal)
+static void setDACTemp(uint8_t freqIndex, uint8_t powerIndex)
 {
+	uint16_t cal = powerSetting[freqIndex][powerIndex];
+
+#if defined(PLATFORM_MD9600)
+	dac_Out(2, cal << 4);
+#else
 	dac_Out(1, cal << 4);
+#endif
+}
+
+static void terminateTransmission(void)
+{
+	trxDisableTransmission();
+	trxTransmissionEnabled = false;
+}
+
+static void applySettings(bool sk2Down)
+{
+	//copy the new calibration values to calibration table
+
+	calibrationSetMod2Offset(RADIO_BAND_VHF, oscTune[0]);
+	calibrationSetMod2Offset(RADIO_BAND_UHF, oscTune[1]);
+
+	for(int i = 0 ; i < NO_OF_CAL_FREQS ; i++)
+	{
+#ifdef MD9600_ONLY__UNUSED_RX_TUNING
+		calibrationPutRxTune(i, rxTuning[i]);
+#endif
+		for(int j = 0 ; j < NO_OF_POWER_LEVELS ; j++)
+		{
+			calibrationPutPower(i , j , powerSetting[i][j] );
+		}
+	}
+
+	if(sk2Down)					//only save to flash or factory reset if SK2 + green is pressed.
+	{
+		if (pageNumber == CALIBRATION_MENU_PAGE_FACTORY_RESET)
+		{
+//					calibrationCheckAndCopyToCommonLocation(true);
+
+			calibrationReadFactory();        //restore the factory values
+			calibrationSaveLocal();	        // save as the local copy
+
+			pageNumber = CALIBRATION_MENU_PAGE_POWER;
+			menuDataGlobal.currentItemIndex = 0;
+			menuDataGlobal.newOptionSelected = true;
+		}
+		else
+		{
+			calibrationSaveLocal();
+		}
+	}
+
+	trxConfigurePA_DAC_ForFrequencyBand();//			trxConfigurePA_DAC_ForFrequencyBand(true);
+}
+
+static void exitCallback(void *data)
+{
+	trxSetFrequency(currentChannelData->rxFreq + 10, currentChannelData->txFreq + 10, DMR_MODE_AUTO);      //FORCE A SMALL FREQUENCY CHANGE TO TIDY UP
+	trxSetFrequency(currentChannelData->rxFreq, currentChannelData->txFreq, DMR_MODE_AUTO);
+	trxSetModeAndBandwidth(currentChannelData->chMode, (codeplugChannelGetFlag(currentChannelData, CHANNEL_FLAG_BW_25K) != 0));
+	terminateTransmission();
 }

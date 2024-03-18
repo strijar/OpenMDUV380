@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  * Using information from the MMDVM_HS source code by Andy CA6JAU
@@ -41,6 +41,7 @@
 #include "usb/usb_com.h"
 #include "functions/rxPowerSaving.h"
 #include "user_interface/uiHotspot.h"
+#include "interfaces/gps.h"
 
 // Uncomment the following to enable demo screen, access it with function events
 //#define DEMO_SCREEN
@@ -87,6 +88,9 @@ static uint32_t savedTGorPC;
 static uint8_t savedLibreDMR_Power;
 static uint32_t batteryUpdateTimeout;
 static uint16_t batteryAverageMillivolts;
+#if defined(HAS_GPS)
+static gpsMode_t previousGPSState = GPS_NOT_DETECTED;
+#endif
 
 static bool handleEvent(uiEvent_t *ev);
 static uint16_t getBatteryAverageInMillivolts(void);
@@ -99,6 +103,18 @@ menuStatus_t menuHotspotMode(uiEvent_t *ev, bool isFirstRun)
 {
 	if (isFirstRun)
 	{
+#if defined(HAS_GPS)
+		if (nonVolatileSettings.gps >= GPS_MODE_ON)
+		{
+			previousGPSState = nonVolatileSettings.gps;
+#if defined(LOG_GPS_DATA)
+			gpsLoggingStop();
+#endif
+			gpsOff();
+			nonVolatileSettings.gps = GPS_MODE_OFF;
+		}
+#endif
+
 		rxPowerSavingSetLevel(0);// disable power saving
 
 		// DMR filter level isn't saved yet (cycling power OFF/ON quickly can corrupt
@@ -188,6 +204,18 @@ void menuHotspotRestoreSettings(void)
 
 		HRC6000ResetTimeSlotDetection();
 	}
+
+#if defined(HAS_GPS)
+	// restore GPS state if needed
+	if (previousGPSState >= GPS_MODE_ON)
+	{
+		nonVolatileSettings.gps = previousGPSState;
+		gpsOn();
+#if defined(LOG_GPS_DATA)
+		gpsLoggingStart();
+#endif
+	}
+#endif
 }
 
 static void displayContactInfo(uint8_t y, char *text, size_t maxLen)
@@ -276,7 +304,7 @@ void uiHotspotUpdateScreen(uint8_t rxCommandState)
 	displayPrintCentered(0, "Hotspot", FONT_SIZE_3);
 
 	// Display battery percentage/voltage
-	if (nonVolatileSettings.bitfieldOptions & BIT_BATTERY_VOLTAGE_IN_HEADER)
+	if (settingsIsOptionBitSet(BIT_BATTERY_VOLTAGE_IN_HEADER))
 	{
 		int volts, mvolts;
 		int16_t xV = (DISPLAY_SIZE_X - ((4 * 6) + 6));
@@ -424,7 +452,7 @@ void uiHotspotUpdateScreen(uint8_t rxCommandState)
 	displayPrintCentered(48, buffer, FONT_SIZE_3);
 	displayRender();
 
-	if (trxTransmissionEnabled || ((rxCommandState == HOTSPOT_RX_START) || (rxCommandState == HOTSPOT_RX_START_LATE)))
+	if ((trxTransmissionEnabled && (hotspotCwKeying == false)) || ((rxCommandState == HOTSPOT_RX_START) || (rxCommandState == HOTSPOT_RX_START_LATE)))
 	{
 		displayLightTrigger(false);
 	}
@@ -485,6 +513,14 @@ static bool handleEvent(uiEvent_t *ev)
 		}
 	}
 
+	if ((ev->events & FUNCTION_EVENT) && (ev->function == FUNC_REDRAW))
+	{
+		uint8_t prevRxCmd = hotspotCurrentRxCommandState;
+		uiHotspotUpdateScreen(hotspotCurrentRxCommandState);
+		hotspotCurrentRxCommandState = prevRxCmd;
+		return true;
+	}
+
 	if (ev->events & BUTTON_EVENT)
 	{
 		// Display HS FW version
@@ -533,7 +569,7 @@ void hotspotExit(void)
 		trxSetPowerFromLevel(hotspotSavedPowerLevel);
 	}
 
-	setTxDMRID(codeplugGetUserDMRID());
+	trxDMRID = codeplugGetUserDMRID();
 	settingsUsbMode = USB_MODE_CPS;
 	hotspotMmdvmHostIsConnected = false;
 

@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2019      Kai Ludwig, DG4KLU
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -35,17 +35,29 @@
 #include "user_interface/uiLocalisation.h"
 #include "functions/ticks.h"
 #include "functions/rxPowerSaving.h"
+#if defined(HAS_GPS)
 #include "interfaces/gps.h"
+#endif
 
 
-#define STORAGE_MAGIC_NUMBER          0x4774 // NOTE: never use 0xDEADBEEF, it's reserved value
+#define STORAGE_MAGIC_NUMBER          0x477B // NOTE: never use 0xDEADBEEF, it's reserved value
+// 0x477B: adds gpsLogMemBlockNum.
+// 0x477A: keypadTimer{Long/Repeat} changed from u16 to u8, autolockTimer added.
+// 0x4779: APRS beaconing settings added.
+// 0x4778: abandon languageIndex, use BIT_SECONDARY_LANGUAGE instead. Struct reorg.
+// 0x4777: add night backlight support.
+// 0x4776: structure change:
+//           - currentChannelIndexInZone and currentChannelIndexInAllZone members are only used on RD5R (moved to the end of the struct)
+//           - settings address changed to 0x604B (due to Last Used Channel In Zone feature)
+// 0x4775: due to theme addition, it handles and convert theme regarding the display invert bit (then clear that inversion bit).
+// 0x4774: Fix incorrect settings storage of Lat Lon
 // 0x4764: moves location at the top of the struct, make it upgradable.
 // 0x4770: adds apo entry, upgradable.
 // 0x4771: settings struct reorg
 
 const uint32_t SETTINGS_UNITIALISED_LOCATION_LAT = 0x7F000000;
 
-#if defined(PLATFORM_RD5R) || defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_RD5R)
 static uint32_t dirtyTime = 0;
 #endif
 
@@ -59,13 +71,22 @@ struct_codeplugDTMFContact_t contactListDTMFContactData;
 struct_codeplugChannel_t settingsVFOChannel[2];// VFO A and VFO B from the codeplug.
 volatile int settingsUsbMode = USB_MODE_CPS;
 
-int *nextKeyBeepMelody = (int *)MELODY_KEY_BEEP;
+int16_t *nextKeyBeepMelody = (int16_t *)MELODY_KEY_BEEP;
 struct_codeplugGeneralSettings_t settingsCodeplugGeneralSettings;
 
 monitorModeSettingsStruct_t monitorModeData = { .isEnabled = false, .qsoInfoUpdated = true, .dmrIsValid = false };
 
+#if !defined(PLATFORM_GD77S)
+static void settingsVFOSanityCheck(struct_codeplugChannel_t *vfo, Channel_t VFONumber);
+#endif
+
 bool settingsSaveSettings(bool includeVFOs)
 {
+	if (spiFlashInitHasFailed) // Never save the settings if the flash initialization failed
+	{
+		return false;
+	}
+
 	if (includeVFOs)
 	{
 		codeplugSetVFO_ChannelData(&settingsVFOChannel[CHANNEL_VFO_A], CHANNEL_VFO_A);
@@ -89,47 +110,18 @@ bool settingsSaveSettings(bool includeVFOs)
 	return ret;
 }
 
-/* redundant
-void settingsSaveVfosIfNecessary(void)
+bool settingsLoadSettings(bool reset)
 {
-	bool needsSaveVFO[2];
-	struct_codeplugChannel_t tmpVFOChannel;
-	for(int i = 0; i < 2; i++)
-	{
-		codeplugGetVFO_ChannelData(&tmpVFOChannel,i);
-		needsSaveVFO[i] = (memcmp(&tmpVFOChannel, &settingsVFOChannel[i], sizeof(struct_codeplugChannel_t)) !=0);
-	}
-
-	for(int i = 0; i < 2; i++)
-	{
-		if (needsSaveVFO[i])
-		{
-			settingsStorageWriteVFO(&settingsVFOChannel[i], i);
-		}
-	}
-}
-*/
-void settingsSaveForPowerOff(void)
-{
-
-//	settingsStorageWriteVFO(&settingsVFOChannel[CHANNEL_VFO_A], CHANNEL_VFO_A);
-//	settingsStorageWriteVFO(&settingsVFOChannel[CHANNEL_VFO_B], CHANNEL_VFO_B);
-
-	settingsStorageWrite((uint8_t *)&nonVolatileSettings, sizeof(settingsStruct_t));
-}
-
-bool settingsLoadSettings(void)
-{
-	bool hasRestoredDefaultsettings = false;
-
 	if (!settingsStorageRead((uint8_t *)&nonVolatileSettings, sizeof(settingsStruct_t)))
 	{
-		nonVolatileSettings.magicNumber = 0;// flag settings could not be loaded
+		nonVolatileSettings.magicNumber = 0U;// flag settings could not be loaded
 	}
 
-	if (nonVolatileSettings.magicNumber != STORAGE_MAGIC_NUMBER)
+	if (reset || (nonVolatileSettings.magicNumber != STORAGE_MAGIC_NUMBER))
 	{
-		hasRestoredDefaultsettings = settingsRestoreDefaultSettings();
+		settingsRestoreDefaultSettings();
+		settingsLoadSettings(false);
+		return true;
 	}
 
 	// Force Hotspot mode to off for existing RD-5R users.
@@ -139,13 +131,18 @@ bool settingsLoadSettings(void)
 
 	codeplugGetVFO_ChannelData(&settingsVFOChannel[CHANNEL_VFO_A], CHANNEL_VFO_A);
 	codeplugGetVFO_ChannelData(&settingsVFOChannel[CHANNEL_VFO_B], CHANNEL_VFO_B);
+
+#if !defined(PLATFORM_GD77S)
+	settingsVFOSanityCheck(&settingsVFOChannel[CHANNEL_VFO_A], CHANNEL_VFO_A);
+	settingsVFOSanityCheck(&settingsVFOChannel[CHANNEL_VFO_B], CHANNEL_VFO_B);
+#endif
+
 	/* 2020.10.27  vk3kyy. This should not be necessary as the rest of the firmware e.g. on the VFO screen and in the contact lookup handles when Rx Group and / or Contact is set to none
 	settingsInitVFOChannel(0);// clean up any problems with VFO data
 	settingsInitVFOChannel(1);
 	*/
 
-	uiDataGlobal.userDMRId = codeplugGetUserDMRID();
-	setTxDMRID(uiDataGlobal.userDMRId);
+	trxDMRID = uiDataGlobal.userDMRId = codeplugGetUserDMRID();
 	struct_codeplugDeviceInfo_t tmpDeviceInfoBuffer;// Temporary buffer to load the data including the CPS user band limits
 	if (codeplugGetDeviceInfo(&tmpDeviceInfoBuffer))
 	{
@@ -182,9 +179,9 @@ bool settingsLoadSettings(void)
 	}
 	//codeplugGetGeneralSettings(&settingsCodeplugGeneralSettings);
 
-	if (nonVolatileSettings.languageIndex >= NUM_LANGUAGES)
+	if (settingsIsOptionBitSet(BIT_SECONDARY_LANGUAGE) && (languagesGetCount() < 2))
 	{
-		nonVolatileSettings.languageIndex = 0U; // Reset to English
+		settingsSetOptionBit(BIT_SECONDARY_LANGUAGE, false);
 		settingsSetDirty();
 	}
 	else
@@ -192,7 +189,7 @@ bool settingsLoadSettings(void)
 		settingsDirty = false;
 	}
 
-	currentLanguage = &languages[nonVolatileSettings.languageIndex];
+	currentLanguage = &languages[(settingsIsOptionBitSet(BIT_SECONDARY_LANGUAGE) ? 1 : 0)];
 
 	soundBeepVolumeDivider = nonVolatileSettings.beepVolumeDivider;
 
@@ -210,25 +207,32 @@ bool settingsLoadSettings(void)
 		settingsSet(nonVolatileSettings.initialMenuNumber, UI_CHANNEL_MODE);
 	}
 
+	if (settingsIsOptionBitSet(BIT_AUTO_NIGHT_OVERRIDE))
+	{
+		uiDataGlobal.daytimeOverridden = (DayTime_t)settingsIsOptionBitSet(BIT_AUTO_NIGHT_DAYTIME);
+	}
+
 	// If the menu structure if changed the enum for the screens is changed which can result the initial screen being something other than the CHANNEL or VFO screen
 	if (nonVolatileSettings.initialMenuNumber != UI_CHANNEL_MODE && UI_CHANNEL_MODE != UI_VFO_MODE)
 	{
 		nonVolatileSettings.initialMenuNumber = UI_VFO_MODE;
 	}
 
+#if defined(HAS_GPS)
 	if (nonVolatileSettings.gps >= NUM_GPS_MODES)
 	{
 		nonVolatileSettings.gps = GPS_NOT_DETECTED;
 	}
+#endif
 
-	if (nonVolatileSettings.gps == GPS_NOT_DETECTED)
-	{
-		gpsOn();
-	}
+#if !defined(PLATFORM_GD77S)
+	aprsBeaconingUpdateConfigurationFromSystemSettings();
+#endif
 
-	return hasRestoredDefaultsettings;
+	return false;
 }
 
+#if 0
 void settingsInitVFOChannel(int vfoNumber)
 {
 	// temporary hack in case the code plug has no RxGroup selected
@@ -243,24 +247,17 @@ void settingsInitVFOChannel(int vfoNumber)
 		settingsVFOChannel[vfoNumber].contact = 1;
 	}
 }
+#endif
 
 // returns true on default settings, false if upgraded.
 bool settingsRestoreDefaultSettings(void)
 {
-	bool ret = true;
-
-	// Upgrade location settings
-//	if ((nonVolatileSettings.magicNumber >= 0x4764) == false)
-	{
-		nonVolatileSettings.locationLat = SETTINGS_UNITIALISED_LOCATION_LAT;// Value that are out of range, so that it can be detected in the Satellite menu;
-		nonVolatileSettings.locationLon = 0;
-		nonVolatileSettings.timezone = SETTINGS_TIMEZONE_UTC;
-	}
+	nonVolatileSettings.locationLat = SETTINGS_UNITIALISED_LOCATION_LAT;// Value that are out of range, so that it can be detected in the Satellite menu;
+	nonVolatileSettings.locationLon = 0;
+	nonVolatileSettings.timezone = SETTINGS_TIMEZONE_UTC;
 
 	nonVolatileSettings.magicNumber = STORAGE_MAGIC_NUMBER;
 
-	nonVolatileSettings.currentChannelIndexInZone = 0;
-	nonVolatileSettings.currentChannelIndexInAllZone = 1;
 	nonVolatileSettings.currentIndexInTRxGroupList[SETTINGS_CHANNEL_MODE] = 0;
 	nonVolatileSettings.currentIndexInTRxGroupList[SETTINGS_VFO_A_MODE] = 0;
 	nonVolatileSettings.currentIndexInTRxGroupList[SETTINGS_VFO_B_MODE] = 0;
@@ -286,7 +283,8 @@ bool settingsRestoreDefaultSettings(void)
 #else
 			UI_VFO_MODE;
 #endif
-	nonVolatileSettings.displayBacklightPercentage = 100;// 100% brightness
+	nonVolatileSettings.displayBacklightPercentage[DAY] = 100;// 100% brightness
+	nonVolatileSettings.displayBacklightPercentage[NIGHT] = 100;
 	nonVolatileSettings.displayBacklightPercentageOff = 0;// 0% brightness
 	nonVolatileSettings.extendedInfosOnScreen = INFO_ON_SCREEN_OFF;
 	nonVolatileSettings.txFreqLimited =
@@ -307,16 +305,15 @@ bool settingsRestoreDefaultSettings(void)
 #if defined(PLATFORM_GD77S)
 			0U;
 #else
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017) 
+  #if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
 	#if defined(PLATFORM_MD9600)
-				 BIT_BATTERY_VOLTAGE_IN_HEADER |
+	        BIT_BATTERY_VOLTAGE_IN_HEADER |
 	#else
-				 BIT_SETTINGS_UPDATED;// we need to keep track if the user has been notified about settings update.
+			BIT_SETTINGS_UPDATED;// we need to keep track if the user has been notified about settings update.
 	#endif
-#else
-	 	 	 BIT_SETTINGS_UPDATED; // we need to keep track if the user has been notified about settings update.
-#endif
-
+  #else
+	        BIT_SETTINGS_UPDATED; // we need to keep track if the user has been notified about settings update.
+  #endif
 #endif
 
 	nonVolatileSettings.overrideTG = 0U;// 0 = No override
@@ -325,21 +322,18 @@ bool settingsRestoreDefaultSettings(void)
 	nonVolatileSettings.micGainDMR = SETTINGS_DMR_MIC_ZERO; // Normal value
 	nonVolatileSettings.micGainFM = SETTINGS_FM_MIC_ZERO; // Normal Value
 	nonVolatileSettings.tsManualOverride = 0U; // No manual TS override using the Star key
-	nonVolatileSettings.keypadTimerLong = 5U;
-	nonVolatileSettings.keypadTimerRepeat = 3U;
 	nonVolatileSettings.currentVFONumber = CHANNEL_VFO_A;
 	nonVolatileSettings.dmrDestinationFilter =
 #if defined(PLATFORM_GD77S)
-	DMR_DESTINATION_FILTER_TG;
+			DMR_DESTINATION_FILTER_TG;
 #else
-	DMR_DESTINATION_FILTER_NONE;
+			DMR_DESTINATION_FILTER_NONE;
 #endif
 	nonVolatileSettings.dmrCcTsFilter = DMR_CCTS_FILTER_CC_TS;
 
 	nonVolatileSettings.dmrCaptureTimeout = 10U;// Default to holding 10 seconds after a call ends
 	nonVolatileSettings.analogFilterLevel = ANALOG_FILTER_CSS;
 	trxSetAnalogFilterLevel(nonVolatileSettings.analogFilterLevel);
-	nonVolatileSettings.languageIndex = 0U;
 	nonVolatileSettings.scanDelay = 5U;// 5 seconds
 	nonVolatileSettings.scanStepTime = 0;// 30ms
 	nonVolatileSettings.scanModePause = SCAN_MODE_HOLD;
@@ -377,14 +371,7 @@ bool settingsRestoreDefaultSettings(void)
 #if defined(PLATFORM_GD77S)
 	nonVolatileSettings.audioPromptMode = AUDIO_PROMPT_MODE_VOICE_LEVEL_3;
 #else
-	if (voicePromptDataIsLoaded)
-	{
-		nonVolatileSettings.audioPromptMode = AUDIO_PROMPT_MODE_VOICE_LEVEL_1;
-	}
-	else
-	{
-		nonVolatileSettings.audioPromptMode = AUDIO_PROMPT_MODE_BEEP;
-	}
+	nonVolatileSettings.audioPromptMode = (voicePromptDataIsLoaded ? AUDIO_PROMPT_MODE_VOICE_LEVEL_1 : AUDIO_PROMPT_MODE_BEEP);
 #endif
 
 	nonVolatileSettings.temperatureCalibration = 0;
@@ -396,8 +383,28 @@ bool settingsRestoreDefaultSettings(void)
 
 	nonVolatileSettings.vfoSweepSettings = ((((sizeof(VFO_SWEEP_SCAN_RANGE_SAMPLE_STEP_TABLE) / sizeof(VFO_SWEEP_SCAN_RANGE_SAMPLE_STEP_TABLE[0])) - 1) << 12) | (VFO_SWEEP_RSSI_NOISE_FLOOR_DEFAULT << 7) | VFO_SWEEP_GAIN_DEFAULT);
 
-	nonVolatileSettings.gps = GPS_NOT_DETECTED;
+	nonVolatileSettings.keypadTimerLong = 5U;
+	nonVolatileSettings.keypadTimerRepeat = 3U;
+	nonVolatileSettings.autolockTimer = 0U;
 
+#if defined(HAS_GPS)
+	nonVolatileSettings.gps = GPS_NOT_DETECTED;
+#if defined(LOG_GPS_DATA)
+	nonVolatileSettings.gpsLogMemOffset = 0U;
+#endif
+#endif
+
+#if defined(PLATFORM_RD5R)
+	nonVolatileSettings.currentChannelIndexInZone = 0;
+	nonVolatileSettings.currentChannelIndexInAllZone = 1;
+#else // These two has to be used on any platform but RD5R
+	nonVolatileSettings.UNUSED_1 = 0;
+	nonVolatileSettings.UNUSED_2 = 0;
+#endif
+
+#if !defined(PLATFORM_GD77S)
+	aprsBeaconingUpdateSystemSettingsFromConfiguration();
+#endif
 
 	currentChannelData = &settingsVFOChannel[nonVolatileSettings.currentVFONumber];// Set the current channel data to point to the VFO data since the default screen will be the VFO
 
@@ -407,7 +414,7 @@ bool settingsRestoreDefaultSettings(void)
 
 	settingsSaveSettings(false);
 
-	return ret;
+	return true;
 }
 
 void enableVoicePromptsIfLoaded(bool enableFullPrompts)
@@ -418,7 +425,7 @@ void enableVoicePromptsIfLoaded(bool enableFullPrompts)
 		nonVolatileSettings.audioPromptMode = AUDIO_PROMPT_MODE_VOICE_LEVEL_3;
 #else
 
-		nonVolatileSettings.audioPromptMode = enableFullPrompts?AUDIO_PROMPT_MODE_VOICE_LEVEL_3:AUDIO_PROMPT_MODE_VOICE_LEVEL_1;
+		nonVolatileSettings.audioPromptMode = enableFullPrompts ? AUDIO_PROMPT_MODE_VOICE_LEVEL_3 : AUDIO_PROMPT_MODE_VOICE_LEVEL_1;
 #endif
 		settingsDirty = true;
 		settingsSaveSettings(false);
@@ -474,12 +481,6 @@ void settingsSetUINT32(uint32_t *s, uint32_t v)
 	settingsSetDirty();
 }
 
-void settingsSetUINT64(uint64_t *s, uint64_t v)
-{
-	*s = v;
-	settingsSetDirty();
-}
-
 void settingsIncINT8(int8_t *s, int8_t v)
 {
 	*s = *s + v;
@@ -511,12 +512,6 @@ void settingsIncINT32(int32_t *s, int32_t v)
 }
 
 void settingsIncUINT32(uint32_t *s, uint32_t v)
-{
-	*s = *s + v;
-	settingsSetDirty();
-}
-
-void settingsIncUINT64(uint64_t *s, uint64_t v)
 {
 	*s = *s + v;
 	settingsSetDirty();
@@ -557,12 +552,6 @@ void settingsDecUINT32(uint32_t *s, uint32_t v)
 	*s = *s - v;
 	settingsSetDirty();
 }
-
-void settingsDecUINT64(uint64_t *s, uint64_t v)
-{
-	*s = *s - v;
-	settingsSetDirty();
-}
 // --- End of Helpers ---
 
 void settingsSetOptionBit(bitfieldOptions_t bit, bool set)
@@ -578,16 +567,21 @@ void settingsSetOptionBit(bitfieldOptions_t bit, bool set)
 	settingsSetDirty();
 }
 
+bool settingsIsOptionBitSetFromSettings(settingsStruct_t *sets, bitfieldOptions_t bit)
+{
+	return ((sets->bitfieldOptions & bit) == (bit));
+}
+
 bool settingsIsOptionBitSet(bitfieldOptions_t bit)
 {
-	return ((nonVolatileSettings.bitfieldOptions & bit) == (bit));
+	return (settingsIsOptionBitSetFromSettings(&nonVolatileSettings, bit));
 }
 
 void settingsSetDirty(void)
 {
 	settingsDirty = true;
 
-#if defined(PLATFORM_RD5R) || defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_RD5R)
 	dirtyTime = ticksGetMillis();
 #endif
 }
@@ -596,18 +590,18 @@ void settingsSetVFODirty(void)
 {
 	settingsVFODirty = true;
 
-#if defined(PLATFORM_RD5R) || defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_RD5R)
 	dirtyTime = ticksGetMillis();
 #endif
 }
 
 void settingsSaveIfNeeded(bool immediately)
 {
-#if defined(PLATFORM_RD5R) || defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
-	const int DIRTY_DURTION_MILLISECS = 500;
+#if defined(PLATFORM_RD5R)
+	const int DIRTY_DURATION_MILLISECS = 500;
 
 	if ((settingsDirty || settingsVFODirty) &&
-			(immediately || (((ticksGetMillis() - dirtyTime) > DIRTY_DURTION_MILLISECS) && // DIRTY_DURTION_ has passed since last change
+			(immediately || (((ticksGetMillis() - dirtyTime) > DIRTY_DURATION_MILLISECS) && // DIRTY_DURATION_MILLISECS has passed since last change
 					((uiDataGlobal.Scan.active == false) || // not scanning, or scanning anything but channels
 							(menuSystemGetCurrentMenuNumber() != UI_CHANNEL_MODE)))))
 	{
@@ -620,3 +614,19 @@ int settingsGetScanStepTimeMilliseconds(void)
 {
 	return TIMESLOT_DURATION + (nonVolatileSettings.scanStepTime * TIMESLOT_DURATION);
 }
+
+#if !defined(PLATFORM_GD77S)
+static void settingsVFOSanityCheck(struct_codeplugChannel_t *vfo, Channel_t vfoNumber)
+{
+	if ((trxGetBandFromFrequency(vfo->txFreq) == -1) || (trxGetBandFromFrequency(vfo->rxFreq) == -1))
+	{
+		vfo->chMode = RADIO_MODE_ANALOG;
+		vfo->txFreq = vfo->rxFreq = DEFAULT_USER_FREQUENCY_BANDS[RADIO_BAND_VHF].minFreq;
+		vfo->txTone = vfo->rxTone = CODEPLUG_CSS_TONE_NONE;
+		vfo->sql = 10U;
+		vfo->VFOflag5 &= 0x0F; // set freq step to 2.5kHz
+
+		codeplugSetVFO_ChannelData(vfo, vfoNumber);
+	}
+}
+#endif

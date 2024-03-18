@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -46,7 +46,11 @@
 #define XBAR            69
 #define YBOX            (YCENTER - (INNERBOX_H / 2))
 
-static uint16_t screenNotificationBufData[DISPLAY_SIZE_X * DISPLAY_SIZE_Y] __attribute__((section(".ccmram")));
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_GD77) || defined(PLATFORM_GD77S) || defined(PLATFORM_DM1801) || defined(PLATFORM_DM1801A) || defined(PLATFORM_RD5R)
+static __attribute__((section(".data.$RAM2"))) uint8_t screenNotificationBufData[((DISPLAY_SIZE_X * DISPLAY_SIZE_Y) >> 3)];
+#else
+static  __attribute__((section(".ccmram"))) uint16_t screenNotificationBufData[DISPLAY_SIZE_X * DISPLAY_SIZE_Y];
+#endif
 
 typedef struct
 {
@@ -72,8 +76,11 @@ void uiNotificationShow(uiNotificationType_t type, uiNotificationID_t id, uint32
 
 	if (notificationData.visible)
 	{
-		notificationData.visible = false;
-		displayRender();
+		if (notificationData.id != id)
+		{
+			notificationData.visible = false;
+			displayRender();
+		}
 	}
 
 	memset(notificationData.message, 0, sizeof(notificationData.message));
@@ -84,6 +91,9 @@ void uiNotificationShow(uiNotificationType_t type, uiNotificationID_t id, uint32
 	switch (type)
 	{
 		case NOTIFICATION_TYPE_SQUELCH:
+#if defined(HAS_SOFT_VOLUME)
+		case NOTIFICATION_TYPE_VOLUME:
+#endif
 			break;
 
 		case NOTIFICATION_TYPE_POWER:
@@ -119,24 +129,52 @@ void uiNotificationRefresh(void)
 		// copy the primary screen content
 		memcpy(screenNotificationBufData, displayGetPrimaryScreenBuffer(), sizeof(screenNotificationBufData));
 
-		//displayOverrideScreenBuffer(screenNotificationBufData);
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_GD77) || defined(PLATFORM_GD77S) || defined(PLATFORM_DM1801) || defined(PLATFORM_DM1801A) || defined(PLATFORM_RD5R)
+		displayOverrideScreenBuffer(screenNotificationBufData);
+#endif
 
 		// Draw whatever
 		switch (notificationData.type)
 		{
 			case NOTIFICATION_TYPE_SQUELCH:
+#if defined(HAS_SOFT_VOLUME)
+			case NOTIFICATION_TYPE_VOLUME:
+#endif
 			{
 				char buffer[SCREEN_LINE_BUFFER_SIZE];
+				const int16_t totalBarLength = (((DISPLAY_SIZE_X - XBAR) - 4) - 4);
+				double slope;
+				int16_t bargraph;
 
-				strncpy(buffer, currentLanguage->squelch, 9);
+#if defined(HAS_SOFT_VOLUME)
+				if (notificationData.type == NOTIFICATION_TYPE_VOLUME)
+				{
+					uint16_t volValue = CLAMP((lastVolume + 32), 0, 62);
+
+					slope = 1.0 * (totalBarLength) / 62.0;
+					bargraph = slope * volValue;
+
+					strncpy(buffer, currentLanguage->volume, 9);
+				}
+				else
+#endif
+				{
+					slope = 1.0 * (totalBarLength) / (CODEPLUG_MAX_VARIABLE_SQUELCH - CODEPLUG_MIN_VARIABLE_SQUELCH);
+					bargraph = slope * (currentChannelData->sql - CODEPLUG_MIN_VARIABLE_SQUELCH);
+
+					strncpy(buffer, currentLanguage->squelch, 9);
+				}
 				buffer[8] = 0;
 
-				int sLen = (strlen(buffer) * 8);
-				displayDrawRoundRectWithDropShadow(1, YBOX, DISPLAY_SIZE_X - 4, INNERBOX_H, 3, true);
-				displayPrintAt(2 + ((sLen) < XBAR - 2 ? (((XBAR - 2) - (sLen)) >> 1) : 0), YTEXT, buffer, FONT_SIZE_3);
+				size_t sLen = (strlen(buffer) * 8);
 
-				int bargraph = 1 + ((currentChannelData->sql - 1) * 5) / 2;
-				displayDrawRect((XBAR - 2), YBAR, 55, (SQUELCH_BAR_H + 4), true);
+				displayThemeApply(THEME_ITEM_FG_DECORATION, THEME_ITEM_BG_NOTIFICATION);
+				displayDrawRoundRectWithDropShadow(1, YBOX, DISPLAY_SIZE_X - 4, INNERBOX_H, 3, true);
+
+				displayThemeApply(THEME_ITEM_FG_NOTIFICATION, THEME_ITEM_BG_NOTIFICATION);
+				displayPrintAt(2 + ((sLen < (XBAR - 2)) ? (((XBAR - 2) - sLen) >> 1) : 0), YTEXT, buffer, FONT_SIZE_3);
+
+				displayDrawRect((XBAR - 2), YBAR, (totalBarLength + 4), (SQUELCH_BAR_H + 4), true);
 				displayFillRect(XBAR, (YBAR + 2), bargraph, SQUELCH_BAR_H, false);
 			}
 			break;
@@ -146,14 +184,18 @@ void uiNotificationRefresh(void)
 				char buffer[SCREEN_LINE_BUFFER_SIZE];
 				int powerLevel = trxGetPowerLevel();
 
+				displayThemeApply(THEME_ITEM_FG_DECORATION, THEME_ITEM_BG_NOTIFICATION);
 				displayDrawRoundRectWithDropShadow((DISPLAY_SIZE_X / 4), YBOX, (DISPLAY_SIZE_X / 2), INNERBOX_H, 3, true);
 				sprintf(buffer, "%s%s", POWER_LEVELS[powerLevel], POWER_LEVEL_UNITS[powerLevel]);
+				displayThemeApply(THEME_ITEM_FG_NOTIFICATION, THEME_ITEM_BG_NOTIFICATION);
 				displayPrintCentered(YTEXT, buffer, FONT_SIZE_3);
 			}
 			break;
 
 			case NOTIFICATION_TYPE_MESSAGE:
-				displayDrawRoundRectWithDropShadow(1, YBOX, (DISPLAY_SIZE_X - 64), INNERBOX_H, 3, true);
+				displayThemeApply(THEME_ITEM_FG_DECORATION, THEME_ITEM_BG_NOTIFICATION);
+				displayDrawRoundRectWithDropShadow(1, YBOX, (DISPLAY_SIZE_X - 4), INNERBOX_H, 3, true);
+				displayThemeApply(THEME_ITEM_FG_NOTIFICATION, THEME_ITEM_BG_NOTIFICATION);
 				displayPrintCentered(YTEXT, notificationData.message, FONT_SIZE_3);
 				break;
 
@@ -161,9 +203,13 @@ void uiNotificationRefresh(void)
 				break;
 		}
 
+		displayThemeResetToDefault();
 		displayRenderWithoutNotification();
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_GD77) || defined(PLATFORM_GD77S) || defined(PLATFORM_DM1801) || defined(PLATFORM_DM1801A) || defined(PLATFORM_RD5R)
+		displayRestorePrimaryScreenBuffer();
+#else
 		memcpy(displayGetPrimaryScreenBuffer(), screenNotificationBufData, sizeof(screenNotificationBufData));
-		//displayRestorePrimaryScreenBuffer();
+#endif
 	}
 }
 

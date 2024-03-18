@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -51,7 +51,7 @@ menuStatus_t menuPrivateCall(uiEvent_t *ev, bool isFirstRun)
 			return MENU_STATUS_SUCCESS;
 		}
 
-		soundSetMelody(MELODY_PRIVATE_CALL);
+//		soundSetMelody(MELODY_PRIVATE_CALL);			//disable melody because it prevents the call from being heard.
 		uiDataGlobal.PrivateCall.state = PRIVATE_CALL_ACCEPT;
 		uiDataGlobal.receivedPcId = LinkHead->id;
 		uiDataGlobal.receivedPcTS = (dmrMonitorCapturedTS != -1) ? dmrMonitorCapturedTS : trxGetDMRTimeSlot();

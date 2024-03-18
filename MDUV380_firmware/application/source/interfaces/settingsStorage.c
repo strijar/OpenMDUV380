@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions
@@ -28,10 +28,10 @@
 #include "interfaces/batteryRAM.h"
 #include "interfaces/settingsStorage.h"
 
-#define STORAGE_BASE_ADDRESS          0x6000
+#define STORAGE_BASE_ADDRESS         (0x6000 + 0x4B /* After "Last Used Channel In Zone" */)
 #define USE_PERMANENT_STORAGE
 #if defined(STM32F405xx)
-#define SETTINGS_START_ADDRESS  0x02
+#define SETTINGS_START_ADDRESS        0x02
 #endif
 
 bool settingsStorageRead(uint8_t *buf, uint32_t size)
@@ -51,35 +51,3 @@ bool settingsStorageWrite(uint8_t *buf, uint32_t size)
 	return batteryRAM_Write(SETTINGS_START_ADDRESS,buf,size);
 #endif
 }
-
-/*
-// Battery RAM is 4k. Put VFOs at the end
-const uint32_t VFOs_STORAGE_ADDRESS = ((4 * 1024) - (sizeof(struct_codeplugChannel_t) * 2));
-
-bool settingsStorageReadVFO(struct_codeplugChannel_t * buf, int vfoNum)
-{
-	return batteryRAM_Read(VFOs_STORAGE_ADDRESS + (vfoNum * sizeof(struct_codeplugChannel_t)), (uint8_t *)buf, sizeof(struct_codeplugChannel_t));
-}
-
-bool settingsStorageWriteVFO(struct_codeplugChannel_t * buf, int vfoNum)
-{
-	return batteryRAM_Write(VFOs_STORAGE_ADDRESS + (vfoNum * sizeof(struct_codeplugChannel_t)),	(uint8_t *)buf, sizeof(struct_codeplugChannel_t));
-}
-
-bool settingsStorageMarkVFOsasDirty(void)
-{
-	struct_codeplugChannel_t zeroBuf;
-
-	zeroBuf.magicNumber = 0x00000000;
-
-	uint32_t magicOffset = (void *)&zeroBuf.magicNumber - (void *)&zeroBuf;
-
-	if (batteryRAM_Write(VFOs_STORAGE_ADDRESS + magicOffset,(uint8_t *)&zeroBuf.magicNumber, 4))
-	{
-		return batteryRAM_Write(VFOs_STORAGE_ADDRESS + sizeof(struct_codeplugChannel_t) + magicOffset,(uint8_t *)&zeroBuf.magicNumber, 4);
-	}
-
-	return false;
-}
-
-*/

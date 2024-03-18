@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -35,9 +35,12 @@
 
 static void updateScreen(bool isFirstRun);
 static void handleEvent(uiEvent_t *ev);
+static void applySettings(void);
+static void exitCallback(void *data);
 
 static menuStatus_t menuOptionsExitCode = MENU_STATUS_SUCCESS;
-enum RADIO_OPTIONS_MENU_LIST
+
+enum
 {
 	RADIO_OPTIONS_MENU_TX_FREQ_LIMITS = 0U,
 	RADIO_OPTIONS_MENU_DMR_MONITOR_CAPTURE_TIMEOUT,
@@ -46,7 +49,7 @@ enum RADIO_OPTIONS_MENU_LIST
 	RADIO_OPTIONS_MENU_SCAN_MODE,
 	RADIO_OPTIONS_MENU_SCAN_ON_BOOT,
 	RADIO_OPTIONS_MENU_SQUELCH_DEFAULT_VHF,
-#if !(defined(PLATFORM_MD9600) || defined(PLATFORM_MD380))
+#if ! (defined(PLATFORM_MD9600) || defined(PLATFORM_MD380))
 	RADIO_OPTIONS_MENU_SQUELCH_DEFAULT_220MHz,
 #endif
 	RADIO_OPTIONS_MENU_SQUELCH_DEFAULT_UHF,
@@ -74,9 +77,11 @@ menuStatus_t menuRadioOptions(uiEvent_t *ev, bool isFirstRun)
 
 		voicePromptsInit();
 		voicePromptsAppendPrompt(PROMPT_SILENCE);
-		voicePromptsAppendLanguageString(&currentLanguage->radio_options);
-		voicePromptsAppendLanguageString(&currentLanguage->menu);
+		voicePromptsAppendLanguageString(currentLanguage->radio_options);
+		voicePromptsAppendLanguageString(currentLanguage->menu);
 		voicePromptsAppendPrompt(PROMPT_SILENCE);
+
+		menuSystemRegisterExitCallback(exitCallback, NULL);
 
 		updateScreen(true);
 		return (MENU_STATUS_LIST_TYPE | MENU_STATUS_SUCCESS);
@@ -97,14 +102,14 @@ static void updateScreen(bool isFirstRun)
 {
 	int mNum = 0;
 	char buf[SCREEN_LINE_BUFFER_SIZE];
-	char * const *leftSide = NULL;// initialize to please the compiler
-	char * const *rightSideConst = NULL;// initialize to please the compiler
+	const char *leftSide = NULL;// initialize to please the compiler
+	const char *rightSideConst = NULL;// initialize to please the compiler
 	char rightSideVar[SCREEN_LINE_BUFFER_SIZE];
 	voicePrompt_t rightSideUnitsPrompt;
-	const char * rightSideUnitsStr;
+	const char *rightSideUnitsStr;
 
 	displayClearBuf();
-	bool settingOption = uiShowQuickKeysChoices(buf, SCREEN_LINE_BUFFER_SIZE, currentLanguage->radio_options);
+	bool settingOption = uiQuickKeysShowChoices(buf, SCREEN_LINE_BUFFER_SIZE, currentLanguage->radio_options);
 
 	for(int i = 1 - ((MENU_MAX_DISPLAYED_ENTRIES - 1) / 2) - 1; i <= (MENU_MAX_DISPLAYED_ENTRIES - ((MENU_MAX_DISPLAYED_ENTRIES - 1) / 2) - 1); i++)
 	{
@@ -131,14 +136,14 @@ static void updateScreen(bool isFirstRun)
 			switch(mNum)
 			{
 				case RADIO_OPTIONS_MENU_TX_FREQ_LIMITS:// Tx Freq limits
-					leftSide = (char * const *)&currentLanguage->band_limits;
+					leftSide = currentLanguage->band_limits;
 					switch(nonVolatileSettings.txFreqLimited)
 					{
 						case BAND_LIMITS_NONE:
-							rightSideConst = (char * const *)(&currentLanguage->off);
+							rightSideConst = currentLanguage->off;
 							break;
 						case BAND_LIMITS_ON_LEGACY_DEFAULT:
-							rightSideConst = (char * const *)(&currentLanguage->on);
+							rightSideConst = currentLanguage->on;
 							break;
 						case BAND_LIMITS_FROM_CPS:
 							strcpy(rightSideVar,"CPS");
@@ -147,68 +152,68 @@ static void updateScreen(bool isFirstRun)
 
 					break;
 				case RADIO_OPTIONS_MENU_DMR_MONITOR_CAPTURE_TIMEOUT:// DMR filtr timeout repeat
-					leftSide = (char * const *)&currentLanguage->dmr_filter_timeout;
+					leftSide = currentLanguage->dmr_filter_timeout;
 					snprintf(rightSideVar, SCREEN_LINE_BUFFER_SIZE, "%d", nonVolatileSettings.dmrCaptureTimeout);
 					rightSideUnitsPrompt = PROMPT_SECONDS;
 					rightSideUnitsStr = "s";
 					break;
 				case RADIO_OPTIONS_MENU_SCAN_DELAY:// Scan hold and pause time
-					leftSide = (char * const *)&currentLanguage->scan_delay;
+					leftSide = currentLanguage->scan_delay;
 					snprintf(rightSideVar, SCREEN_LINE_BUFFER_SIZE, "%d", nonVolatileSettings.scanDelay);
 					rightSideUnitsPrompt = PROMPT_SECONDS;
 					rightSideUnitsStr = "s";
 					break;
 				case RADIO_OPTIONS_MENU_SCAN_STEP_TIME:// Scan step time
-					leftSide = (char * const *)&currentLanguage->scan_dwell_time;
+					leftSide = currentLanguage->scan_dwell_time;
 					snprintf(rightSideVar, SCREEN_LINE_BUFFER_SIZE, "%d", settingsGetScanStepTimeMilliseconds());
 					rightSideUnitsPrompt = PROMPT_MILLISECONDS;
 					rightSideUnitsStr = "ms";
 					break;
 				case RADIO_OPTIONS_MENU_SCAN_MODE:// scanning mode
-					leftSide = (char * const *)&currentLanguage->scan_mode;
+					leftSide = currentLanguage->scan_mode;
 					{
-						const char * const *scanModes[] = { &currentLanguage->hold, &currentLanguage->pause, &currentLanguage->stop };
-						rightSideConst = (char * const *)scanModes[nonVolatileSettings.scanModePause];
+						const char *scanModes[] = { currentLanguage->hold, currentLanguage->pause, currentLanguage->stop };
+						rightSideConst = scanModes[nonVolatileSettings.scanModePause];
 					}
 					break;
 				case RADIO_OPTIONS_MENU_SCAN_ON_BOOT:
-					leftSide = (char * const *)&currentLanguage->scan_on_boot;
-					rightSideConst = settingsIsOptionBitSet(BIT_SCAN_ON_BOOT_ENABLED) ? (char * const *)&currentLanguage->on : (char * const *)&currentLanguage->off;
+					leftSide = currentLanguage->scan_on_boot;
+					rightSideConst = (settingsIsOptionBitSet(BIT_SCAN_ON_BOOT_ENABLED) ? currentLanguage->on : currentLanguage->off);
 					break;
 				case RADIO_OPTIONS_MENU_SQUELCH_DEFAULT_VHF:
-					leftSide = (char * const *)&currentLanguage->squelch_VHF;
+					leftSide = currentLanguage->squelch_VHF;
 					snprintf(rightSideVar, SCREEN_LINE_BUFFER_SIZE, "%d%%", (nonVolatileSettings.squelchDefaults[RADIO_BAND_VHF] - 1) * 5);// 5% steps
 					break;
-#if !(defined(PLATFORM_MD9600) || defined(PLATFORM_MD380))
+#if ! (defined(PLATFORM_MD9600) || defined(PLATFORM_MD380))
 				case RADIO_OPTIONS_MENU_SQUELCH_DEFAULT_220MHz:
-					leftSide = (char * const *)&currentLanguage->squelch_220;
+					leftSide = currentLanguage->squelch_220;
 					snprintf(rightSideVar, SCREEN_LINE_BUFFER_SIZE, "%d%%", (nonVolatileSettings.squelchDefaults[RADIO_BAND_220MHz] - 1) * 5);// 5% steps
 					break;
 #endif
 				case RADIO_OPTIONS_MENU_SQUELCH_DEFAULT_UHF:
-					leftSide = (char * const *)&currentLanguage->squelch_UHF;
+					leftSide = currentLanguage->squelch_UHF;
 					snprintf(rightSideVar, SCREEN_LINE_BUFFER_SIZE, "%d%%", (nonVolatileSettings.squelchDefaults[RADIO_BAND_UHF] - 1) * 5);// 5% steps
 					break;
 				case RADIO_OPTIONS_MENU_PTT_TOGGLE:
-					leftSide = (char * const *)&currentLanguage->ptt_toggle;
-					rightSideConst = (char * const *)(settingsIsOptionBitSet(BIT_PTT_LATCH) ? &currentLanguage->on : &currentLanguage->off);
+					leftSide = currentLanguage->ptt_toggle;
+					rightSideConst = (settingsIsOptionBitSet(BIT_PTT_LATCH) ? currentLanguage->on : currentLanguage->off);
 					break;
 				case RADIO_OPTIONS_MENU_PRIVATE_CALLS:
-					leftSide = (char * const *)&currentLanguage->private_call_handling;
-					const char * const *allowPCOptions[] = { &currentLanguage->off, &currentLanguage->on, &currentLanguage->ptt, &currentLanguage->Auto};
-					rightSideConst = (char * const *)allowPCOptions[nonVolatileSettings.privateCalls];
+					leftSide = currentLanguage->private_call_handling;
+					const char *allowPCOptions[] = { currentLanguage->off, currentLanguage->on, currentLanguage->ptt, currentLanguage->Auto};
+					rightSideConst = allowPCOptions[nonVolatileSettings.privateCalls];
 					break;
 				case RADIO_OPTIONS_MENU_USER_POWER:
-					leftSide = (char * const *)&currentLanguage->user_power;
+					leftSide = currentLanguage->user_power;
 					snprintf(rightSideVar, SCREEN_LINE_BUFFER_SIZE, "%d", (nonVolatileSettings.userPower));
 					break;
 				case RADIO_OPTIONS_MENU_DMR_CRC:
-					leftSide = (char * const *)&currentLanguage->dmr_crc;
-					rightSideConst = settingsIsOptionBitSet(BIT_DMR_CRC_IGNORED) ? (char * const *)&currentLanguage->off : (char * const *)&currentLanguage->on;
+					leftSide = currentLanguage->dmr_crc;
+					rightSideConst = (settingsIsOptionBitSet(BIT_DMR_CRC_IGNORED) ? currentLanguage->off : currentLanguage->on);
 					break;
 			}
 
-			snprintf(buf, SCREEN_LINE_BUFFER_SIZE, "%s:%s", *leftSide, (rightSideVar[0] ? rightSideVar : (rightSideConst ? *rightSideConst : "")));
+			snprintf(buf, SCREEN_LINE_BUFFER_SIZE, "%s:%s", leftSide, (rightSideVar[0] ? rightSideVar : (rightSideConst ? rightSideConst : "")));
 
 			if (i == 0)
 			{
@@ -219,9 +224,9 @@ static void updateScreen(bool isFirstRun)
 					voicePromptsInit();
 				}
 
-				if (!wasPlaying || menuDataGlobal.newOptionSelected)
+				if (!wasPlaying || (menuDataGlobal.newOptionSelected || (menuDataGlobal.menuOptionsTimeout > 0)))
 				{
-					voicePromptsAppendLanguageString((const char * const *)leftSide);
+					voicePromptsAppendLanguageString(leftSide);
 				}
 
 				if ((rightSideVar[0] != 0) || ((rightSideVar[0] == 0) && (rightSideConst == NULL)))
@@ -230,7 +235,7 @@ static void updateScreen(bool isFirstRun)
 				}
 				else
 				{
-					voicePromptsAppendLanguageString((const char * const *)rightSideConst);
+					voicePromptsAppendLanguageString(rightSideConst);
 				}
 
 				if (rightSideUnitsPrompt != PROMPT_SILENCE)
@@ -256,7 +261,7 @@ static void updateScreen(bool isFirstRun)
 			// QuickKeys
 			if (menuDataGlobal.menuOptionsTimeout > 0)
 			{
-				menuDisplaySettingOption(*leftSide, (rightSideVar[0] ? rightSideVar : *rightSideConst));
+				menuDisplaySettingOption(leftSide, (rightSideVar[0] ? rightSideVar : rightSideConst));
 			}
 			else
 			{
@@ -265,7 +270,7 @@ static void updateScreen(bool isFirstRun)
 					strncat(buf, rightSideUnitsStr, SCREEN_LINE_BUFFER_SIZE);
 				}
 
-				menuDisplayEntry(i, mNum, buf);
+				menuDisplayEntry(i, mNum, buf, (strlen(leftSide) + 1), THEME_ITEM_FG_MENU_ITEM, THEME_ITEM_FG_OPTIONS_VALUE, THEME_ITEM_BG);
 			}
 		}
 	}
@@ -287,21 +292,31 @@ static void handleEvent(uiEvent_t *ev)
 
 	if ((menuDataGlobal.menuOptionsTimeout > 0) && (!BUTTONCHECK_DOWN(ev, BUTTON_SK2)))
 	{
-		menuDataGlobal.menuOptionsTimeout--;
-		if (menuDataGlobal.menuOptionsTimeout == 0)
+		if (voicePromptsIsPlaying() == false)
 		{
-			resetOriginalSettingsData();
-			menuSystemPopPreviousMenu();
-			return;
+			menuDataGlobal.menuOptionsTimeout--;
+			if (menuDataGlobal.menuOptionsTimeout == 0)
+			{
+				applySettings();
+				menuSystemPopPreviousMenu();
+				return;
+			}
 		}
 	}
+
 	if (ev->events & FUNCTION_EVENT)
 	{
 		isDirty = true;
-		if ((QUICKKEY_TYPE(ev->function) == QUICKKEY_MENU) && (QUICKKEY_ENTRYID(ev->function) < NUM_RADIO_OPTIONS_MENU_ITEMS))
+		if (ev->function == FUNC_REDRAW)
+		{
+			updateScreen(false);
+			return;
+		}
+		else if ((QUICKKEY_TYPE(ev->function) == QUICKKEY_MENU) && (QUICKKEY_ENTRYID(ev->function) < NUM_RADIO_OPTIONS_MENU_ITEMS))
 		{
 			menuDataGlobal.currentItemIndex = QUICKKEY_ENTRYID(ev->function);
 		}
+
 		if ((QUICKKEY_FUNCTIONID(ev->function) != 0))
 		{
 			menuDataGlobal.menuOptionsTimeout = 1000;
@@ -326,20 +341,12 @@ static void handleEvent(uiEvent_t *ev)
 		}
 		else if (KEYCHECK_SHORTUP(ev->keys, KEY_GREEN))
 		{
-			settingsSaveIfNeeded(true);
-			resetOriginalSettingsData();
-			rxPowerSavingSetLevel(nonVolatileSettings.ecoLevel);
+			applySettings();
 			menuSystemPopAllAndDisplayRootMenu();
 			return;
 		}
 		else if (KEYCHECK_SHORTUP(ev->keys, KEY_RED))
 		{
-			// Restore original settings.
-			memcpy(&nonVolatileSettings, &originalNonVolatileSettings, sizeof(settingsStruct_t));
-			settingsSaveIfNeeded(true);
-			trxUpdate_PA_DAC_Drive();
-
-			resetOriginalSettingsData();
 			menuSystemPopPreviousMenu();
 			return;
 		}
@@ -349,10 +356,15 @@ static void handleEvent(uiEvent_t *ev)
 				isDirty = true;
 		}
 	}
+
 	if ((ev->events & (KEY_EVENT | FUNCTION_EVENT)) && (menuDataGlobal.menuOptionsSetQuickkey == 0))
 	{
 
-		if (KEYCHECK_PRESS(ev->keys, KEY_RIGHT) || (QUICKKEY_FUNCTIONID(ev->function) == FUNC_RIGHT))
+		if (KEYCHECK_PRESS(ev->keys, KEY_RIGHT)
+#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+				|| KEYCHECK_SHORTUP(ev->keys, KEY_ROTARY_INCREMENT)
+#endif
+				|| (QUICKKEY_FUNCTIONID(ev->function) == FUNC_RIGHT))
 		{
 			isDirty = true;
 			menuDataGlobal.newOptionSelected = false;
@@ -400,7 +412,7 @@ static void handleEvent(uiEvent_t *ev)
 						settingsIncrement(nonVolatileSettings.squelchDefaults[RADIO_BAND_VHF], 1);
 					}
 					break;
-#if !(defined(PLATFORM_MD9600) || defined(PLATFORM_MD380))
+#if ! (defined(PLATFORM_MD9600) || defined(PLATFORM_MD380))
 				case RADIO_OPTIONS_MENU_SQUELCH_DEFAULT_220MHz:
 					if (nonVolatileSettings.squelchDefaults[RADIO_BAND_220MHz] < CODEPLUG_MAX_VARIABLE_SQUELCH)
 					{
@@ -419,7 +431,6 @@ static void handleEvent(uiEvent_t *ev)
 					{
 						settingsSetOptionBit(BIT_PTT_LATCH, true);
 					}
-					break;
 					break;
 				case RADIO_OPTIONS_MENU_PRIVATE_CALLS:
 					// Note. Currently the "AUTO" option is not available
@@ -448,7 +459,11 @@ static void handleEvent(uiEvent_t *ev)
 					break;
 			}
 		}
-		else if (KEYCHECK_PRESS(ev->keys, KEY_LEFT) || (QUICKKEY_FUNCTIONID(ev->function) == FUNC_LEFT))
+		else if (KEYCHECK_PRESS(ev->keys, KEY_LEFT)
+#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+				|| KEYCHECK_SHORTUP(ev->keys, KEY_ROTARY_DECREMENT)
+#endif
+				|| (QUICKKEY_FUNCTIONID(ev->function) == FUNC_LEFT))
 		{
 			isDirty = true;
 			menuDataGlobal.newOptionSelected = false;
@@ -496,7 +511,7 @@ static void handleEvent(uiEvent_t *ev)
 						settingsDecrement(nonVolatileSettings.squelchDefaults[RADIO_BAND_VHF], 1);
 					}
 					break;
-#if !(defined(PLATFORM_MD9600) || defined(PLATFORM_MD380))
+#if ! (defined(PLATFORM_MD9600) || defined(PLATFORM_MD380))
 				case RADIO_OPTIONS_MENU_SQUELCH_DEFAULT_220MHz:
 					if (nonVolatileSettings.squelchDefaults[RADIO_BAND_220MHz] > 1)
 					{
@@ -551,29 +566,9 @@ static void handleEvent(uiEvent_t *ev)
 		}
 	}
 
-	if ((ev->events & KEY_EVENT) && (menuDataGlobal.menuOptionsSetQuickkey != 0) && (menuDataGlobal.menuOptionsTimeout == 0))
+	if (uiQuickKeysIsStoring(ev))
 	{
-		if (KEYCHECK_SHORTUP(ev->keys, KEY_RED))
-		{
-			menuDataGlobal.menuOptionsSetQuickkey = 0;
-			menuDataGlobal.menuOptionsTimeout = 0;
-			menuOptionsExitCode |= MENU_STATUS_ERROR;
-		}
-		else if (KEYCHECK_SHORTUP(ev->keys, KEY_GREEN))
-		{
-			saveQuickkeyMenuIndex(menuDataGlobal.menuOptionsSetQuickkey, menuSystemGetCurrentMenuNumber(), menuDataGlobal.currentItemIndex, 0);
-			menuDataGlobal.menuOptionsSetQuickkey = 0;
-		}
-		else if (KEYCHECK_SHORTUP(ev->keys, KEY_LEFT))
-		{
-			saveQuickkeyMenuIndex(menuDataGlobal.menuOptionsSetQuickkey, menuSystemGetCurrentMenuNumber(), menuDataGlobal.currentItemIndex, FUNC_LEFT);
-			menuDataGlobal.menuOptionsSetQuickkey = 0;
-		}
-		else if (KEYCHECK_SHORTUP(ev->keys, KEY_RIGHT))
-		{
-			saveQuickkeyMenuIndex(menuDataGlobal.menuOptionsSetQuickkey, menuSystemGetCurrentMenuNumber(), menuDataGlobal.currentItemIndex, FUNC_RIGHT);
-			menuDataGlobal.menuOptionsSetQuickkey = 0;
-		}
+		uiQuickKeysStore(ev, &menuOptionsExitCode);
 		isDirty = true;
 	}
 
@@ -582,3 +577,23 @@ static void handleEvent(uiEvent_t *ev)
 		updateScreen(false);
 	}
 }
+
+static void applySettings(void)
+{
+	settingsSaveIfNeeded(true);
+	resetOriginalSettingsData();
+}
+
+static void exitCallback(void *data)
+{
+	if (originalNonVolatileSettings.magicNumber != 0xDEADBEEF)
+	{
+		// Restore original settings.
+		memcpy(&nonVolatileSettings, &originalNonVolatileSettings, sizeof(settingsStruct_t));
+		settingsSaveIfNeeded(true);
+		trxUpdate_PA_DAC_Drive();
+
+		resetOriginalSettingsData();
+	}
+}
+

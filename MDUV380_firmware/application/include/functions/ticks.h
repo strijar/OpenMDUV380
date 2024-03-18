@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2019      Kai Ludwig, DG4KLU
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions
@@ -52,5 +52,6 @@ void ticksTimerReset(ticksTimer_t *timer);
 void ticksTimerStart(ticksTimer_t *timer, uint32_t timeout);
 bool ticksTimerHasExpired(ticksTimer_t *timer);
 uint32_t ticksTimerRemaining(ticksTimer_t *timer);
+bool ticksTimerIsEnabled(ticksTimer_t *timer);
 
 #endif /* _OPENGD77_TICKS_H_ */

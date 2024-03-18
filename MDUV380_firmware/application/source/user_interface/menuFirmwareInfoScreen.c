@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -28,9 +28,12 @@
 #include "user_interface/menuSystem.h"
 #include "user_interface/uiLocalisation.h"
 #include "user_interface/uiUtilities.h"
-#include "FreeRTOSConfig.h"
 
-enum { FIRMWARE_INFO_BUILD_DETAILS = 0 /* then all credits pages */ };
+
+enum
+{
+	FIRMWARE_INFO_BUILD_DETAILS = 0 /* then all credits pages */
+};
 
 #if defined(PLATFORM_RD5R)
 #define maxDisplayedCreditsLines  3
@@ -102,6 +105,12 @@ static void handleEvent(uiEvent_t *ev)
 		}
 	}
 
+	if ((ev->events & FUNCTION_EVENT) && (ev->function == FUNC_REDRAW))
+	{
+		updateScreen(false);
+		return;
+	}
+
 	if (EVENTCHECK_SHORTUP(ev->keys))
 	{
 		switch(ev->keys.key)
@@ -130,77 +139,75 @@ static void handleEvent(uiEvent_t *ev)
 	}
 }
 
-
 static void displayBuildDetails(bool playVP)
 {
 #if !defined(PLATFORM_GD77S)
-	char buf[SCREEN_LINE_BUFFER_SIZE];
-	char * const *radioModel;
-#if (defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017))
-	snprintf(buf, SCREEN_LINE_BUFFER_SIZE, "[ %s", XSTRINGIFY(GITVERSION));
-#else
-	snprintf(buf, SCREEN_LINE_BUFFER_SIZE, "[ %s", GITVERSION);
-#endif	
-	buf[9] = 0; // git hash id 7 char long;
-	strcat(buf, (uiDataGlobal.dmrDisabled ? " F ]" : " D ]"));
+	char versionBuf[SCREEN_LINE_BUFFER_SIZE];
+	const char *radioModel = currentLanguage->openGD77;
+	char dateTimeBuf[SCREEN_LINE_BUFFER_SIZE];
 
 	displayClearBuf();
 
-#if defined(PLATFORM_GD77)
-	radioModel = (char * const *)&currentLanguage->openGD77;
-#elif defined(PLATFORM_DM1801)
-	radioModel = (char * const *)&currentLanguage->openDM1801;
-#elif defined(PLATFORM_DM1801A)
-	radioModel = (char * const *)&currentLanguage->openDM1801A;
-#elif defined(PLATFORM_RD5R)
-	radioModel = (char * const *)&currentLanguage->openRD5R;
-#elif defined(PLATFORM_MDUV9600)
-	radioModel = (char * const *)&currentLanguage->openMD9600;
-#elif defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
-	radioModel = (char * const *)&currentLanguage->openMDUV380;
-#elif defined(PLATFORM_MD380)
-	radioModel = (char * const *)&currentLanguage->openMD380;
-#endif
+	sprintf(dateTimeBuf, "%d%02d%02d%02d%02d%02d", BUILD_YEAR, BUILD_MONTH, BUILD_DAY, BUILD_HOUR, BUILD_MIN, BUILD_SEC);
 
-#if defined(PLATFORM_RD5R)
-	displayPrintCentered(0, *radioModel, FONT_SIZE_3);
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+	snprintf(versionBuf, SCREEN_LINE_BUFFER_SIZE, "[ %s", XSTRINGIFY(GITVERSION));
 #else
-	displayPrintCentered(5, *radioModel, FONT_SIZE_3);
+	snprintf(versionBuf, SCREEN_LINE_BUFFER_SIZE, "[ %s", GITVERSION);
 #endif
+	versionBuf[9] = 0; // git hash id 7 char long;
+	strcat(versionBuf, (uiDataGlobal.dmrDisabled ? " F ]" : " D ]"));
 
 
 #if defined(PLATFORM_RD5R)
+	displayPrintCentered(0, radioModel, FONT_SIZE_3);
 	displayPrintCentered(10, currentLanguage->built, FONT_SIZE_2);
-	displayPrintCentered(20,__TIME__, FONT_SIZE_2);
-	displayPrintCentered(28,__DATE__, FONT_SIZE_2);
-	displayPrintCentered(36, buf, FONT_SIZE_2);
+	displayPrintCentered(20, dateTimeBuf , FONT_SIZE_2);
+	displayPrintCentered(30, versionBuf, FONT_SIZE_2);
 #else
+	displayPrintCentered(5, radioModel, FONT_SIZE_3);
 	displayPrintCentered(20, currentLanguage->built, FONT_SIZE_2);
-	char dateTimeBuf[SCREEN_LINE_BUFFER_SIZE];
-	sprintf(dateTimeBuf,"%d%02d%02d%02d%02d%02d",BUILD_YEAR,BUILD_MONTH,BUILD_DAY,BUILD_HOUR,BUILD_MIN,BUILD_SEC);
-	displayPrintCentered(30,dateTimeBuf , FONT_SIZE_2);
-	displayPrintCentered(40, buf, FONT_SIZE_2);
-#if defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
-	char cpuTypeBuf[SCREEN_LINE_BUFFER_SIZE];
-	strcpy(cpuTypeBuf,(NumInterruptPriorityBits==4)?"CPU:STM":" CPU:TYT");
-	displayPrintCentered(50,cpuTypeBuf , FONT_SIZE_2);
-#endif
+	displayPrintCentered(30, dateTimeBuf , FONT_SIZE_2);
+	displayPrintCentered(40, versionBuf, FONT_SIZE_2);
 #endif
 
-	if (playVP && (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_LEVEL_1))
+// STM32 platforms (Genuine or Clone)
+#if defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_MD9600) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+	char cpuTypeBuf[SCREEN_LINE_BUFFER_SIZE] = {0};
+
+#if defined(PLATFORM_MD9600)
+	strncpy(cpuTypeBuf,
+#if defined(MD9600_VERSION_1)
+			"HW v1 "
+#elif defined(MD9600_VERSION_2)
+			"HW v2 "
+#elif defined(MD9600_VERSION_4)
+			"HW v4 "
+#elif defined(MD9600_VERSION_5)
+			"HW v5 "
+#endif
+	, SCREEN_LINE_BUFFER_SIZE);
+#endif
+
+	strncat(cpuTypeBuf, (NumInterruptPriorityBits == 4) ? "CPU:STM" : " CPU:TYT", (SCREEN_LINE_BUFFER_SIZE - (strlen(cpuTypeBuf) - 1)));
+	displayPrintCentered(50, cpuTypeBuf , FONT_SIZE_2);
+#endif
+
+	if (playVP && (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_THRESHOLD))
 	{
 		voicePromptsInit();
 		voicePromptsAppendPrompt(PROMPT_SILENCE);
-		voicePromptsAppendLanguageString((const char * const *)radioModel);
-		voicePromptsAppendLanguageString(&currentLanguage->built);
+		voicePromptsAppendLanguageString(radioModel);
+		voicePromptsAppendLanguageString(currentLanguage->built);
 		voicePromptsAppendString(dateTimeBuf);
-		voicePromptsAppendLanguageString(&currentLanguage->gitCommit);
-		voicePromptsAppendString(buf);
-#if defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+		voicePromptsAppendLanguageString(currentLanguage->gitCommit);
+		voicePromptsAppendString(versionBuf);
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
 		voicePromptsAppendString(cpuTypeBuf);
 #endif
 		promptsPlayNotAfterTx();
 	}
+
 	displayFillTriangle(63 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 1), 59 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 3), 67 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 3), blink);
 	displayRender();
 #endif
@@ -208,12 +215,12 @@ static void displayBuildDetails(bool playVP)
 
 static void displayCredits(bool playVP, uint32_t pageNumber)
 {
-	if (playVP && (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_LEVEL_1))
+	if (playVP && (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_THRESHOLD))
 	{
 		voicePromptsInit();
 		voicePromptsAppendPrompt(PROMPT_SILENCE);
-		voicePromptsAppendLanguageString(&currentLanguage->credits);
-		voicePromptsAppendLanguageString(&currentLanguage->menu);
+		voicePromptsAppendLanguageString(currentLanguage->credits);
+		voicePromptsAppendLanguageString(currentLanguage->menu);
 		voicePromptsAppendPrompt(PROMPT_SILENCE);
 		promptsPlayNotAfterTx();
 	}

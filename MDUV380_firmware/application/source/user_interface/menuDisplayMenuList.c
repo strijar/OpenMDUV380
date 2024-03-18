@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -39,7 +39,7 @@ menuStatus_t menuDisplayMenuList(uiEvent_t *ev, bool isFirstRun)
 {
 	if (isFirstRun)
 	{
-		char **menuName = NULL;
+		const char *menuName = NULL;
 		int currentMenuNumber = menuSystemGetCurrentMenuNumber();
 
 		menuDataGlobal.currentMenuList = (menuItemNewData_t *)menuDataGlobal.data[currentMenuNumber]->items;
@@ -53,8 +53,8 @@ menuStatus_t menuDisplayMenuList(uiEvent_t *ev, bool isFirstRun)
 
 				if (lastIndex != -1)
 				{
-					menuName = (char **)((int)&currentLanguage->LANGUAGE_NAME +
-							(menuDataGlobal.data[menuDataGlobal.controlData.stack[menuDataGlobal.controlData.stackPosition - 1]]->items[lastIndex].stringOffset * sizeof(char *)));
+					menuName = (currentLanguage->LANGUAGE_NAME +
+							(menuDataGlobal.data[menuDataGlobal.controlData.stack[menuDataGlobal.controlData.stackPosition - 1]]->items[lastIndex].stringOffset * LANGUAGE_TEXTS_LENGTH));
 				}
 			}
 		}
@@ -63,9 +63,9 @@ menuStatus_t menuDisplayMenuList(uiEvent_t *ev, bool isFirstRun)
 		if (menuName)
 		{
 			voicePromptsAppendPrompt(PROMPT_SILENCE);
-			voicePromptsAppendLanguageString((const char * const *)menuName);
+			voicePromptsAppendLanguageString((const char *)menuName);
 		}
-		voicePromptsAppendLanguageString(&currentLanguage->menu);
+		voicePromptsAppendLanguageString(currentLanguage->menu);
 		voicePromptsAppendPrompt(PROMPT_SILENCE);
 
 		updateScreen(true);
@@ -120,8 +120,8 @@ static void updateScreen(bool isFirstRun)
 		{
 			if (menuDataGlobal.currentMenuList[mNum].stringOffset >= 0)
 			{
-				char **menuName = (char **)((int)&currentLanguage->LANGUAGE_NAME + (menuDataGlobal.currentMenuList[mNum].stringOffset * sizeof(char *)));
-				menuDisplayEntry(i, mNum, (const char *)*menuName);
+				const char *menuName = (currentLanguage->LANGUAGE_NAME + (menuDataGlobal.currentMenuList[mNum].stringOffset * LANGUAGE_TEXTS_LENGTH));
+				menuDisplayEntry(i, mNum, menuName, 0, THEME_ITEM_FG_MENU_ITEM, THEME_ITEM_COLOUR_NONE, THEME_ITEM_BG);
 
 				if (i == 0)
 				{
@@ -130,7 +130,7 @@ static void updateScreen(bool isFirstRun)
 						voicePromptsInit();
 					}
 
-					voicePromptsAppendLanguageString((const char * const *)menuName);
+					voicePromptsAppendLanguageString(menuName);
 					promptsPlayNotAfterTx();
 				}
 			}
@@ -152,7 +152,11 @@ static void handleEvent(uiEvent_t *ev)
 
 	if (ev->events & FUNCTION_EVENT)
 	{
-		if ((QUICKKEY_TYPE(ev->function) == QUICKKEY_MENU) && (QUICKKEY_ENTRYID(ev->function) < menuDataGlobal.numItems))
+		if (ev->function == FUNC_REDRAW)
+		{
+			updateScreen(false);
+		}
+		else if ((QUICKKEY_TYPE(ev->function) == QUICKKEY_MENU) && (QUICKKEY_ENTRYID(ev->function) < menuDataGlobal.numItems))
 		{
 			menuDataGlobal.currentItemIndex = QUICKKEY_ENTRYID(ev->function);
 			updateScreen(false);

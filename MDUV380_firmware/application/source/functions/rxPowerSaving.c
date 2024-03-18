@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2021-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -110,7 +110,6 @@ void rxPowerSavingSetState(ecoPhase_t newState)
 
 void rxPowerSavingTick(uiEvent_t *ev, bool hasSignal)
 {
-
 	if ((settingsUsbMode != USB_MODE_HOTSPOT) || (rxPowerSavingState != ECOPHASE_POWERSAVE_INACTIVE))
 	{
 		if (USB_DeviceIsResetting() || isCompressingAMBE || hasSignal || trxTransmissionEnabled || trxIsTransmitting ||
@@ -139,8 +138,12 @@ void rxPowerSavingTick(uiEvent_t *ev, bool hasSignal)
 		else
 		{
 			if (ticksTimerHasExpired(&ecoPhaseTimer) &&
-					((powerSavingLevel > 0) && (codeplugChannelIsFlagSet(currentChannelData, CHANNEL_FLAG_NO_ECO) == false)) &&
-					(melody_play == NULL) && (voicePromptsIsPlaying() == false))
+					((powerSavingLevel > 0) && (codeplugChannelGetFlag(currentChannelData, CHANNEL_FLAG_NO_ECO) == 0)) &&
+					(melody_play == NULL) && (voicePromptsIsPlaying() == false)
+#if defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+					&& (voxIsEnabled() == false)
+#endif
+			)
 			{
 				int rxDuration = (130 - (10 * powerSavingLevel));
 
@@ -158,6 +161,7 @@ void rxPowerSavingTick(uiEvent_t *ev, bool hasSignal)
 							suspendBeepAndC6000Tasks();
 							clockManagerSetRunMode(kAPP_PowerModeRun, CLOCK_MANAGER_RUN_ECO_POWER_MODE);
 						}
+
 						rxPowerSavingState = ECOPHASE_POWERSAVE_ACTIVE___RX_IS_ON;
 						// drop through
 
@@ -168,10 +172,7 @@ void rxPowerSavingTick(uiEvent_t *ev, bool hasSignal)
 						break;
 
 					case ECOPHASE_POWERSAVE_ACTIVE___RX_IS_OFF:
-
 						//USB_DEBUG_printf("ECOPHASE_POWERSAVE_ACTIVE___RX_IS_ON\n");
-
-
 						hrc6000IsPoweredOff = trxPowerUpDownRxAndC6000(true, hrc6000IsPoweredOff);// Power up AT1846S, C6000 and preamps
 						ticksTimerStart(&ecoPhaseTimer, (rxDuration * 1));
 						trxPostponeReadRSSIAndNoise(0); // Give it a bit of time, after powering up, before checking the RSSI and Noise values

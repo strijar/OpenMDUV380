@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  * Low level DMR stream implementation informed by code written by
@@ -223,12 +223,24 @@ static bool	embeddedDataRaw[128];
 static bool	embeddedDataProcessed[72];
 static int	embeddedDataFLCO;
 static bool	embeddedDataIsValid;
-__attribute__((section(".ccmram"))) static bool BPTCRaw[196];
-__attribute__((section(".ccmram"))) static bool BPTCDeInterleaved[196];
+
+#if defined(PLATFORM_GD77) || defined(PLATFORM_GD77S) || defined(PLATFORM_DM1801) || defined(PLATFORM_DM1801A) || defined(PLATFORM_RD5R)
+#define BPTRAMLOCATION ".data.$RAM2"
+#else
+#define BPTRAMLOCATION ".ccmram"
+#endif
+
+__attribute__((section(BPTRAMLOCATION))) static bool BPTCRaw[196];
+__attribute__((section(BPTRAMLOCATION))) static bool BPTCDeInterleaved[196];
+
 static const uint32_t cwDOTDuration = 60; // 60ms per DOT
 static ticksTimer_t cwNextPeriodTimer = { 0, 0 };
 static uint8_t cwBuffer[64];
 static uint16_t cwpoPtr;
+
+#if defined(PLATFORM_MD9600)
+static HRC6000_Tone1Config_t tone1Config;
+#endif
 
 bool hotspotCwKeying = false;
 uint16_t hotspotCwpoLen;
@@ -1246,11 +1258,11 @@ static void getVersion(void)
 #elif defined(PLATFORM_MD9600)
 			"MD-9600"
 #elif defined(PLATFORM_MDUV380)
-	"MD-UV380"
+			"MD-UV380"
 #elif defined(PLATFORM_MD380)
-	"MD-380"
+			"MD-380"
 #elif defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
-	"DM-1701"
+			"DM-1701"
 #else
 			"Unknown"
 #endif
@@ -1656,17 +1668,27 @@ void handleHotspotRequest(void)
 			{
 				trxSetModeAndBandwidth(RADIO_MODE_ANALOG, false);
 				trxSetTxCSS(CODEPLUG_CSS_TONE_NONE);
-				trxSetTone1(0);
 			}
 
+			HRC6000ClearIsWakingState();
+			trxSetTone1(0);
 			trxEnableTransmission();
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
-			enableAudioAmp(AUDIO_AMP_MODE_RF);
-#else
+
+#if defined(CPU_MK22FN512VLL12)
 			trxSelectVoiceChannel(AT1846_VOICE_CHANNEL_TONE1);
 			enableAudioAmp(AUDIO_AMP_MODE_RF);
 			GPIO_PinWrite(GPIO_RX_audio_mux, Pin_RX_audio_mux, 1);
+#elif defined(PLATFORM_MD9600)
+			// As the HRC6000 tone system is made, we can't set more than
+			// one trxSetTone1() call without a trxDTMFoff() in the middle, as some
+			// configuration values need to be restored each time.
+			// So, grabbing the original values (after the first trxSetTone1() call permits
+			// us to restore these settings after the CW ID beaconing is done.
+			//
+			// Get the previous Tone1 config (collected by HRC6000SendTone().
+			HRC6000GetTone1Config(&tone1Config);
 #endif
+
 			uiHotspotUpdateScreen(HOTSPOT_RX_IDLE);
 		}
 
@@ -1677,16 +1699,22 @@ void handleHotspotRequest(void)
 
 			if (trxTransmissionEnabled)
 			{
-				// Stop TXing;
 				trxTransmissionEnabled = false;
-				//trxSetRX();
-				LedWrite(LED_GREEN, 0);
+				trxIsTransmitting = false;
+				PTTToggledDown = false;
 
 				if (trxGetMode() == RADIO_MODE_ANALOG)
 				{
 					trxSetModeAndBandwidth(RADIO_MODE_DIGITAL, false);
+
+#if defined(CPU_MK22FN512VLL12)
 					trxSelectVoiceChannel(AT1846_VOICE_CHANNEL_MIC);
 					disableAudioAmp(AUDIO_AMP_MODE_RF);
+#elif defined(PLATFORM_MD9600)
+					// Restore original Tone1 config, otherwise DIGITAL won't work until power-cycling.
+					HRC6000SetTone1Config(&tone1Config);
+					trxDTMFoff(true); // Apply restored Tone1 config.
+#endif
 				}
 			}
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -35,9 +35,11 @@
 #include "main.h"
 #include "functions/satellite.h"
 #include "functions/codeplug.h"
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
 #include "interfaces/batteryAndPowerManagement.h"
 #include "semphr.h"
 #include "interfaces/gps.h"
+#endif
 
 static SemaphoreHandle_t battSemaphore = NULL;
 
@@ -58,7 +60,6 @@ static uint32_t seconds;
 static struct tm timeAndDate;
 bool latLonIsSouthernHemisphere = false;
 bool latLonIsWesternHemisphere = false;
-const uint32_t LOCATION_TEXT_BUFFER_SIZE = 32;
 
 typedef struct
 {
@@ -69,9 +70,18 @@ typedef struct
 	bool     modified;
 } voltageCircularBuffer_t;
 
-__attribute__((section(".ccmram"))) voltageCircularBuffer_t batteryVoltageHistory;
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+__attribute__((section(".ccmram")))
+#else
+__attribute__((section(".data.$RAM2")))
+#endif
+voltageCircularBuffer_t batteryVoltageHistory;
 
-enum { GRAPH_FILL = 0, GRAPH_LINE };
+enum
+{
+	GRAPH_FILL = 0,
+	GRAPH_LINE
+};
 
 static int displayMode = RADIO_INFOS_BATTERY_LEVEL;
 static bool pureBatteryLevel = false;
@@ -138,7 +148,6 @@ static size_t circularBufferGetData(voltageCircularBuffer_t *cb, int32_t *data, 
      return count;
 }
 
-
 static uint32_t inputDigitsLonToFixed_10_5(void)
 {
 	uint32_t inPart =		((keypadInputDigits[6] - '0') * 100) +
@@ -157,6 +166,7 @@ static uint32_t inputDigitsLonToFixed_10_5(void)
 	}
 	return fixedVal;
 }
+
 static uint32_t inputDigitsLatToFixed_10_5(void)
 {
 	uint32_t inPart =		((keypadInputDigits[0] - '0') *  10) +
@@ -184,9 +194,6 @@ menuStatus_t menuRadioInfos(uiEvent_t *ev, bool isFirstRun)
 		displayClearBuf();
 		menuDisplayTitle(currentLanguage->radio_info);
 		displayRenderRows(0, 2);
-#if defined(PLATFORM_MD9600)
-		gpsOn(); //enable GPS DMA to see if we have a GPS fitted.
-#endif
 
 		if (nonVolatileSettings.locationLat != SETTINGS_UNITIALISED_LOCATION_LAT)
 		{
@@ -220,59 +227,6 @@ menuStatus_t menuRadioInfos(uiEvent_t *ev, bool isFirstRun)
 		}
 	}
 	return menuRadioInfosExitCode;
-}
-
-
-void buildMaidenHead(char *maidenheadBuffer,uint32_t intPartLat,uint32_t decPartLat,bool isSouthern,uint32_t intPartLon,uint32_t decPartLon, bool isWestern)
-{
-	double latitude = intPartLat + (((double)decPartLat) /  LOCATION_DECIMAL_PART_MULIPLIER);
-	double longitude = intPartLon + (((double)decPartLon) / LOCATION_DECIMAL_PART_MULIPLIER);
-
-	if (isSouthern)
-	{
-		latitude *= -1;
-	}
-
-	if (isWestern)
-	{
-		longitude *= -1;
-	}
-
-	coordsToMaidenhead((uint8_t *)maidenheadBuffer, latitude, longitude);
-}
-
-void buildLocationTextBuffer(char *buffer, char * maidenheadBuf, bool locIsValid)
-{
-	if (locIsValid)
-	{
-		uint32_t intPartLat = (nonVolatileSettings.locationLat & 0x7FFFFFFF) >> 23;
-		uint32_t decPartLat = (nonVolatileSettings.locationLat & 0x7FFFFF);
-		bool southernHemisphere = false;
-		bool westernHemisphere = false;
-
-		if (nonVolatileSettings.locationLat & 0x80000000)
-		{
-			southernHemisphere = true;
-		}
-		uint32_t intPartLon = (nonVolatileSettings.locationLon & 0x7FFFFFFF) >> 23;
-		uint32_t decPartLon = (nonVolatileSettings.locationLon & 0x7FFFFF);
-		if (nonVolatileSettings.locationLon & 0x80000000)
-		{
-			westernHemisphere = true;
-		}
-
-		buildMaidenHead(maidenheadBuf, intPartLat, decPartLat, southernHemisphere, intPartLon, decPartLon, westernHemisphere );
-
-		snprintf(buffer, LOCATION_TEXT_BUFFER_SIZE, "%02u.%04u%c %03u.%04u%c",
-				intPartLat, decPartLat/10, LanguageGetSymbol(southernHemisphere ? SYMBOLS_SOUTH : SYMBOLS_NORTH),
-				intPartLon, decPartLon/10, LanguageGetSymbol(westernHemisphere ? SYMBOLS_WEST : SYMBOLS_EAST));
-
-	}
-	else
-	{
-		strcpy(buffer, "??.???? ???.????");
-		maidenheadBuf[0] = 0;
-	}
 }
 
 static void updateScreen(uiEvent_t *ev, bool forceRedraw)
@@ -364,6 +318,8 @@ static void updateScreen(uiEvent_t *ev, bool forceRedraw)
 					displayClearBuf();
 					menuDisplayTitle(currentLanguage->battery);
 
+					displayThemeApply(THEME_ITEM_FG_DECORATION, THEME_ITEM_BG);
+
 					// Draw...
 					// Inner body frame
 					displayDrawRoundRect(x + 1, 20, 26 + DISPLAY_H_EXTRA_PIXELS, DISPLAY_SIZE_Y - 22, 3, true);
@@ -374,11 +330,15 @@ static void updateScreen(uiEvent_t *ev, bool forceRedraw)
 				}
 				else
 				{
+					displayThemeApply(THEME_ITEM_FG_DECORATION, THEME_ITEM_BG);
+
 					// Clear voltage area
 					displayFillRect(((x - (4 * 8)) >> 1), 19 + 1, (4 * 8), (DISPLAY_SIZE_Y - 20) - 4, true);
 					// Clear level area
 					displayFillRoundRect(x + 4, 23, 20 + DISPLAY_H_EXTRA_PIXELS, battLevelHeight, 2, false);
 				}
+
+				displayThemeResetToDefault();
 
 				// Want to display instant battery voltage, not the averaged value.
 				if (pureBatteryLevel)
@@ -409,12 +369,13 @@ static void updateScreen(uiEvent_t *ev, bool forceRedraw)
 						h = battLevelHeight;
 					}
 
+					displayThemeApply(THEME_ITEM_FG_DECORATION, THEME_ITEM_BG);
 					// Draw Level
 					displayFillRoundRect(x + 4, 23 + battLevelHeight - h , 20 + DISPLAY_H_EXTRA_PIXELS, h, 2, (averageBatteryVoltage < BATTERY_CRITICAL_VOLTAGE) ? blink : true);
 				}
 				else
 				{
-					displayPrintCore(x + (20 / 2), 23 + ((battLevelHeight - FONT_SIZE_3_HEIGHT) >> 1), "?", FONT_SIZE_3, TEXT_ALIGN_LEFT, blink);
+					displayPrintCore(x + ((20 + DISPLAY_H_EXTRA_PIXELS) / 2), 23 + ((battLevelHeight - FONT_SIZE_3_HEIGHT) >> 1), "?", FONT_SIZE_3, TEXT_ALIGN_LEFT, blink);
 				}
 
 				if (voicePromptsIsPlaying() == false)
@@ -424,6 +385,7 @@ static void updateScreen(uiEvent_t *ev, bool forceRedraw)
 #endif
 			}
 
+			displayThemeApply(THEME_ITEM_FG_DECORATION, THEME_ITEM_BG);
 			// Low blinking arrow
 			displayFillTriangle(63 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 1), 59 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 5), 67 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 5), blink);
 		}
@@ -432,7 +394,7 @@ static void updateScreen(uiEvent_t *ev, bool forceRedraw)
 		case RADIO_INFOS_CURRENT_TIME:
 			{
 				displayClearBuf();
-				snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%s %s", currentLanguage->time, ((nonVolatileSettings.timezone & 0x80) ? "" : "UTC"));
+				snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%s%s", currentLanguage->time, ((nonVolatileSettings.timezone & 0x80) ? "" : " UTC"));
 				menuDisplayTitle(buffer);
 
 				if (keypadInputDigitsLength == 0)
@@ -452,7 +414,7 @@ static void updateScreen(uiEvent_t *ev, bool forceRedraw)
 				{
 					strcpy(buffer,"__:__:__");
 					int bufPos = 0;
-					for(int i = 0; i < keypadInputDigitsLength; i++)
+					for (int i = 0; i < keypadInputDigitsLength; i++)
 					{
 						buffer[bufPos++] = keypadInputDigits[i];
 						if ((bufPos == 2) || (bufPos == 5))
@@ -460,11 +422,14 @@ static void updateScreen(uiEvent_t *ev, bool forceRedraw)
 							bufPos++;
 						}
 					}
+
+					displayThemeApply(THEME_ITEM_FG_TEXT_INPUT, THEME_ITEM_BG);
 				}
 
 				displayPrintCentered((DISPLAY_SIZE_Y / 2) - 8, buffer, FONT_SIZE_4);
 				renderArrowOnly = false;
 
+				displayThemeApply(THEME_ITEM_FG_DECORATION, THEME_ITEM_BG);
 				// Up/Down blinking arrow
 				displayFillTriangle(63 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 1), 59 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 3), 67 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 3), blink);
 				displayFillTriangle(63 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 5), 59 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 3), 67 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 3), blink);
@@ -501,11 +466,14 @@ static void updateScreen(uiEvent_t *ev, bool forceRedraw)
 						bufPos++;
 					}
 				}
+				displayThemeApply(THEME_ITEM_FG_TEXT_INPUT, THEME_ITEM_BG);
 			}
 
 			displayPrintCentered((DISPLAY_SIZE_Y / 2) - 8, buffer, FONT_SIZE_3);
 
 			renderArrowOnly = false;
+
+			displayThemeApply(THEME_ITEM_FG_DECORATION, THEME_ITEM_BG);
 			// Up/Down blinking arrow
 			displayFillTriangle(63 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 1), 59 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 3), 67 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 3), blink);
 			displayFillTriangle(63 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 5), 59 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 3), 67 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 3), blink);
@@ -516,11 +484,12 @@ static void updateScreen(uiEvent_t *ev, bool forceRedraw)
 			menuDisplayTitle(currentLanguage->location);
 			{
 				char maidenheadBuf[7];
+
 				if (keypadInputDigitsLength == 0)
 				{
 					bool locIsValid = (nonVolatileSettings.locationLat != SETTINGS_UNITIALISED_LOCATION_LAT);
 
-					buildLocationTextBuffer(buffer, maidenheadBuf, locIsValid);
+					buildLocationAndMaidenheadStrings(buffer, maidenheadBuf, locIsValid);
 
 					if (locIsValid == false)
 					{
@@ -534,33 +503,47 @@ static void updateScreen(uiEvent_t *ev, bool forceRedraw)
 				}
 				else
 				{
-					sprintf(buffer, "__.____%c ___.____%c",
-							LanguageGetSymbol(latLonIsSouthernHemisphere ? SYMBOLS_SOUTH : SYMBOLS_NORTH),
-							LanguageGetSymbol(latLonIsWesternHemisphere ? SYMBOLS_WEST : SYMBOLS_EAST));
 					int bufPos = 0;
+
+					sprintf(buffer, "__.____%c ___.____%c",
+							currentLanguageGetSymbol(latLonIsSouthernHemisphere ? SYMBOLS_SOUTH : SYMBOLS_NORTH),
+							currentLanguageGetSymbol(latLonIsWesternHemisphere ? SYMBOLS_WEST : SYMBOLS_EAST));
+
 					for(int i = 0; i < keypadInputDigitsLength; i++)
 					{
 						buffer[bufPos++] = keypadInputDigits[i];
+
 						if ((bufPos == 2) || (bufPos == 12))
 						{
 							bufPos++;
 						}
-						if (bufPos == 7)
+						else if (bufPos == 7)
 						{
 							bufPos +=2;
 						}
 					}
+
 					maidenheadBuf[0] = 0;
+					displayThemeApply(THEME_ITEM_FG_TEXT_INPUT, THEME_ITEM_BG);
 				}
 
-				displayPrintCentered((DISPLAY_SIZE_Y / 2) - 8, buffer, FONT_SIZE_3);
+				displayPrintCentered((DISPLAY_SIZE_Y / 2) - 8, buffer,
+#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+						FONT_SIZE_3
+#else
+						FONT_SIZE_1
+#endif
+				);
 				displayPrintCentered(((DISPLAY_SIZE_Y / 4) * 3) - 8 , maidenheadBuf, FONT_SIZE_3);
 			}
 			renderArrowOnly = false;
+
+			displayThemeApply(THEME_ITEM_FG_DECORATION, THEME_ITEM_BG);
 			// Up/Down blinking arrow
 			displayFillTriangle(63 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 1), 59 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 3), 67 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 3), blink);
 			displayFillTriangle(63 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 5), 59 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 3), 67 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 3), blink);
 			break;
+
 		case RADIO_INFOS_TEMPERATURE_LEVEL:
 		{
 			int temperature = getTemperature();
@@ -585,6 +568,8 @@ static void updateScreen(uiEvent_t *ev, bool forceRedraw)
 					displayClearBuf();
 					menuDisplayTitle(currentLanguage->temperature);
 
+					displayThemeApply(THEME_ITEM_FG_DECORATION, THEME_ITEM_BG);
+
 					// Body frame
 					displayDrawCircleHelper(x, 20 + 2, 7, (1 | 2), true);
 					displayDrawCircleHelper(x, 20 + 2, 6, (1 | 2), true);
@@ -605,6 +590,8 @@ static void updateScreen(uiEvent_t *ev, bool forceRedraw)
 				}
 				else
 				{
+					displayThemeApply(THEME_ITEM_FG_DECORATION, THEME_ITEM_BG);
+
 					// Clear temperature text area
 					displayFillRect((((x - (7 + 5)) - (7 * 8)) >> 1), 20, (7 * 8), (DISPLAY_SIZE_Y - 20) - 4, true);
 
@@ -612,6 +599,8 @@ static void updateScreen(uiEvent_t *ev, bool forceRedraw)
 					displayFillCircle(x, tankVCenter, tankRadius - 3, ((temperature > TEMPERATURE_CRITICAL) ? !blink : true));
 					displayFillRect(x - 4, 20, 9, temperatureHeight, true);
 				}
+
+				displayThemeResetToDefault();
 
 				snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%3d.%1d%s", (temperature / 10), abs(temperature % 10), currentLanguage->celcius);
 				displayPrintAt((((x - (7 + 5)) - (7 * 8)) >> 1), (((DISPLAY_SIZE_Y - (14 + FONT_SIZE_3_HEIGHT)) >> 1) + 14), buffer, FONT_SIZE_3);
@@ -621,6 +610,7 @@ static void updateScreen(uiEvent_t *ev, bool forceRedraw)
 				// Draw Level
 				if (t)
 				{
+					displayThemeApply(THEME_ITEM_FG_DECORATION, THEME_ITEM_BG);
 					displayFillRect(x - 4, 20 + temperatureHeight - t , 9, t, (temperature > TEMPERATURE_CRITICAL) ? blink : false);
 				}
 
@@ -630,6 +620,7 @@ static void updateScreen(uiEvent_t *ev, bool forceRedraw)
 				}
 			}
 
+			displayThemeApply(THEME_ITEM_FG_DECORATION, THEME_ITEM_BG);
 			// Up/Down blinking arrow
 			displayFillTriangle(63 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 1), 59 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 3), 67 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 3), blink);
 			displayFillTriangle(63 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 5), 59 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 3), 67 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 3), blink);
@@ -662,10 +653,17 @@ static void updateScreen(uiEvent_t *ev, bool forceRedraw)
 				static const uint8_t chartY = 14 + 1 + 2;
 				const int chartHeight = (DISPLAY_SIZE_Y - 26);
 
+#if defined(PLATFORM_MD9600)
 				// Min is 10V, Max is 15V
 				// Pick: MIN @ 11V, MAX @ 14V
+				uint32_t minVH = (uint32_t)(((110 - CUTOFF_VOLTAGE_UPPER_HYST) * chartHeight) / (BATTERY_MAX_VOLTAGE - CUTOFF_VOLTAGE_UPPER_HYST));
+				uint32_t maxVH = (uint32_t)(((140 - CUTOFF_VOLTAGE_UPPER_HYST) * chartHeight) / (BATTERY_MAX_VOLTAGE - CUTOFF_VOLTAGE_UPPER_HYST));
+#else
+				// Min is 6.4V, Max is 8.2V
+				// Pick: MIN @ 7V, MAX @ 8V
 				uint32_t minVH = (uint32_t)(((70 - CUTOFF_VOLTAGE_UPPER_HYST) * chartHeight) / (BATTERY_MAX_VOLTAGE - CUTOFF_VOLTAGE_UPPER_HYST));
 				uint32_t maxVH = (uint32_t)(((80 - CUTOFF_VOLTAGE_UPPER_HYST) * chartHeight) / (BATTERY_MAX_VOLTAGE - CUTOFF_VOLTAGE_UPPER_HYST));
+#endif
 
 				renderArrowOnly = false;
 
@@ -675,6 +673,8 @@ static void updateScreen(uiEvent_t *ev, bool forceRedraw)
 					displayClearBuf();
 					menuDisplayTitle(currentLanguage->battery);
 
+					displayThemeApply(THEME_ITEM_FG_DECORATION, THEME_ITEM_BG);
+
 					// 2 axis chart
 					displayDrawFastVLine(chartX - 3, chartY - 2, chartHeight + 2 + 3, true);
 					displayDrawFastVLine(chartX - 2, chartY - 2, chartHeight + 2 + 2, true);
@@ -683,9 +683,19 @@ static void updateScreen(uiEvent_t *ev, bool forceRedraw)
 
 					// Min/Max Voltage ticks and values
 					displayDrawFastHLine(chartX - 6, (chartY + chartHeight) - minVH, 3, true);
+#if defined(PLATFORM_MD9600)
+					displayPrintAt(DISPLAY_H_OFFSET, ((chartY + chartHeight) - minVH) - 3, "11V", FONT_SIZE_1);
+					displayDrawFastHLine(chartX - 6, (chartY + chartHeight) - maxVH, 3, true);
+					displayPrintAt(DISPLAY_H_OFFSET, ((chartY + chartHeight) - maxVH) - 3, "14V", FONT_SIZE_1);
+#elif defined(PLATFORM_GD77) || defined(PLATFORM_GD77S) || defined(PLATFORM_DM1801) || defined(PLATFORM_DM1801A) || defined(PLATFORM_RD5R)
+					displayPrintAt(chartX - 3 - 12 - 3, ((chartY + chartHeight) - minVH) - 3, "7V", FONT_SIZE_1);
+					displayDrawFastHLine(chartX - 6, (chartY + chartHeight) - maxVH, 3, true);
+					displayPrintAt(chartX - 3 - 12 - 3, ((chartY + chartHeight) - maxVH) - 3, "8V", FONT_SIZE_1);
+#else // Other STM32 platforms
 					displayPrintAt(DISPLAY_H_OFFSET, ((chartY + chartHeight) - minVH) - 3, "7V", FONT_SIZE_1);
 					displayDrawFastHLine(chartX - 6, (chartY + chartHeight) - maxVH, 3, true);
 					displayPrintAt(DISPLAY_H_OFFSET, ((chartY + chartHeight) - maxVH) - 3, "8V", FONT_SIZE_1);
+#endif
 
 					// Time ticks
 					for (uint8_t i = 0; i < CHART_WIDTH + 2; i += 22 /* ~ 15 minutes */)
@@ -695,6 +705,7 @@ static void updateScreen(uiEvent_t *ev, bool forceRedraw)
 				}
 				else
 				{
+					displayThemeApply(THEME_ITEM_FG_DECORATION, THEME_ITEM_BG);
 					displayFillRect(chartX, chartY, CHART_WIDTH, chartHeight, true);
 				}
 
@@ -719,6 +730,10 @@ static void updateScreen(uiEvent_t *ev, bool forceRedraw)
 					displaySetPixel(chartX + i, ((chartY + chartHeight) - minVH), (i % 2) ? false : true);
 					displaySetPixel(chartX + i, ((chartY + chartHeight) - maxVH), (i % 2) ? false : true);
 				}
+			}
+			else
+			{
+				displayThemeApply(THEME_ITEM_FG_DECORATION, THEME_ITEM_BG);
 			}
 
 			// Up blinking arrow
@@ -753,6 +768,7 @@ static void updateScreen(uiEvent_t *ev, bool forceRedraw)
 
 			renderArrowOnly = false;
 
+			displayThemeApply(THEME_ITEM_FG_DECORATION, THEME_ITEM_BG);
 			// Up/Down blinking arrow
 			displayFillTriangle(63 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 1), 59 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 3), 67 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 3), blink);
 			displayFillTriangle(63 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 5), 59 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 3), 67 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 3), blink);
@@ -788,11 +804,13 @@ static void updateScreen(uiEvent_t *ev, bool forceRedraw)
 							bufPos++;
 						}
 					}
+					displayThemeApply(THEME_ITEM_FG_TEXT_INPUT, THEME_ITEM_BG);
 				}
 
 				displayPrintCentered((DISPLAY_SIZE_Y / 2) - 8, buffer, FONT_SIZE_4);
 				renderArrowOnly = false;
 
+				displayThemeApply(THEME_ITEM_FG_DECORATION, THEME_ITEM_BG);
 				// Up/Down blinking arrow
 				displayFillTriangle(63 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 1), 59 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 3), 67 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 3), blink);
 				displayFillTriangle(63 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 5), 59 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 3), 67 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 3), blink);
@@ -801,6 +819,7 @@ static void updateScreen(uiEvent_t *ev, bool forceRedraw)
 	}
 
 	blink = !blink;
+	displayThemeResetToDefault();
 
 	displayRenderRows((renderArrowOnly ? (DISPLAY_NUMBER_OF_ROWS - 1) : 0), DISPLAY_NUMBER_OF_ROWS);
 }
@@ -809,7 +828,12 @@ static void handleEvent(uiEvent_t *ev)
 {
 	if (ev->events & FUNCTION_EVENT)
 	{
-		if (QUICKKEY_TYPE(ev->function) == QUICKKEY_MENU)
+		if (ev->function == FUNC_REDRAW)
+		{
+			updateScreen(ev, true);
+			return;
+		}
+		else if (QUICKKEY_TYPE(ev->function) == QUICKKEY_MENU)
 		{
 			displayMode = QUICKKEY_ENTRYID(ev->function);
 
@@ -838,6 +862,22 @@ static void handleEvent(uiEvent_t *ev)
 		}
 	}
 
+	if ((KEYCHECK_SHORTUP(ev->keys, KEY_GREEN) && BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+#if defined(PLATFORM_MD9600)
+			// Let the operator to set the GPS power status to GPS_MODE_ON only, on longpress GREEN (A/B mic button also).
+			|| (KEYCHECK_LONGDOWN(ev->keys, KEY_GREEN) && (nonVolatileSettings.gps > GPS_NOT_DETECTED) && (nonVolatileSettings.gps < GPS_MODE_ON))
+#endif
+	)
+	{
+		if (displayMode == RADIO_INFOS_LOCATION)
+		{
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+			gpsOnUsingQuickKey(true);
+#endif
+		}
+
+		return;
+	}
 
 	if ((ev->keys.event & (KEY_MOD_UP | KEY_MOD_LONG)) == KEY_MOD_UP)
 	{
@@ -861,13 +901,12 @@ static void handleEvent(uiEvent_t *ev)
 							timeAndDate.tm_mon		= (((keypadInputDigits[4] - '0') * 10) + (keypadInputDigits[5] - '0')) - 1;
 							timeAndDate.tm_mday	= ((keypadInputDigits[6] - '0') * 10) + (keypadInputDigits[7] - '0');
 
-
 							timeAndDate.tm_year = (((keypadInputDigits[0] - '0') * 1000) +
 									((keypadInputDigits[1] - '0') * 100) +
 									((keypadInputDigits[2] - '0') * 10) +
 									((keypadInputDigits[3] - '0'))) - 1900;
 
-							uiDataGlobal.dateTimeSecs = mktime_custom(&timeAndDate) - ((nonVolatileSettings.timezone & 0x80)?((nonVolatileSettings.timezone & 0x7F) - 64) * (15 * 60):0);
+							uiSetUTCDateTimeInSecs(mktime_custom(&timeAndDate) - ((nonVolatileSettings.timezone & 0x80)?((nonVolatileSettings.timezone & 0x7F) - 64) * (15 * 60):0));
 #if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
 							setRtc_custom(uiDataGlobal.dateTimeSecs);
 #endif
@@ -876,7 +915,7 @@ static void handleEvent(uiEvent_t *ev)
 
 							menuSatelliteScreenClearPredictions(false);
 
-							nextKeyBeepMelody = (int *)MELODY_ACK_BEEP;
+							nextKeyBeepMelody = (int16_t *)MELODY_ACK_BEEP;
 
 							updateScreen(ev, true);
 						}
@@ -891,12 +930,13 @@ static void handleEvent(uiEvent_t *ev)
 								keypadInputDigits[0] = 0;// clear digits
 								keypadInputDigitsLength = 0;
 								menuSatelliteScreenClearPredictions(false);
+								aprsBeaconingInvalidateFixedPosition();
 								updateScreen(ev, true);
-								nextKeyBeepMelody = (int *)MELODY_ACK_BEEP;
+								nextKeyBeepMelody = (int16_t *)MELODY_ACK_BEEP;
 							}
 							else
 							{
-								nextKeyBeepMelody = (int *)MELODY_NACK_BEEP;
+								nextKeyBeepMelody = (int16_t *)MELODY_NACK_BEEP;
 							}
 							break;
 
@@ -922,8 +962,8 @@ static void handleEvent(uiEvent_t *ev)
 									timeAndDate.tm_sec		= ((keypadInputDigits[4] - '0') * 10) + (keypadInputDigits[5] - '0');
 
 									PIT2SecondsCounter = 0;//Synchronise PIT2SecondsCounter
-									uiDataGlobal.dateTimeSecs = mktime_custom(&timeAndDate) - ((nonVolatileSettings.timezone & 0x80)?((nonVolatileSettings.timezone & 0x7F) - 64) * (15 * 60):0);
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380)  || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+									uiSetUTCDateTimeInSecs(mktime_custom(&timeAndDate) - ((nonVolatileSettings.timezone & 0x80)?((nonVolatileSettings.timezone & 0x7F) - 64) * (15 * 60):0));
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
 									setRtc_custom(uiDataGlobal.dateTimeSecs);
 #endif
 									menuSatelliteScreenClearPredictions(false);
@@ -942,7 +982,7 @@ static void handleEvent(uiEvent_t *ev)
 								keypadInputDigits[0] = 0;// clear digits
 								keypadInputDigitsLength = 0;
 								updateScreen(ev, true);
-								nextKeyBeepMelody = (int *)MELODY_ACK_BEEP;
+								nextKeyBeepMelody = (int16_t *)MELODY_ACK_BEEP;
 							}
 							break;
 						}
@@ -950,8 +990,16 @@ static void handleEvent(uiEvent_t *ev)
 				}
 				return;
 				break;
+
 			case KEY_RED:
-				if (((displayMode == RADIO_INFOS_CURRENT_TIME) || (displayMode == RADIO_INFOS_DATE) || (displayMode == RADIO_INFOS_LOCATION))
+				if ((displayMode == RADIO_INFOS_LOCATION) && BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+				{
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+					gpsOnUsingQuickKey(false);
+#endif
+					return;
+				}
+				else if (((displayMode == RADIO_INFOS_CURRENT_TIME) || (displayMode == RADIO_INFOS_DATE) || (displayMode == RADIO_INFOS_LOCATION))
 					&& (keypadInputDigitsLength != 0))
 				{
 					keypadInputDigits[0] = 0;
@@ -983,12 +1031,12 @@ static void handleEvent(uiEvent_t *ev)
 						if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
 						{
 							latLonIsWesternHemisphere = true;
-							buf[0] = LanguageGetSymbol(latLonIsWesternHemisphere ? SYMBOLS_WEST : SYMBOLS_EAST);
+							buf[0] = currentLanguageGetSymbol(latLonIsWesternHemisphere ? SYMBOLS_WEST : SYMBOLS_EAST);
 						}
 						else
 						{
 							latLonIsSouthernHemisphere = true;
-							buf[0] = LanguageGetSymbol(latLonIsSouthernHemisphere ? SYMBOLS_SOUTH : SYMBOLS_NORTH);
+							buf[0] = currentLanguageGetSymbol(latLonIsSouthernHemisphere ? SYMBOLS_SOUTH : SYMBOLS_NORTH);
 						}
 						voicePromptsInit();
 						voicePromptsAppendString(buf);
@@ -1015,12 +1063,12 @@ static void handleEvent(uiEvent_t *ev)
 						if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
 						{
 							latLonIsWesternHemisphere = false;
-							buf[0] = LanguageGetSymbol(latLonIsWesternHemisphere ? SYMBOLS_WEST : SYMBOLS_EAST);
+							buf[0] = currentLanguageGetSymbol(latLonIsWesternHemisphere ? SYMBOLS_WEST : SYMBOLS_EAST);
 						}
 						else
 						{
 							latLonIsSouthernHemisphere = false;
-							buf[0] = LanguageGetSymbol(latLonIsSouthernHemisphere ? SYMBOLS_SOUTH : SYMBOLS_NORTH);
+							buf[0] = currentLanguageGetSymbol(latLonIsSouthernHemisphere ? SYMBOLS_SOUTH : SYMBOLS_NORTH);
 						}
 						voicePromptsInit();
 						voicePromptsAppendString(buf);
@@ -1039,6 +1087,9 @@ static void handleEvent(uiEvent_t *ev)
 				break;
 
 			case KEY_LEFT:
+#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+			case KEY_ROTARY_DECREMENT:
+#endif
 				switch(displayMode)
 				{
 					case RADIO_INFOS_BATTERY_GRAPH:
@@ -1066,6 +1117,9 @@ static void handleEvent(uiEvent_t *ev)
 				break;
 
 			case KEY_RIGHT:
+#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+			case KEY_ROTARY_INCREMENT:
+#endif
 				switch(displayMode)
 				{
 					case RADIO_INFOS_BATTERY_GRAPH:
@@ -1079,6 +1133,7 @@ static void handleEvent(uiEvent_t *ev)
 				break;
 
 			default:
+				if (BUTTONCHECK_DOWN(ev, BUTTON_SK2) == 0) // Filtering for QuickKey
 				{
 					int keyval = menuGetKeypadKeyValue(ev, true);
 					if (keyval != 99)
@@ -1241,7 +1296,7 @@ static void handleEvent(uiEvent_t *ev)
 								char c[2] = {0, 0};
 								c[0] = keyval + '0';
 
-								if (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_LEVEL_1)
+								if (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_THRESHOLD)
 								{
 									voicePromptsInit();
 									switch(displayMode)
@@ -1276,13 +1331,13 @@ static void handleEvent(uiEvent_t *ev)
 											else if (keypadInputDigitsLength == 5)
 											{
 												char buf[2] = { 0, 0 };
-												buf[0] = LanguageGetSymbol(latLonIsSouthernHemisphere ? SYMBOLS_SOUTH : SYMBOLS_NORTH);
+												buf[0] = currentLanguageGetSymbol(latLonIsSouthernHemisphere ? SYMBOLS_SOUTH : SYMBOLS_NORTH);
 												voicePromptsAppendString(buf);
 											}
 											else if (keypadInputDigitsLength == 12)
 											{
 												char buf[2] = { 0, 0 };
-												buf[0] = LanguageGetSymbol(latLonIsWesternHemisphere ? SYMBOLS_WEST : SYMBOLS_EAST);
+												buf[0] = currentLanguageGetSymbol(latLonIsWesternHemisphere ? SYMBOLS_WEST : SYMBOLS_EAST);
 												voicePromptsAppendString(buf);
 											}
 										break;
@@ -1293,19 +1348,19 @@ static void handleEvent(uiEvent_t *ev)
 								strcat(keypadInputDigits, c);
 								keypadInputDigitsLength++;
 								updateScreen(ev, true);
-								nextKeyBeepMelody = (int *)MELODY_KEY_BEEP;
+								nextKeyBeepMelody = (int16_t *)MELODY_KEY_BEEP;
 							}
 							else
 							{
 								if (keypadInputDigitsLength != 0)
 								{
-									nextKeyBeepMelody = (int *)MELODY_NACK_BEEP;
+									nextKeyBeepMelody = (int16_t *)MELODY_NACK_BEEP;
 								}
 							}
 						}
 						else
 						{
-							nextKeyBeepMelody = (int *)MELODY_NACK_BEEP;
+							nextKeyBeepMelody = (int16_t *)MELODY_NACK_BEEP;
 						}
 					}
 				}
@@ -1317,7 +1372,6 @@ static void handleEvent(uiEvent_t *ev)
 	if (KEYCHECK_SHORTUP_NUMBER(ev->keys) && (BUTTONCHECK_DOWN(ev, BUTTON_SK2)))
 	{
 		saveQuickkeyMenuIndex(ev->keys.key, menuSystemGetCurrentMenuNumber(), displayMode, 0);
-		return;
 	}
 }
 
@@ -1353,17 +1407,17 @@ void menuRadioInfosPushBackVoltage(int32_t voltage)
 
 static void updateVoicePrompts(bool spellIt, bool firstRun)
 {
-	if (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_LEVEL_1)
+	if (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_THRESHOLD)
 	{
-		char buffer[SCREEN_LINE_BUFFER_SIZE];
+		char buffer[LOCATION_TEXT_BUFFER_SIZE];
 
 		voicePromptsInit();
 
 		if (firstRun)
 		{
 			voicePromptsAppendPrompt(PROMPT_SILENCE);
-			voicePromptsAppendLanguageString(&currentLanguage->radio_info);
-			voicePromptsAppendLanguageString(&currentLanguage->menu);
+			voicePromptsAppendLanguageString(currentLanguage->radio_info);
+			voicePromptsAppendLanguageString(currentLanguage->menu);
 			voicePromptsAppendPrompt(PROMPT_SILENCE);
 		}
 
@@ -1374,7 +1428,7 @@ static void updateVoicePrompts(bool spellIt, bool firstRun)
 			{
 				int volts, mvolts;
 
-				voicePromptsAppendLanguageString(&currentLanguage->battery);
+				voicePromptsAppendLanguageString(currentLanguage->battery);
 				getBatteryVoltage(&volts,  &mvolts);
 				snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, " %1d.%1d", volts, mvolts);
 				voicePromptsAppendString(buffer);
@@ -1387,14 +1441,14 @@ static void updateVoicePrompts(bool spellIt, bool firstRun)
 			{
 				int temperature = getTemperature();
 
-				voicePromptsAppendLanguageString(&currentLanguage->temperature);
+				voicePromptsAppendLanguageString(currentLanguage->temperature);
 				snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%d.%1d", (temperature / 10), (temperature % 10));
 				voicePromptsAppendString(buffer);
-				voicePromptsAppendLanguageString(&currentLanguage->celcius);
+				voicePromptsAppendLanguageString(currentLanguage->celcius);
 			}
 			break;
 			case RADIO_INFOS_CURRENT_TIME:
-				voicePromptsAppendLanguageString(&currentLanguage->time);
+				voicePromptsAppendLanguageString(currentLanguage->time);
 				if (!(nonVolatileSettings.timezone & 0x80))
 				{
 					voicePromptsAppendString("UTC");
@@ -1403,33 +1457,36 @@ static void updateVoicePrompts(bool spellIt, bool firstRun)
 				voicePromptsAppendString(buffer);
 			break;
 			case RADIO_INFOS_LOCATION:
-				voicePromptsAppendLanguageString(&currentLanguage->location);
+				voicePromptsAppendLanguageString(currentLanguage->location);
 				if (nonVolatileSettings.locationLat != SETTINGS_UNITIALISED_LOCATION_LAT)
 				{
-					char maidenheadBuf[LOCATION_TEXT_BUFFER_SIZE];
-					buildLocationTextBuffer(buffer, maidenheadBuf, true);
+					char maidenheadBuf[7];
+
+					buildLocationAndMaidenheadStrings(buffer, maidenheadBuf, true);
 					voicePromptsAppendString(buffer);
+					voicePromptsAppendPrompt(PROMPT_SILENCE);
+					voicePromptsAppendPrompt(PROMPT_SILENCE);
+					voicePromptsAppendPrompt(PROMPT_SILENCE);
 					voicePromptsAppendString(maidenheadBuf);
 				}
 				else
 				{
-					voicePromptsAppendLanguageString(&currentLanguage->not_set);
+					voicePromptsAppendLanguageString(currentLanguage->not_set);
 				}
 			break;
 			case RADIO_INFOS_DATE:
-				voicePromptsAppendLanguageString(&currentLanguage->date);
+				voicePromptsAppendLanguageString(currentLanguage->date);
 				snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%04u %02u %02u", (timeAndDate.tm_year + 1900),(timeAndDate.tm_mon + 1),timeAndDate.tm_mday);
 				voicePromptsAppendString(buffer);
 			break;
-
 			case RADIO_INFOS_UP_TIME:
-				voicePromptsAppendLanguageString(&currentLanguage->uptime);
+				voicePromptsAppendLanguageString(currentLanguage->uptime);
 				snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%u", hours);
 				voicePromptsAppendString(buffer);
-				voicePromptsAppendLanguageString(&currentLanguage->hours);
+				voicePromptsAppendLanguageString(currentLanguage->hours);
 				snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%u", minutes);
 				voicePromptsAppendString(buffer);
-				voicePromptsAppendLanguageString(&currentLanguage->minutes);
+				voicePromptsAppendLanguageString(currentLanguage->minutes);
 			break;
 		}
 

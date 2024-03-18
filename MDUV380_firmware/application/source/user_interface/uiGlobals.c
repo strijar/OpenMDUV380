@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -39,7 +39,7 @@ const char *POWER_LEVELS[]                  = { "100", "250", "500", "750", "1",
 const char *POWER_LEVELS[]                  = { "50", "250", "500", "750", "1", "2", "3", "4", "5", "+W-"};
 #endif
 const char *POWER_LEVEL_UNITS[]             = { "mW", "mW",  "mW",  "mW",  "W", "W", "W", "W", "W", ""};
-const char *DMR_DESTINATION_FILTER_LEVELS[] = { "TG", "Ct", "RxG" };
+const char *DMR_DESTINATION_FILTER_LEVELS[] = { "TG", "Ct", "TGL" };
 const char *ANALOG_FILTER_LEVELS[]          = { "CTCSS|DCS" };
 
 
@@ -64,6 +64,9 @@ uiDataGlobal_t uiDataGlobal =
 		.sk2latched                   = false,
 #endif
 		.rxBeepState                  = RX_BEEP_UNSET,
+		.talkaround                   = false,
+		.daytime                      = DAY,
+		.daytimeOverridden            = UNDEFINED,
 
 		.Scan =
 		{
@@ -73,7 +76,7 @@ uiDataGlobal_t uiDataGlobal =
 				.availableChannelsCount 	= 0,
 				.nuisanceDeleteIndex    	= 0,
 				.nuisanceDelete         	= { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 },
-				.state                  	= SCAN_SCANNING,
+				.state                  	= SCAN_STATE_SCANNING,
 				.active                 	= false,
 				.toneActive             	= false,
 				.refreshOnEveryStep     	= false,
@@ -95,7 +98,9 @@ uiDataGlobal_t uiDataGlobal =
 				.tmpAnalogFilterLevel         = 0,
 				.tmpTxRxLockMode              = 0,
 				.tmpToneScanCSS               = CSS_TYPE_NONE,
-				.tmpVFONumber                 = 0
+				.tmpVFONumber                 = 0,
+				.tmpTalkaround                = false,
+				.tmpSortOrderIsDistance       = false
 		},
 
 		.FreqEnter =
@@ -156,11 +161,33 @@ settingsStruct_t originalNonVolatileSettings =
 		.magicNumber = 0xDEADBEEF
 };
 
+#if !defined(PLATFORM_GD77S)
+aprsBeaconingSettings_t aprsSettingsCopy =
+{
+		.smart =
+		{
+				.slowRate  = 0xEF,
+				.fastRate  = 0xBE,
+				.lowSpeed  = 0xAD,
+				.highSpeed = 0xDE
+		}
+};
+#endif
+
 struct_codeplugZone_t currentZone =
 {
 		.NOT_IN_CODEPLUGDATA_indexNumber = 0xDEADBEEF
 };
-__attribute__((section(".ccmram"))) struct_codeplugRxGroup_t currentRxGroupData;
+
+
+#if defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+__attribute__((section(".ccmram")))
+#else // MD9600 and MK22 platforms
+__attribute__((section(".data.$RAM2")))
+#endif
+struct_codeplugRxGroup_t currentRxGroupData;
+
+
 int lastLoadedRxGroup = -1;// to show data for which RxGroupIndex has been loaded into    currentRxGroupData
 struct_codeplugContact_t currentContactData;
 

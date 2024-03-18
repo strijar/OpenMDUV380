@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2019      Kai Ludwig, DG4KLU
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -28,16 +28,15 @@
  */
 
 #include <FreeRTOS.h>
-#include <hardware/HX8353E.h>
+#include "hardware/HX8353E.h"
 #include "io/display.h"
 #include "functions/settings.h"
 #include "interfaces/gpio.h"
 #include "main.h"
+#include "user_interface/uiGlobals.h"
 
 uint8_t displayLCD_Type = 1;
-static u_int32_t foregroundR8G8B8;
-static u_int32_t backgroundR8G8B8;
-static bool displayIsInverseVideo;
+static bool displayIsInverseVideo = false;
 
 void displayWriteCmd(uint8_t cmd)
 {
@@ -66,22 +65,37 @@ void displayWriteCmds(uint8_t cmd, size_t len, uint8_t opts[])
 
 void displaySetInvertedState(bool isInverted)
 {
-	displayIsInverseVideo = isInverted;
-    displaySetForegroundColour(isInverted ? backgroundR8G8B8 : foregroundR8G8B8);
-    displaySetBackgroundColour(isInverted ? foregroundR8G8B8 : backgroundR8G8B8);
+	if (displayIsInverseVideo != isInverted)
+	{
+		GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+		displayIsInverseVideo = isInverted;
+
+		GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+		GPIO_InitStruct.Pull = GPIO_NOPULL;
+		GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+		GPIO_InitStruct.Alternate = GPIO_AF12_FSMC;
+
+		GPIO_InitStruct.Pin = LCD_D0_Pin | LCD_D1_Pin | LCD_D2_Pin | LCD_D3_Pin;
+		HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+		GPIO_InitStruct.Pin = LCD_D4_Pin | LCD_D5_Pin | LCD_D6_Pin | LCD_D7_Pin;
+		HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+
+		HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_RESET);
+		osDelay(10);
+		displayWriteCmd(displayIsInverseVideo ? HX8583_CMD_INVON : HX8583_CMD_INVOFF);
+		osDelay(10);
+		HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_SET);
+
+		*((volatile uint8_t*) LCD_FSMC_ADDR_DATA) = 0;// write 0 to the display pins , to pull them all low, so keyboard reads don't need to
+
+		displaySetInverseVideo(displayIsInverseVideo);
+	}
 }
 
-void displaySetToDefaultForegroundColour(void)
+void displayInit(bool isInverted, bool SPIFlashAvailable)
 {
-    displaySetForegroundColour(displayIsInverseVideo ? backgroundR8G8B8 : foregroundR8G8B8);
-}
-
-void displayInit(int32_t fgR8G8B8,int32_t bgR8G8B8, bool isInverted)
-{
-	foregroundR8G8B8 = fgR8G8B8;
-	backgroundR8G8B8 = bgR8G8B8;
-	displayIsInverseVideo = isInverted;
-
 	GPIO_InitTypeDef GPIO_InitStruct = {0};
 
 	// Enable the FMC interface clock
@@ -132,257 +146,257 @@ void displayInit(int32_t fgR8G8B8,int32_t bgR8G8B8, bool isInverted)
 	HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_RESET);
 
 	// Init
-    if((displayLCD_Type == 2) || (displayLCD_Type == 3))
-    {
-        displayWriteCmd(0xfe);
-        displayWriteCmd(0xef);
+	if((DISPLAYLCD_GET_TYPE(displayLCD_Type) == 2) || (DISPLAYLCD_GET_TYPE(displayLCD_Type) == 3))
+	{
+		displayWriteCmd(0xfe);
+		displayWriteCmd(0xef);
 
-        {
-        	uint8_t opts[] = { 0x00 };
-        	displayWriteCmds(0xb4, 1, opts);
-        }
+		{
+			uint8_t opts[] = { 0x00 };
+			displayWriteCmds(0xb4, 1, opts);
+		}
 
-        {
-        	uint8_t opts[] = { 0x16 };
-        	displayWriteCmds(0xff, 1, opts);
-        }
+		{
+			uint8_t opts[] = { 0x16 };
+			displayWriteCmds(0xff, 1, opts);
+		}
 
 
-        {
-        	uint8_t opts[] = { ((displayLCD_Type == 3) ? 0x40 : 0x4f) };
-        	displayWriteCmds(0xfd, 1, opts);
-        }
+		{
+			uint8_t opts[] = { ((DISPLAYLCD_GET_TYPE(displayLCD_Type) == 3) ? 0x40 : 0x4f) };
+			displayWriteCmds(0xfd, 1, opts);
+		}
 
-        {
-        	uint8_t opts[] = { 0x70 };
-        	displayWriteCmds(0xa4, 1, opts);
-        }
+		{
+			uint8_t opts[] = { 0x70 };
+			displayWriteCmds(0xa4, 1, opts);
+		}
 
-        {
-        	uint8_t opts[] = { 0x94, 0x88 };
-        	displayWriteCmds(0xe7, 2, opts);
-        }
+		{
+			uint8_t opts[] = { 0x94, 0x88 };
+			displayWriteCmds(0xe7, 2, opts);
+		}
 
-        {
-        	uint8_t opts[] = { 0x3a };
-        	displayWriteCmds(0xea, 1, opts);
-        }
+		{
+			uint8_t opts[] = { 0x3a };
+			displayWriteCmds(0xea, 1, opts);
+		}
 
-        {
-        	uint8_t opts[] = { 0x11 };
-        	displayWriteCmds(0xed, 1, opts);
-        }
+		{
+			uint8_t opts[] = { 0x11 };
+			displayWriteCmds(0xed, 1, opts);
+		}
 
-        {
-        	uint8_t opts[] = { 0xc5 };
-        	displayWriteCmds(0xe4, 1, opts);
-        }
+		{
+			uint8_t opts[] = { 0xc5 };
+			displayWriteCmds(0xe4, 1, opts);
+		}
 
-        {
-        	uint8_t opts[] = { 0x80 };
-        	displayWriteCmds(0xe2, 1, opts);
-        }
+		{
+			uint8_t opts[] = { 0x80 };
+			displayWriteCmds(0xe2, 1, opts);
+		}
 
-        {
-        	uint8_t opts[] = { 0x12 };
-        	displayWriteCmds(0xa3, 1, opts);
-        }
+		{
+			uint8_t opts[] = { 0x12 };
+			displayWriteCmds(0xa3, 1, opts);
+		}
 
-        {
-        	uint8_t opts[] = { 0x07 };
-        	displayWriteCmds(0xe3, 1, opts);
-        }
+		{
+			uint8_t opts[] = { 0x07 };
+			displayWriteCmds(0xe3, 1, opts);
+		}
 
-        {
-        	uint8_t opts[] = { 0x10 };
-        	displayWriteCmds(0xe5, 1, opts);
-        }
+		{
+			uint8_t opts[] = { 0x10 };
+			displayWriteCmds(0xe5, 1, opts);
+		}
 
-        {
-        	uint8_t opts[] = { 0x00 };
-        	displayWriteCmds(0xf0, 1, opts);
-        }
+		{
+			uint8_t opts[] = { 0x00 };
+			displayWriteCmds(0xf0, 1, opts);
+		}
 
-        {
-        	uint8_t opts[] = { 0x55 };
-        	displayWriteCmds(0xf1, 1, opts);
-        }
+		{
+			uint8_t opts[] = { 0x55 };
+			displayWriteCmds(0xf1, 1, opts);
+		}
 
-        {
-        	uint8_t opts[] = { 0x05 };
-        	displayWriteCmds(0xf2, 1, opts);
-        }
+		{
+			uint8_t opts[] = { 0x05 };
+			displayWriteCmds(0xf2, 1, opts);
+		}
 
-        {
-        	uint8_t opts[] = { 0x53 };
-        	displayWriteCmds(0xf3, 1, opts);
-        }
+		{
+			uint8_t opts[] = { 0x53 };
+			displayWriteCmds(0xf3, 1, opts);
+		}
 
-        {
-        	uint8_t opts[] = { 0x00 };
-        	displayWriteCmds(0xf4, 1, opts);
-        }
+		{
+			uint8_t opts[] = { 0x00 };
+			displayWriteCmds(0xf4, 1, opts);
+		}
 
-        {
-        	uint8_t opts[] = { 0x00 };
-        	displayWriteCmds(0xf5, 1, opts);
-        }
+		{
+			uint8_t opts[] = { 0x00 };
+			displayWriteCmds(0xf5, 1, opts);
+		}
 
-        {
-        	uint8_t opts[] = { 0x27 };
-        	displayWriteCmds(0xf7, 1 , opts);
-        }
+		{
+			uint8_t opts[] = { 0x27 };
+			displayWriteCmds(0xf7, 1 , opts);
+		}
 
-        {
-        	uint8_t opts[] = { 0x22 };
-        	displayWriteCmds(0xf8, 1, opts);
-        }
+		{
+			uint8_t opts[] = { 0x22 };
+			displayWriteCmds(0xf8, 1, opts);
+		}
 
-        {
-        	uint8_t opts[] = { 0x77 };
-        	displayWriteCmds(0xf9, 1, opts);
-        }
+		{
+			uint8_t opts[] = { 0x77 };
+			displayWriteCmds(0xf9, 1, opts);
+		}
 
-        {
-        	uint8_t opts[] = { 0x35 };
-        	displayWriteCmds(0xfa, 1, opts);
-        }
+		{
+			uint8_t opts[] = { 0x35 };
+			displayWriteCmds(0xfa, 1, opts);
+		}
 
-        {
-        	uint8_t opts[] = { 0x00 };
-        	displayWriteCmds(0xfb, 1, opts);
-        }
+		{
+			uint8_t opts[] = { 0x00 };
+			displayWriteCmds(0xfb, 1, opts);
+		}
 
-        {
-        	uint8_t opts[] = { 0x00 };
-        	displayWriteCmds(0xfc, 1, opts);
-        }
+		{
+			uint8_t opts[] = { 0x00 };
+			displayWriteCmds(0xfc, 1, opts);
+		}
 
-        displayWriteCmd(0xfe);
+		displayWriteCmd(0xfe);
 
-        displayWriteCmd(0xef);
+		displayWriteCmd(0xef);
 
-        {
-        	uint8_t opts[] = { 0x00 };
-        	displayWriteCmds(0xe9, 1, opts);
-        }
+		{
+			uint8_t opts[] = { 0x00 };
+			displayWriteCmds(0xe9, 1, opts);
+		}
 
-        osDelay(20);
-    }
-    else
-    {
-        displayWriteCmd(0x11);
-        osDelay(120);
+		osDelay(20);
+	}
+	else
+	{
+		displayWriteCmd(0x11);
+		osDelay(120);
 
-        {
-        	uint8_t opts[] = {0x05, 0x3c, 0x3c };
-        	displayWriteCmds(0xb1, sizeof(opts), opts);
-        }
+		{
+			uint8_t opts[] = {0x05, 0x3c, 0x3c };
+			displayWriteCmds(0xb1, sizeof(opts), opts);
+		}
 
-        {
-        	uint8_t opts[] = { 0x05, 0x3c, 0x3c };
-        	displayWriteCmds(0xb2, sizeof(opts), opts);
-        }
+		{
+			uint8_t opts[] = { 0x05, 0x3c, 0x3c };
+			displayWriteCmds(0xb2, sizeof(opts), opts);
+		}
 
-        {
-        	uint8_t opts[] = { 0x05, 0x3c, 0x3c, 0x05, 0x3c, 0x3c };
-        	displayWriteCmds(0xb3, sizeof(opts), opts);
-        }
+		{
+			uint8_t opts[] = { 0x05, 0x3c, 0x3c, 0x05, 0x3c, 0x3c };
+			displayWriteCmds(0xb3, sizeof(opts), opts);
+		}
 
-        {
-        	uint8_t opts[] = { 0x03 };
-        	displayWriteCmds(0xb4, 1, opts);
-        }
+		{
+			uint8_t opts[] = { 0x03 };
+			displayWriteCmds(0xb4, 1, opts);
+		}
 
-        {
-        	uint8_t opts[] = { 0x28, 0x08, 0x04 };
-        	displayWriteCmds(0xc0, sizeof(opts), opts);
-        }
+		{
+			uint8_t opts[] = { 0x28, 0x08, 0x04 };
+			displayWriteCmds(0xc0, sizeof(opts), opts);
+		}
 
-        {
-        	uint8_t opts[] = { 0xc0 };
-        	displayWriteCmds(0xc1, 1, opts);
-        }
+		{
+			uint8_t opts[] = { 0xc0 };
+			displayWriteCmds(0xc1, 1, opts);
+		}
 
-        {
-        	uint8_t opts[] = { 0xd, 0x00};
-        	displayWriteCmds(0xc2, sizeof(opts), opts);
-        }
+		{
+			uint8_t opts[] = { 0xd, 0x00};
+			displayWriteCmds(0xc2, sizeof(opts), opts);
+		}
 
-        {
-        	uint8_t opts[] = { 0x8d, 0x2a };
-        	displayWriteCmds(0xc3, sizeof(opts), opts);
-        }
+		{
+			uint8_t opts[] = { 0x8d, 0x2a };
+			displayWriteCmds(0xc3, sizeof(opts), opts);
+		}
 
-        {
-        	uint8_t opts[] = { 0x8d, 0xee };
-        	displayWriteCmds(0xc4, sizeof(opts), opts);
-        }
+		{
+			uint8_t opts[] = { 0x8d, 0xee };
+			displayWriteCmds(0xc4, sizeof(opts), opts);
+		}
 
-        {
-        	uint8_t opts[] = { 0x1a };
-        	displayWriteCmds(0xc5, 1 , opts);
-        }
+		{
+			uint8_t opts[] = { 0x1a };
+			displayWriteCmds(0xc5, 1 , opts);
+		}
 
-        {
-        	uint8_t opts[] = { 0x08 };
-        	displayWriteCmds(0x36, 1, opts);
-        }
+		{
+			uint8_t opts[] = { 0x08 };
+			displayWriteCmds(0x36, 1, opts);
+		}
 
-        {
-        	uint8_t opts[] = { 0x04, 0x0c, 0x07, 0x0a, 0x2e, 0x30, 0x25, 0x2a, 0x28, 0x26, 0x2e, 0x3a, 0x00, 0x01, 0x03, 0x13 };
-        	displayWriteCmds(0xe0, sizeof(opts), opts);
-        }
+		{
+			uint8_t opts[] = { 0x04, 0x0c, 0x07, 0x0a, 0x2e, 0x30, 0x25, 0x2a, 0x28, 0x26, 0x2e, 0x3a, 0x00, 0x01, 0x03, 0x13 };
+			displayWriteCmds(0xe0, sizeof(opts), opts);
+		}
 
-        {
-        	uint8_t opts[] = { 0x04, 0x16, 0x06, 0x0d, 0x2d, 0x26, 0x23, 0x27, 0x27, 0x25, 0x2d, 0x3b, 0x00, 0x01, 0x04, 0x13 };
-        	displayWriteCmds(0xE1, sizeof(opts), opts);
-        }
-    }
+		{
+			uint8_t opts[] = { 0x04, 0x16, 0x06, 0x0d, 0x2d, 0x26, 0x23, 0x27, 0x27, 0x25, 0x2d, 0x3b, 0x00, 0x01, 0x04, 0x13 };
+			displayWriteCmds(0xE1, sizeof(opts), opts);
+		}
+	}
 
-    {
-    	uint8_t opts[] = {
-    			(displayLCD_Type == 1) ? 0x60 :
-    					(displayLCD_Type == 2) ? 0xE0 :
-    							0xA0
-    	};
-    	displayWriteCmds(HX8583_CMD_MADCTL, 1, opts);
-    }
+	{
+		uint8_t opts[] = {
+				(DISPLAYLCD_GET_TYPE(displayLCD_Type) == 1) ? 0x60 :
+						(DISPLAYLCD_GET_TYPE(displayLCD_Type) == 2) ? 0xE0 :
+								0xA0
+		};
+		displayWriteCmds(HX8583_CMD_MADCTL, 1, opts);
+	}
 
-    {
-    	uint8_t opts[] = { 0x00, 0x00, 0x00, DISPLAY_SIZE_X };
-    	displayWriteCmds(HX8583_CMD_CASET, sizeof(opts), opts);
-    }
+	{
+		uint8_t opts[] = { 0x00, 0x00, 0x00, DISPLAY_SIZE_X };
+		displayWriteCmds(HX8583_CMD_CASET, sizeof(opts), opts);
+	}
 
-    {
-    	uint8_t opts[] = { 0x00, 0x00, 0x00, DISPLAY_SIZE_Y};
-    	displayWriteCmds(HX8583_CMD_RASET, sizeof(opts), opts);
-    }
+	{
+		uint8_t opts[] = { 0x00, 0x00, 0x00, DISPLAY_SIZE_Y};
+		displayWriteCmds(HX8583_CMD_RASET, sizeof(opts), opts);
+	}
 
-    {
-    	uint8_t opts[] = { 0x05 }; // RGB565 16 bits per pixel
-    	displayWriteCmds(HX8583_CMD_COLMOD, 1, opts);
-    }
+	{
+		uint8_t opts[] = { 0x05 }; // RGB565 16 bits per pixel
+		displayWriteCmds(HX8583_CMD_COLMOD, 1, opts);
+	}
 
-    //osDelay(10);// does not seem to be needed
-    displayWriteCmd(HX8583_CMD_SLPOUT); // Activate the display
-    //osDelay(120);// does not seem to be needed
+	//osDelay(10);// does not seem to be needed
+	displayWriteCmd(HX8583_CMD_SLPOUT); // Activate the display
+	//osDelay(120);// does not seem to be needed
 
-    displayWriteCmd(HX8583_CMD_DISPON);
+	displayWriteCmd(HX8583_CMD_DISPON);
 
 	HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_SET);
 
-	displaySetInvertedState(isInverted);
+	displayBegin(isInverted, SPIFlashAvailable);
 
-    displayClearBuf();
-    displayRender();
+	displayClearBuf();
+	displayRender();
 }
 
 void displayEnableBacklight(bool enable, int displayBacklightPercentageOff)
 {
 	if (enable)
 	{
-		gpioSetDisplayBacklightIntensityPercentage(nonVolatileSettings.displayBacklightPercentage);
+		gpioSetDisplayBacklightIntensityPercentage(nonVolatileSettings.displayBacklightPercentage[DAYTIME_CURRENT]);
 	}
 	else
 	{
@@ -394,4 +408,3 @@ bool displayIsBacklightLit(void)
 {
 	return (gpioGetDisplayBacklightIntensityPercentage() != nonVolatileSettings.displayBacklightPercentageOff);
 }
-

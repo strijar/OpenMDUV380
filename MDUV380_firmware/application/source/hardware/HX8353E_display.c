@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -54,8 +54,16 @@ static float _angleOffset = DEFAULT_ANGLE_OFFSET;
 
 extern bool headerRowIsDirty;
 
-static uint16_t bgColour = 0xFFFF;
-static uint16_t fgColour = 0x0000;
+static bool inverted = false;
+#if defined(HAS_COLOURS)
+static themeItem_t foregroundThemeItem = THEME_ITEM_FG_DEFAULT;
+static uint16_t foregroundColour = PLATFORM_COLOUR_FORMAT_SWAP_BYTES(RGB888_TO_PLATFORM_COLOUR_FORMAT(0x000000));
+static themeItem_t backgroundThemeItem = THEME_ITEM_BG;
+static uint16_t backgroundColour = PLATFORM_COLOUR_FORMAT_SWAP_BYTES(RGB888_TO_PLATFORM_COLOUR_FORMAT(0xFFFFFFU));
+#else
+static uint16_t foregroundColour = 0x0000U;
+static uint16_t backgroundColour = 0xFFFFU;
+#endif
 
 static uint16_t screenBufData[DISPLAY_SIZE_X * DISPLAY_SIZE_Y];
 uint16_t *screenBuf = screenBufData;
@@ -65,18 +73,21 @@ uint16_t *screenBuf = screenBufData;
 static const uint8_t *screenBufEnd = screenBuf + sizeof(screenBuf);
 #endif
 
+#if defined(HAS_COLOURS)
+DayTime_t themeDaytime = DAY;
+uint16_t themeItems[NIGHT + 1][THEME_ITEM_MAX]; // Theme storage
+#endif
 
-
-int16_t displaySetPixel(int16_t x, int16_t y, bool color)
+int16_t displaySetPixel(int16_t x, int16_t y, bool isInverted)
 {
 	int16_t i = (y * DISPLAY_SIZE_X) + x;
 
-	if (i >= (DISPLAY_SIZE_X * DISPLAY_SIZE_Y))
+	if ((i < 0) || (i >= (DISPLAY_SIZE_X * DISPLAY_SIZE_Y)))
 	{
 		return -1;// off the screen
 	}
 
-	screenBuf[i] = color ? fgColour : bgColour;
+	screenBuf[i] = isInverted ? foregroundColour : backgroundColour;
 
 	return 0;
 }
@@ -115,6 +126,49 @@ static inline bool checkWritePos(uint8_t * writePos)
 }
 #endif
 
+#if ! defined(PLATFORM_GD77S)
+static uint8_t *getUncompressedChar(uint8_t *dest, uint8_t *currentFont, uint8_t charOffset)
+{
+	if (charOffset < CHARS_PER_FONT)
+	{
+		uint8_t count = 0;
+		uint8_t *p = currentFont + 8; // skip the header
+		uint8_t numOfPairs = *p;
+
+		do
+		{
+			if (count == charOffset)
+			{
+				uint8_t *pSrc = p + 1;
+				uint8_t *pDest = dest;
+
+				// decode RLE8
+				while (numOfPairs > 0)
+				{
+					uint8_t l = (*(pSrc + 1) + 1);
+
+					memset(pDest, *pSrc, l);
+
+					pDest += l;
+					pSrc += 2;
+					numOfPairs--;
+				}
+
+				break;
+			}
+
+			p += ((numOfPairs * 2) + 1);
+			numOfPairs = *p;
+
+			count++;
+
+		} while (count < CHARS_PER_FONT);
+	}
+
+	return dest;
+}
+#endif
+
 int displayPrintCore(int16_t xPos, int16_t yPos, const char *szMsg, ucFont_t fontSize, ucTextAlign_t alignment, bool isInverted)
 {
 #if ! defined(PLATFORM_GD77S)
@@ -126,58 +180,61 @@ int displayPrintCore(int16_t xPos, int16_t yPos, const char *szMsg, ucFont_t fon
 	int16_t startCode;
 	int16_t endCode;
 	uint8_t *currentFont;
+	bool fontIsCompressed = false;
+	uint8_t uncompressChar[64];
 
-    sLen = strlen(szMsg);
+	sLen = strlen(szMsg);
 
-    switch(fontSize)
-    {
+	switch(fontSize)
+	{
 #if defined(PLATFORM_RD5R)
-       	case FONT_SIZE_1:
-    		currentFont = (uint8_t *) font_6x8;
-    		break;
-    	case FONT_SIZE_1_BOLD:
-			currentFont = (uint8_t *) font_6x8_bold;
-    		break;
-    	case FONT_SIZE_2:
-    		currentFont = (uint8_t *) font_8x8;//font_8x8;
-    		break;
-    	case FONT_SIZE_3:
-    		currentFont = (uint8_t *) font_8x8;//font_8x16;
+		case FONT_SIZE_1:
+			currentFont = (uint8_t *) font_6x8;
 			break;
-    	case FONT_SIZE_4:
-    		currentFont = (uint8_t *) font_8x16;// font_16x32;
+		case FONT_SIZE_1_BOLD:
+			currentFont = (uint8_t *) font_6x8_bold;
+			break;
+		case FONT_SIZE_2:
+			currentFont = (uint8_t *) font_8x8;
+			break;
+		case FONT_SIZE_3:
+			currentFont = (uint8_t *) font_8x8; // font_8x16;
+			break;
+		case FONT_SIZE_4:
+			currentFont = (uint8_t *) font_8x16; // font_16x32;
 			break;
 #else
-    	case FONT_SIZE_1:
-    		currentFont = (uint8_t *) font_6x8;
-    		break;
-    	case FONT_SIZE_1_BOLD:
-			currentFont = (uint8_t *) font_6x8_bold;
-    		break;
-    	case FONT_SIZE_2:
-    		currentFont = (uint8_t *) font_8x8;
-    		break;
-    	case FONT_SIZE_3:
-    		currentFont = (uint8_t *) font_8x16;
+		case FONT_SIZE_1:
+			currentFont = (uint8_t *) font_6x8;
 			break;
-    	case FONT_SIZE_4:
-    		currentFont = (uint8_t *) font_16x32;
+		case FONT_SIZE_1_BOLD:
+			currentFont = (uint8_t *) font_6x8_bold;
+			break;
+		case FONT_SIZE_2:
+			currentFont = (uint8_t *) font_8x8;
+			break;
+		case FONT_SIZE_3:
+			currentFont = (uint8_t *) font_8x16;
+			break;
+		case FONT_SIZE_4:
+			currentFont = (uint8_t *) font_16x32_compressed;
 			break;
 #endif
-    	default:
-    		return -2;// Invalid font selected
-    		break;
-    }
+		default:
+			return -2;// Invalid font selected
+			break;
+	}
 
-    startCode   		= currentFont[2];  // get first defined character
-    endCode 	  		= currentFont[3];  // get last defined character
-    charWidthPixels   	= currentFont[4];  // width in pixel of one char
-    charHeightPixels  	= currentFont[5];  // page count per char
-    bytesPerChar 		= currentFont[7];  // bytes per char
+	fontIsCompressed	= (currentFont[0] & 0x01); // does the current font is compressed ?
+	startCode   		= currentFont[2];  // get first defined character
+	endCode 	  		= currentFont[3];  // get last defined character
+	charWidthPixels   	= currentFont[4];  // width in pixel of one char
+	charHeightPixels  	= currentFont[5];  // page count per char
+	bytesPerChar 		= currentFont[7];  // bytes per char
 
-    if ((charWidthPixels*sLen) + xPos > DISPLAY_SIZE_X)
+	if ((charWidthPixels * sLen) + xPos > DISPLAY_SIZE_X)
 	{
-    	sLen = (DISPLAY_SIZE_X - xPos) / charWidthPixels;
+		sLen = (DISPLAY_SIZE_X - xPos) / charWidthPixels;
 	}
 
 	if (sLen < 0)
@@ -200,6 +257,12 @@ int displayPrintCore(int16_t xPos, int16_t yPos, const char *szMsg, ucFont_t fon
 
 	for (int16_t i = 0; i < sLen; i++)
 	{
+		// Skip space character as it's empty (and no more part of the fonts).
+		if (szMsg[i] == ' ')
+		{
+			continue;
+		}
+
 		uint32_t charOffset = (szMsg[i] - startCode);
 
 		// End boundary checking.
@@ -208,18 +271,29 @@ int displayPrintCore(int16_t xPos, int16_t yPos, const char *szMsg, ucFont_t fon
 			charOffset = ('?' - startCode); // Substitute unsupported ASCII code by a question mark
 		}
 
-		currentCharData = (uint8_t *)&currentFont[8 + (charOffset * bytesPerChar)];
+		if (fontIsCompressed)
+		{
+			currentCharData = getUncompressedChar(&uncompressChar[0], currentFont, charOffset);
+		}
+		else
+		{
+			currentCharData = (uint8_t *)&currentFont[8 + (charOffset * bytesPerChar)];
+		}
+
 		uint32_t charPixelOffset = (i * charWidthPixels);
 
 		for(int x = 0; x <  charWidthPixels; x++)
 		{
 			int xp = x + xPos;
+
 			for(int y =  0; y < charHeightPixels; y++)
 			{
 				uint8_t rowData = currentCharData[x + ((y / 8) * charWidthPixels)];
-				if ((rowData>>(y % 8) & 0x01))
+				int32_t bOffset = xp + ((yPos + y) * DISPLAY_SIZE_X) + charPixelOffset;
+
+				if ((rowData >> (y % 8) & 0x01) && (bOffset < (DISPLAY_SIZE_X * DISPLAY_SIZE_Y)))
 				{
-					screenBuf[xp + ((yPos + y) * DISPLAY_SIZE_X) + charPixelOffset] =  isInverted ? bgColour : fgColour;
+					screenBuf[xp + ((yPos + y) * DISPLAY_SIZE_X) + charPixelOffset] =  isInverted ? backgroundColour : foregroundColour;
 				}
 
 			}
@@ -234,7 +308,7 @@ void displayClearBuf(void)
 	// may be able to do this using DMA
 	for(int i = 0; i < DISPLAY_SIZE_X * DISPLAY_SIZE_Y; i++)
 	{
-		screenBuf[i] = bgColour;
+		screenBuf[i] = backgroundColour;
 	}
 }
 
@@ -254,7 +328,7 @@ void displayClearRows(int16_t startRow, int16_t endRow, bool isInverted)
 	startRow *= (8 * DISPLAY_SIZE_X);
 	endRow *= (8 * DISPLAY_SIZE_X);
 
-	uint16_t fillColour = (isInverted ? fgColour : bgColour);
+	uint16_t fillColour = (isInverted ? foregroundColour : backgroundColour);
 
 	for(int i = startRow; i < endRow; i++)
 	{
@@ -274,7 +348,7 @@ void displayPrintAt(uint16_t x, uint16_t y, const char *text, ucFont_t fontSize)
 }
 
 // Bresenham's algorithm - thx wikpedia
-void displayDrawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1, bool color)
+void displayDrawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1, bool isInverted)
 {
 	bool steep = abs(y1 - y0) > abs(x1 - x0);
 
@@ -303,11 +377,11 @@ void displayDrawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1, bool color)
 	{
 		if (steep)
 		{
-			displaySetPixel(y0, x0, color);
+			displaySetPixel(y0, x0, isInverted);
 		}
 		else
 		{
-			displaySetPixel(x0, y0, color);
+			displaySetPixel(x0, y0, isInverted);
 		}
 
 		err -= dy;
@@ -319,18 +393,18 @@ void displayDrawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1, bool color)
 	}
 }
 
-void displayDrawFastVLine(int16_t x, int16_t y, int16_t h, bool color)
+void displayDrawFastVLine(int16_t x, int16_t y, int16_t h, bool isInverted)
 {
-	displayFillRect(x, y, 1, h, !color);
+	displayFillRect(x, y, 1, h, !isInverted);
 }
 
-void displayDrawFastHLine(int16_t x, int16_t y, int16_t w, bool color)
+void displayDrawFastHLine(int16_t x, int16_t y, int16_t w, bool isInverted)
 {
-	displayFillRect(x, y, w, 1, !color);
+	displayFillRect(x, y, w, 1, !isInverted);
 }
 
 // Draw a circle outline
-void displayDrawCircle(int16_t x0, int16_t y0, int16_t r, bool color)
+void displayDrawCircle(int16_t x0, int16_t y0, int16_t r, bool isInverted)
 {
 	int16_t f     = 1 - r;
 	int16_t ddF_x = 1;
@@ -338,10 +412,10 @@ void displayDrawCircle(int16_t x0, int16_t y0, int16_t r, bool color)
 	int16_t x     = 0;
 	int16_t y     = r;
 
-	displaySetPixel(x0    , y0 + r, color);
-	displaySetPixel(x0    , y0 - r, color);
-	displaySetPixel(x0 + r, y0    , color);
-	displaySetPixel(x0 - r, y0    , color);
+	displaySetPixel(x0    , y0 + r, isInverted);
+	displaySetPixel(x0    , y0 - r, isInverted);
+	displaySetPixel(x0 + r, y0    , isInverted);
+	displaySetPixel(x0 - r, y0    , isInverted);
 
 	while (x < y)
 	{
@@ -356,18 +430,18 @@ void displayDrawCircle(int16_t x0, int16_t y0, int16_t r, bool color)
 		ddF_x += 2;
 		f += ddF_x;
 
-		displaySetPixel(x0 + x, y0 + y, color);
-		displaySetPixel(x0 - x, y0 + y, color);
-		displaySetPixel(x0 + x, y0 - y, color);
-		displaySetPixel(x0 - x, y0 - y, color);
-		displaySetPixel(x0 + y, y0 + x, color);
-		displaySetPixel(x0 - y, y0 + x, color);
-		displaySetPixel(x0 + y, y0 - x, color);
-		displaySetPixel(x0 - y, y0 - x, color);
+		displaySetPixel(x0 + x, y0 + y, isInverted);
+		displaySetPixel(x0 - x, y0 + y, isInverted);
+		displaySetPixel(x0 + x, y0 - y, isInverted);
+		displaySetPixel(x0 - x, y0 - y, isInverted);
+		displaySetPixel(x0 + y, y0 + x, isInverted);
+		displaySetPixel(x0 - y, y0 + x, isInverted);
+		displaySetPixel(x0 + y, y0 - x, isInverted);
+		displaySetPixel(x0 - y, y0 - x, isInverted);
 	}
 }
 
-void displayDrawCircleHelper(int16_t x0, int16_t y0, int16_t r, uint8_t cornername, bool color)
+void displayDrawCircleHelper(int16_t x0, int16_t y0, int16_t r, uint8_t cornername, bool isInverted)
 {
 	int16_t f     = 1 - r;
 	int16_t ddF_x = 1;
@@ -390,26 +464,26 @@ void displayDrawCircleHelper(int16_t x0, int16_t y0, int16_t r, uint8_t cornerna
 
 		if (cornername & 0x4)
 		{
-			displaySetPixel(x0 + x, y0 + y, color);
-			displaySetPixel(x0 + y, y0 + x, color);
+			displaySetPixel(x0 + x, y0 + y, isInverted);
+			displaySetPixel(x0 + y, y0 + x, isInverted);
 		}
 
 		if (cornername & 0x2)
 		{
-			displaySetPixel(x0 + x, y0 - y, color);
-			displaySetPixel(x0 + y, y0 - x, color);
+			displaySetPixel(x0 + x, y0 - y, isInverted);
+			displaySetPixel(x0 + y, y0 - x, isInverted);
 		}
 
 		if (cornername & 0x8)
 		{
-			displaySetPixel(x0 - y, y0 + x, color);
-			displaySetPixel(x0 - x, y0 + y, color);
+			displaySetPixel(x0 - y, y0 + x, isInverted);
+			displaySetPixel(x0 - x, y0 + y, isInverted);
 		}
 
 		if (cornername & 0x1)
 		{
-			displaySetPixel(x0 - y, y0 - x, color);
-			displaySetPixel(x0 - x, y0 - y, color);
+			displaySetPixel(x0 - y, y0 - x, isInverted);
+			displaySetPixel(x0 - x, y0 - y, isInverted);
 		}
 	}
 }
@@ -417,7 +491,7 @@ void displayDrawCircleHelper(int16_t x0, int16_t y0, int16_t r, uint8_t cornerna
 /*
  * Used to do circles and roundrects
  */
-void displayFillCircleHelper(int16_t x0, int16_t y0, int16_t r, uint8_t cornername, int16_t delta, bool color)
+void displayFillCircleHelper(int16_t x0, int16_t y0, int16_t r, uint8_t cornername, int16_t delta, bool isInverted)
 {
 	int16_t f     = 1 - r;
 	int16_t ddF_x = 1;
@@ -440,22 +514,22 @@ void displayFillCircleHelper(int16_t x0, int16_t y0, int16_t r, uint8_t cornerna
 
 		if (cornername & 0x1)
 		{
-			displayDrawFastVLine(x0 + x, y0 - y, 2 * y + 1 + delta, color);
-			displayDrawFastVLine(x0 + y, y0 - x, 2 * x + 1 + delta, color);
+			displayDrawFastVLine(x0 + x, y0 - y, 2 * y + 1 + delta, isInverted);
+			displayDrawFastVLine(x0 + y, y0 - x, 2 * x + 1 + delta, isInverted);
 		}
 
 		if (cornername & 0x2)
 		{
-			displayDrawFastVLine(x0 - x, y0 - y, 2 * y + 1 + delta, color);
-			displayDrawFastVLine(x0 - y, y0 - x, 2 * x + 1 + delta, color);
+			displayDrawFastVLine(x0 - x, y0 - y, 2 * y + 1 + delta, isInverted);
+			displayDrawFastVLine(x0 - y, y0 - x, 2 * x + 1 + delta, isInverted);
 		}
 	}
 }
 
-void displayFillCircle(int16_t x0, int16_t y0, int16_t r, bool color)
+void displayFillCircle(int16_t x0, int16_t y0, int16_t r, bool isInverted)
 {
-	displayDrawFastVLine(x0, y0 - r, 2 * r + 1, color);
-	displayFillCircleHelper(x0, y0, r, 3, 0, color);
+	displayDrawFastVLine(x0, y0 - r, 2 * r + 1, isInverted);
+	displayFillCircleHelper(x0, y0, r, 3, 0, isInverted);
 }
 
 /*
@@ -474,7 +548,7 @@ static float sinDegrees(float angle)
 /*
  * DrawArc function thanks to Jnmattern and his Arc_2.0 (https://github.com/Jnmattern)
  */
-void displayFillArcOffsetted(uint16_t cx, uint16_t cy, uint16_t radius, uint16_t thickness, float start, float end, bool color)
+void displayFillArcOffsetted(uint16_t cx, uint16_t cy, uint16_t radius, uint16_t thickness, float start, float end, bool isInverted)
 {
 	int16_t xmin = 65535, xmax = -32767, ymin = 32767, ymax = -32767;
 	float cosStart, sinStart, cosEnd, sinEnd;
@@ -503,8 +577,8 @@ void displayFillArcOffsetted(uint16_t cx, uint16_t cy, uint16_t radius, uint16_t
 
 	if (startAngle > endAngle)
 	{
-		displayFillArcOffsetted(cx, cy, radius, thickness, ((startAngle) / 360.0f) * _arcAngleMax, _arcAngleMax, color);
-		displayFillArcOffsetted(cx, cy, radius, thickness, 0, ((endAngle) / 360.0f) * _arcAngleMax, color);
+		displayFillArcOffsetted(cx, cy, radius, thickness, ((startAngle) / 360.0f) * _arcAngleMax, _arcAngleMax, isInverted);
+		displayFillArcOffsetted(cx, cy, radius, thickness, 0, ((endAngle) / 360.0f) * _arcAngleMax, isInverted);
 	}
 	else
 	{
@@ -632,18 +706,18 @@ void displayFillArcOffsetted(uint16_t cx, uint16_t cy, uint16_t radius, uint16_t
 				int y2 = y * y;
 
 				if (
-					(x2 + y2 < or2 && x2 + y2 >= ir2) && (
-					(y > 0.0f && startAngle < 180.0f && x <= y * sslope) ||
-					(y < 0.0f && startAngle > 180.0f && x >= y * sslope) ||
-					(y < 0.0f && startAngle <= 180.0f) ||
-					(y == 0.0f && startAngle <= 180.0f && x < 0.0f) ||
-					(y == 0.0f && startAngle == 0.0f && x > 0.0f)
-					) && (
-					(y > 0.0f && endAngle < 180.0f && x >= y * eslope) ||
-					(y < 0.0f && endAngle > 180.0f && x <= y * eslope) ||
-					(y > 0.0f && endAngle >= 180.0f) ||
-					(y == 0.0f && endAngle >= 180.0f && x < 0.0f) ||
-					(y == 0.0f && startAngle == 0.0f && x > 0.0f)))
+						(x2 + y2 < or2 && x2 + y2 >= ir2) && (
+								(y > 0.0f && startAngle < 180.0f && x <= y * sslope) ||
+								(y < 0.0f && startAngle > 180.0f && x >= y * sslope) ||
+								(y < 0.0f && startAngle <= 180.0f) ||
+								(y == 0.0f && startAngle <= 180.0f && x < 0.0f) ||
+								(y == 0.0f && startAngle == 0.0f && x > 0.0f)
+						) && (
+								(y > 0.0f && endAngle < 180.0f && x >= y * eslope) ||
+								(y < 0.0f && endAngle > 180.0f && x <= y * eslope) ||
+								(y > 0.0f && endAngle >= 180.0f) ||
+								(y == 0.0f && endAngle >= 180.0f && x < 0.0f) ||
+								(y == 0.0f && startAngle == 0.0f && x > 0.0f)))
 				{
 					if (!y1StartFound)	//start of the higher line found
 					{
@@ -674,7 +748,7 @@ void displayFillArcOffsetted(uint16_t cx, uint16_t cy, uint16_t radius, uint16_t
 					{
 						y1EndFound = true;
 						y1e = y - 1;
-						displayDrawFastVLine(cx + x, cy + y1s, y - y1s, color);
+						displayDrawFastVLine(cx + x, cy + y1s, y - y1s, isInverted);
 						if (y < 0)
 						{
 							y = abs(y); // skip the empty middle
@@ -687,7 +761,7 @@ void displayFillArcOffsetted(uint16_t cx, uint16_t cy, uint16_t radius, uint16_t
 						if (y2EndSearching)
 						{
 							// we found the end of the lower line after pixel by pixel search
-							displayDrawFastVLine(cx + x, cy + y2s, y - y2s, color);
+							displayDrawFastVLine(cx + x, cy + y2s, y - y2s, isInverted);
 							y2EndSearching = false;
 							break;
 						}
@@ -703,32 +777,32 @@ void displayFillArcOffsetted(uint16_t cx, uint16_t cy, uint16_t radius, uint16_t
 			if (y1StartFound && !y1EndFound)
 			{
 				y1e = ymax;
-				displayDrawFastVLine(cx + x, cy + y1s, y1e - y1s + 1, color);
+				displayDrawFastVLine(cx + x, cy + y1s, y1e - y1s + 1, isInverted);
 			}
 			else if (y2StartFound && y2EndSearching)	// we found start of lower line but we are still searching for the end
 			{										// which we haven't found in the loop so the last pixel in a column must be the end
-				displayDrawFastVLine(cx + x, cy + y2s, ymax - y2s + 1, color);
+				displayDrawFastVLine(cx + x, cy + y2s, ymax - y2s + 1, isInverted);
 			}
 		}
 	}
 }
 
-void displayFillArc(uint16_t x, uint16_t y, uint16_t radius, uint16_t thickness, float start, float end, bool color)
+void displayFillArc(uint16_t x, uint16_t y, uint16_t radius, uint16_t thickness, float start, float end, bool isInverted)
 {
 	if (start == 0.0f && end == _arcAngleMax)
 	{
-		displayFillArcOffsetted(x, y, radius, thickness, 0, _arcAngleMax, color);
+		displayFillArcOffsetted(x, y, radius, thickness, 0, _arcAngleMax, isInverted);
 	}
 	else
 	{
-		displayFillArcOffsetted(x, y, radius, thickness, start + (_angleOffset / 360.0f)*_arcAngleMax, end + (_angleOffset / 360.0f)*_arcAngleMax, color);
+		displayFillArcOffsetted(x, y, radius, thickness, start + (_angleOffset / 360.0f)*_arcAngleMax, end + (_angleOffset / 360.0f)*_arcAngleMax, isInverted);
 	}
 }
 /*
  * ***** End of Arc related functions *****
  */
 
-void displayDrawEllipse(int16_t x0, int16_t y0, int16_t x1, int16_t y1, bool color)
+void displayDrawEllipse(int16_t x0, int16_t y0, int16_t x1, int16_t y1, bool isInverted)
 {
 	int16_t a = abs(x1 - x0), b = abs(y1 - y0), b1 = b & 1; /* values of diameter */
 	long dx = 4 * (1 - a) * b * b, dy = 4 * (b1 + 1) * a * a; /* error increment */
@@ -749,10 +823,10 @@ void displayDrawEllipse(int16_t x0, int16_t y0, int16_t x1, int16_t y1, bool col
 	b1 = 8 * b * b;
 
 	do {
-		displaySetPixel(x1, y0, color); /*   I. Quadrant */
-		displaySetPixel(x0, y0, color); /*  II. Quadrant */
-		displaySetPixel(x0, y1, color); /* III. Quadrant */
-		displaySetPixel(x1, y1, color); /*  IV. Quadrant */
+		displaySetPixel(x1, y0, isInverted); /*   I. Quadrant */
+		displaySetPixel(x0, y0, isInverted); /*  II. Quadrant */
+		displaySetPixel(x0, y1, isInverted); /* III. Quadrant */
+		displaySetPixel(x1, y1, isInverted); /*  IV. Quadrant */
 		e2 = 2 * err;
 		if (e2 >= dx)
 		{
@@ -770,25 +844,25 @@ void displayDrawEllipse(int16_t x0, int16_t y0, int16_t x1, int16_t y1, bool col
 
 	while (y0 - y1 < b) /* too early stop of flat ellipses a=1 */
 	{
-		displaySetPixel(x0 - 1, ++y0, color); /* -> complete tip of ellipse */
-		displaySetPixel(x0 - 1, --y1, color);
+		displaySetPixel(x0 - 1, ++y0, isInverted); /* -> complete tip of ellipse */
+		displaySetPixel(x0 - 1, --y1, isInverted);
 	}
 }
 
 /*
  * Draw a triangle
  */
-void displayDrawTriangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t x2, int16_t y2, bool color)
+void displayDrawTriangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t x2, int16_t y2, bool isInverted)
 {
-	displayDrawLine(x0, y0, x1, y1, color);
-	displayDrawLine(x1, y1, x2, y2, color);
-	displayDrawLine(x2, y2, x0, y0, color);
+	displayDrawLine(x0, y0, x1, y1, isInverted);
+	displayDrawLine(x1, y1, x2, y2, isInverted);
+	displayDrawLine(x2, y2, x0, y0, isInverted);
 }
 
 /*
  * Fill a triangle
  */
-void displayFillTriangle( int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t x2, int16_t y2, bool color)
+void displayFillTriangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t x2, int16_t y2, bool isInverted)
 {
 	int16_t a, b, y, last;
 
@@ -827,7 +901,7 @@ void displayFillTriangle( int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_
 			b = x2;
 		}
 
-		displayDrawFastHLine(a, y0, b - a + 1, color);
+		displayDrawFastHLine(a, y0, b - a + 1, isInverted);
 		return;
 	}
 
@@ -858,13 +932,13 @@ void displayFillTriangle( int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_
 		/* longhand:
 		a = x0 + (x1 - x0) * (y - y0) / (y1 - y0);
 		b = x0 + (x2 - x0) * (y - y0) / (y2 - y0);
-		*/
+		 */
 		if(a > b)
 		{
 			SAFE_SWAP(a,b);
 		}
 
-		displayDrawFastHLine(a, y, b - a + 1, color);
+		displayDrawFastHLine(a, y, b - a + 1, isInverted);
 	}
 
 	// For lower part of triangle, find scanline crossings for segments
@@ -881,64 +955,64 @@ void displayFillTriangle( int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_
 		/* longhand:
 		a = x1 + (x2 - x1) * (y - y1) / (y2 - y1);
 		b = x0 + (x2 - x0) * (y - y0) / (y2 - y0);
-		*/
+		 */
 		if(a > b)
 		{
 			SAFE_SWAP(a,b);
 		}
 
-		displayDrawFastHLine(a, y, b - a + 1, color);
+		displayDrawFastHLine(a, y, b - a + 1, isInverted);
 	}
 }
 
 /*
  * Draw a rounded rectangle
  */
-void displayDrawRoundRect(int16_t x, int16_t y, int16_t w, int16_t h, int16_t r, bool color)
+void displayDrawRoundRect(int16_t x, int16_t y, int16_t w, int16_t h, int16_t r, bool isInverted)
 {
 	// smarter version
-	displayDrawFastHLine(x + r    , y        , w - 2 * r, color); // Top
-	displayDrawFastHLine(x + r    , y + h - 1, w - 2 * r, color); // Bottom
-	displayDrawFastVLine(x        , y + r    , h - 2 * r, color); // Left
-	displayDrawFastVLine(x + w - 1, y + r    , h - 2 * r, color); // Right
+	displayDrawFastHLine(x + r    , y        , w - 2 * r, isInverted); // Top
+	displayDrawFastHLine(x + r    , y + h - 1, w - 2 * r, isInverted); // Bottom
+	displayDrawFastVLine(x        , y + r    , h - 2 * r, isInverted); // Left
+	displayDrawFastVLine(x + w - 1, y + r    , h - 2 * r, isInverted); // Right
 	// draw four corners
-	displayDrawCircleHelper(x + r        , y + r        , r, 1, color);
-	displayDrawCircleHelper(x + w - r - 1, y + r        , r, 2, color);
-	displayDrawCircleHelper(x + w - r - 1, y + h - r - 1, r, 4, color);
-	displayDrawCircleHelper(x + r        , y + h - r - 1, r, 8, color);
+	displayDrawCircleHelper(x + r        , y + r        , r, 1, isInverted);
+	displayDrawCircleHelper(x + w - r - 1, y + r        , r, 2, isInverted);
+	displayDrawCircleHelper(x + w - r - 1, y + h - r - 1, r, 4, isInverted);
+	displayDrawCircleHelper(x + r        , y + h - r - 1, r, 8, isInverted);
 }
 
 /*
  * Fill a rounded rectangle
  */
-void displayFillRoundRect(int16_t x, int16_t y, int16_t w, int16_t h, int16_t r, bool color)
+void displayFillRoundRect(int16_t x, int16_t y, int16_t w, int16_t h, int16_t r, bool isInverted)
 {
-	displayFillRect(x + r, y, w - 2 * r, h, !color);
+	displayFillRect(x + r, y, w - 2 * r, h, !isInverted);
 
 	// draw four corners
-	displayFillCircleHelper(x+w-r-1, y + r, r, 1, h - 2 * r - 1, color);
-	displayFillCircleHelper(x+r    , y + r, r, 2, h - 2 * r - 1, color);
+	displayFillCircleHelper(x+w-r-1, y + r, r, 1, h - 2 * r - 1, isInverted);
+	displayFillCircleHelper(x+r    , y + r, r, 2, h - 2 * r - 1, isInverted);
 }
 
 /*
  *
  */
-void displayDrawRoundRectWithDropShadow(int16_t x, int16_t y, int16_t w, int16_t h, int16_t r, bool color)
+void displayDrawRoundRectWithDropShadow(int16_t x, int16_t y, int16_t w, int16_t h, int16_t r, bool isInverted)
 {
-	displayFillRoundRect(x + 2, y, w, h, r, color); // Shadow
-	displayFillRoundRect(x, y - 2, w, h, r, !color); // Empty box
-	displayDrawRoundRect(x, y - 2, w, h, r, color); // Outline
+	displayFillRoundRect(x + 2, y, w, h, r, isInverted); // Shadow
+	displayFillRoundRect(x, y - 2, w, h, r, !isInverted); // Empty box
+	displayDrawRoundRect(x, y - 2, w, h, r, isInverted); // Outline
 }
 
 /*
  * Draw a rectangle
  */
-void displayDrawRect(int16_t x, int16_t y, int16_t w, int16_t h, bool color)
+void displayDrawRect(int16_t x, int16_t y, int16_t w, int16_t h, bool isInverted)
 {
-	displayDrawFastHLine(x        , y        , w, color);
-	displayDrawFastHLine(x        , y + h - 1, w, color);
-	displayDrawFastVLine(x        , y        , h, color);
-	displayDrawFastVLine(x + w - 1, y        , h, color);
+	displayDrawFastHLine(x        , y        , w, isInverted);
+	displayDrawFastHLine(x        , y + h - 1, w, isInverted);
+	displayDrawFastVLine(x        , y        , h, isInverted);
+	displayDrawFastVLine(x + w - 1, y        , h, isInverted);
 }
 
 /*
@@ -953,7 +1027,7 @@ void displayFillRect(int16_t x, int16_t y, int16_t width, int16_t height, bool i
 		lineStartOffset = (y + yp) * DISPLAY_SIZE_X;
 		for(int xp = 0; xp < width; xp++)
 		{
-			screenBuf[lineStartOffset + x + xp] = isInverted ? bgColour : fgColour;
+			screenBuf[lineStartOffset + x + xp] = isInverted ? backgroundColour : foregroundColour;
 		}
 	}
 }
@@ -961,70 +1035,70 @@ void displayFillRect(int16_t x, int16_t y, int16_t width, int16_t height, bool i
 /*
  *
  */
-void displayDrawRectWithDropShadow(int16_t x, int16_t y, int16_t w, int16_t h, bool color)
+void displayDrawRectWithDropShadow(int16_t x, int16_t y, int16_t w, int16_t h, bool isInverted)
 {
-	displayFillRect(x + 2, y, w, h, !color); // Shadow
-	displayFillRect(x, y - 2, w, h, color); // Empty box
-	displayDrawRect(x, y - 2, w, h, color); // Outline
+	displayFillRect(x + 2, y, w, h, !isInverted); // Shadow
+	displayFillRect(x, y - 2, w, h, isInverted); // Empty box
+	displayDrawRect(x, y - 2, w, h, isInverted); // Outline
 }
 
 /*
  * Draw a 1-bit image at the specified (x,y) position.
-*/
-void displayDrawBitmap(int16_t x, int16_t y, uint8_t *bitmap, int16_t w, int16_t h, bool color)
+ */
+void displayDrawBitmap(int16_t x, int16_t y, uint8_t *bitmap, int16_t w, int16_t h, bool isInverted)
 {
-    int16_t byteWidth = (w + 7) / 8; // Bitmap scanline pad = whole byte
-    uint8_t byte = 0;
+	int16_t byteWidth = (w + 7) / 8; // Bitmap scanline pad = whole byte
+	uint8_t byte = 0;
 
-    for(int16_t j = 0; j < h; j++, y++)
-    {
-        for(int16_t i = 0; i < w; i++)
-        {
-            if(i & 7)
-            {
-            	byte <<= 1;
-            }
-            else
-            {
-            	byte = *(bitmap + (j * byteWidth + i / 8));
-            }
+	for(int16_t j = 0; j < h; j++, y++)
+	{
+		for(int16_t i = 0; i < w; i++)
+		{
+			if(i & 7)
+			{
+				byte <<= 1;
+			}
+			else
+			{
+				byte = *(bitmap + (j * byteWidth + i / 8));
+			}
 
-            if(byte & 0x80)
-            {
-            	displaySetPixel(x + i, y, color);
-            }
-        }
-    }
+			if(byte & 0x80)
+			{
+				displaySetPixel(x + i, y, isInverted);
+			}
+		}
+	}
 }
 
 /*
  * Draw XBitMap Files (*.xbm), e.g. exported from GIMP.
-*/
-void displayDrawXBitmap(int16_t x, int16_t y, const uint8_t *bitmap, int16_t w, int16_t h, bool color)
+ */
+void displayDrawXBitmap(int16_t x, int16_t y, const uint8_t *bitmap, int16_t w, int16_t h, bool isInverted)
 {
-    int16_t byteWidth = (w + 7) / 8; // Bitmap scanline pad = whole byte
-    uint8_t byte = 0;
+	int16_t byteWidth = (w + 7) / 8; // Bitmap scanline pad = whole byte
+	uint8_t byte = 0;
 
-    for(int16_t j = 0; j < h; j++, y++)
-    {
-        for(int16_t i = 0; i < w; i++)
-        {
-            if(i & 7)
-            {
-            	byte >>= 1;
-            }
-            else
-            {
-            	byte = *(bitmap + (j * byteWidth + i / 8));
-            }
-            // Nearly identical to drawBitmap(), only the bit order
-            // is reversed here (left-to-right = LSB to MSB):
-            if(byte & 0x01)
-            {
-            	displaySetPixel(x + i, y, color);
-            }
-        }
-    }
+	for(int16_t j = 0; j < h; j++, y++)
+	{
+		for(int16_t i = 0; i < w; i++)
+		{
+			if(i & 7)
+			{
+				byte >>= 1;
+			}
+			else
+			{
+				byte = *(bitmap + (j * byteWidth + i / 8));
+			}
+			// Nearly identical to drawBitmap(), only the bit order
+			// is reversed here (left-to-right = LSB to MSB):
+			if(byte & 0x01)
+			{
+				displaySetPixel(x + i, y, isInverted);
+			}
+		}
+	}
 }
 
 void displayDrawChoice(ucChoice_t choice, bool clearRegion)
@@ -1040,12 +1114,12 @@ void displayDrawChoice(ucChoice_t choice, bool clearRegion)
 	const uint8_t FILLRECT_Y = 48;
 #endif
 	const uint8_t TEXT_L_CENTER_X = 12;
-	const uint8_t TEXT_R_CENTER_X = 115;
+	const uint8_t TEXT_R_CENTER_X = (DISPLAY_SIZE_X - 13);
 
 	struct
 	{
-		char *lText;
-		char *rText;
+			char *lText;
+			char *rText;
 	} choices[] =
 	{
 			{ "OK"                                       , NULL                                       }, // UC1701_CHOICE_OK
@@ -1058,8 +1132,6 @@ void displayDrawChoice(ucChoice_t choice, bool clearRegion)
 	};
 	char *lText = NULL;
 	char *rText = NULL;
-
-
 	const int ucTriangleArrows[2][6] = {
 			{ // Down
 					(DISPLAY_SIZE_X/2)-12, (TEXT_Y + (FONT_SIZE_3_HEIGHT / 2) - 1),
@@ -1073,7 +1145,7 @@ void displayDrawChoice(ucChoice_t choice, bool clearRegion)
 			}
 	};
 
-
+	displayThemeResetToDefault();
 	if (clearRegion)
 	{
 		displayFillRect(0, FILLRECT_Y, DISPLAY_SIZE_X, 16, true);
@@ -1087,6 +1159,7 @@ void displayDrawChoice(ucChoice_t choice, bool clearRegion)
 	lText = choices[choice].lText;
 	rText = choices[choice].rText;
 
+	displayThemeApply(THEME_ITEM_FG_NOTIFICATION, THEME_ITEM_BG);
 	if (lText)
 	{
 		int16_t x = (TEXT_L_CENTER_X - ((strlen(lText) * 8) >> 1));
@@ -1103,13 +1176,14 @@ void displayDrawChoice(ucChoice_t choice, bool clearRegion)
 		size_t len = (strlen(rText) * 8);
 		int16_t x = (TEXT_R_CENTER_X - (len >> 1));
 
-		if ((x + len) > 126)
+		if ((x + len) > (DISPLAY_SIZE_X - 2))
 		{
-			x = (126 - len);
+			x = ((DISPLAY_SIZE_X - 2) - len);
 		}
 		displayPrintAt(x, TEXT_Y, rText, FONT_SIZE_3);
 	}
 
+	displayThemeApply(THEME_ITEM_FG_DECORATION, THEME_ITEM_BG);
 	if (choice == CHOICES_OKARROWS)
 	{
 		displayFillTriangle(ucTriangleArrows[0][0], ucTriangleArrows[0][1],
@@ -1119,6 +1193,7 @@ void displayDrawChoice(ucChoice_t choice, bool clearRegion)
 				ucTriangleArrows[1][2], ucTriangleArrows[1][3],
 				ucTriangleArrows[1][4], ucTriangleArrows[1][5], true);
 	}
+	displayThemeResetToDefault();
 }
 
 uint16_t *displayGetScreenBuffer(void)
@@ -1148,7 +1223,7 @@ static void dmaCompleteCallback(DMA_HandleTypeDef *hdma)
 {
 	HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_SET);
 
-   	*((volatile uint8_t*) LCD_FSMC_ADDR_DATA) = 0;// write 0 to the display pins , to pull them all low, so keyboard reads don't need to
+	*((volatile uint8_t*) LCD_FSMC_ADDR_DATA) = 0;// write 0 to the display pins , to pull them all low, so keyboard reads don't need to
 }
 #endif
 
@@ -1174,13 +1249,13 @@ void displayRenderRows(int16_t startRow, int16_t endRow)
 
 	HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_RESET);
 
-    // Set start and end rows of the transfer
-    {
-    	uint8_t opts[] = { 0x00, startRow, 0x00, endRow };
-    	displayWriteCmds(HX8583_CMD_RASET, sizeof(opts), opts);
-    }
+	// Set start and end rows of the transfer
+	{
+		uint8_t opts[] = { 0x00, startRow, 0x00, endRow };
+		displayWriteCmds(HX8583_CMD_RASET, sizeof(opts), opts);
+	}
 
-    displayWriteCmd(HX8583_CMD_RAMWR);
+	displayWriteCmd(HX8583_CMD_RAMWR);
 
 	uint8_t *framePtr = (uint8_t *)screenBuf + (DISPLAY_SIZE_X * startRow * sizeof(uint16_t));
 
@@ -1206,58 +1281,24 @@ void displayRenderRows(int16_t startRow, int16_t endRow)
 
 	HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_SET);
 
-   	*((volatile uint8_t*) LCD_FSMC_ADDR_DATA) = 0;// write 0 to the display pins , to pull them all low, so keyboard reads don't need to
+	*((volatile uint8_t*) LCD_FSMC_ADDR_DATA) = 0;// write 0 to the display pins , to pull them all low, so keyboard reads don't need to
 }
 
-void displaySetInverseVideo(bool inverted)
+void displaySetInverseVideo(bool isInverted)
 {
-	uint16_t tmp = bgColour;
-	bgColour = fgColour;
-	fgColour = tmp;
+	inverted = isInverted;
 }
 
-void displayBegin(bool inverted)
+// Native color format (RGB565)
+void displayBegin(bool isInverted, bool SPIFlashAvailable)
 {
-	uint16_t tmp = bgColour;
-	bgColour = fgColour;
-	fgColour = tmp;
-    displayClearBuf();
-    displayRender();
+	displaySetInvertedState(isInverted);
+	themeInit(SPIFlashAvailable);
 }
 
 void displaySetContrast(uint8_t contrast)
 {
-// this display does not have a contrast control
-}
-
-uint16_t displayR8G8B8ToNative(uint32_t R8G8B8)
-{
-	uint32_t red 	= ((R8G8B8 >> 16) >> 3) << 11;
-	uint32_t green 	= (((R8G8B8 >> 8) & 0xFF) >> 2) << 5;
-	uint32_t blue 	= (R8G8B8 & 0xFF) >> 3;
-
-	return __builtin_bswap16(red + green + blue);
-}
-
-void displaySetBackgroundColour(uint32_t R8G8B8)
-{
-	bgColour = displayR8G8B8ToNative(R8G8B8);
-}
-
-void displaySetForegroundColour(uint32_t R8G8B8)
-{
-	fgColour = displayR8G8B8ToNative(R8G8B8);
-}
-
-uint16_t displayGetForegroundColour(void)
-{
-	return fgColour;
-}
-
-
-uint16_t displayGetBackgroundColour(void)
-{
-	return bgColour;
+	// this display does not have a contrast control
 }
 
 // Note.
@@ -1275,6 +1316,7 @@ void displaySetDisplayPowerMode(bool wake)
 void displayConvertGD77ImageData(uint8_t *dataBuf)
 {
 	const uint32_t startOffset = (32 * DISPLAY_SIZE_X) + (DISPLAY_SIZE_X - 128) / 2;
+
 	for(int y = 0; y < 8; y++ )
 	{
 		for(int x = 0; x < 128; x++)
@@ -1282,7 +1324,7 @@ void displayConvertGD77ImageData(uint8_t *dataBuf)
 			uint8_t d = dataBuf[(y * 128) + x];
 			for(int r = 0; r < 8; r++)
 			{
-				screenBufData[startOffset + (((y * 8) + r) * DISPLAY_SIZE_X) + x] = ((d >> r) & 0x01)? fgColour : bgColour;
+				screenBuf[startOffset + (((y * 8) + r) * DISPLAY_SIZE_X) + x] = ((d >> r) & 0x01) ? backgroundColour : foregroundColour;
 			}
 		}
 	}
@@ -1290,6 +1332,146 @@ void displayConvertGD77ImageData(uint8_t *dataBuf)
 	// clear beginning of display buff used to store the image read from flash
 	for(int i = 0; i < (128 * 64 / 8 / 2); i++)
 	{
-		screenBuf[i] = bgColour;
+		screenBuf[i] = backgroundColour;
 	}
 }
+
+//
+// Colour related functions
+//
+
+#if defined(HAS_COLOURS)
+uint16_t displayConvertRGB888ToNative(uint32_t RGB888)
+{
+	// Convert to native format (RGB565/BGR565, swapped bytes)
+	return __builtin_bswap16(RGB888_TO_PLATFORM_COLOUR_FORMAT(RGB888));
+}
+#endif
+
+//
+// Native color format (swapped RGB565/BGR565, swapped bytes) functions
+//
+void displaySetForegroundAndBackgroundColours(uint16_t fgNativeColour, uint16_t bgNativeColour)
+{
+	foregroundColour = fgNativeColour;
+	backgroundColour = bgNativeColour;
+}
+
+void displayGetForegroundAndBackgroundColours(uint16_t *fgNativeColour, uint16_t *bgNativeColour)
+{
+	*fgNativeColour = foregroundColour;
+	*bgNativeColour = backgroundColour;
+}
+
+#if defined(HAS_COLOURS)
+void themeInitToDefaultValues(DayTime_t daytime, bool invert)
+{
+	foregroundColour = PLATFORM_COLOUR_FORMAT_SWAP_BYTES(RGB888_TO_PLATFORM_COLOUR_FORMAT((invert ? 0xFFFFFFU : 0x000000)));
+	backgroundColour = PLATFORM_COLOUR_FORMAT_SWAP_BYTES(RGB888_TO_PLATFORM_COLOUR_FORMAT((invert ? 0x000000 : 0xFFFFFFU)));
+
+	foregroundThemeItem = THEME_ITEM_FG_DEFAULT;
+	backgroundThemeItem = THEME_ITEM_BG;
+
+	themeItems[daytime][THEME_ITEM_FG_DEFAULT] = foregroundColour;
+	themeItems[daytime][THEME_ITEM_BG] = backgroundColour;
+	themeItems[daytime][THEME_ITEM_FG_DECORATION] = foregroundColour;
+	themeItems[daytime][THEME_ITEM_FG_TEXT_INPUT] = foregroundColour;
+	themeItems[daytime][THEME_ITEM_FG_SPLASHSCREEN] = foregroundColour;
+	themeItems[daytime][THEME_ITEM_BG_SPLASHSCREEN] = backgroundColour;
+	themeItems[daytime][THEME_ITEM_FG_NOTIFICATION] = foregroundColour;
+	themeItems[daytime][THEME_ITEM_FG_WARNING_NOTIFICATION] = foregroundColour;
+	themeItems[daytime][THEME_ITEM_FG_ERROR_NOTIFICATION] = foregroundColour;
+	themeItems[daytime][THEME_ITEM_BG_NOTIFICATION] = backgroundColour;
+	themeItems[daytime][THEME_ITEM_FG_MENU_NAME] = foregroundColour;
+	themeItems[daytime][THEME_ITEM_BG_MENU_NAME] = backgroundColour;
+	themeItems[daytime][THEME_ITEM_FG_MENU_ITEM] = foregroundColour;
+	themeItems[daytime][THEME_ITEM_BG_MENU_ITEM_SELECTED] = foregroundColour;
+	themeItems[daytime][THEME_ITEM_FG_OPTIONS_VALUE] = foregroundColour;
+	themeItems[daytime][THEME_ITEM_FG_HEADER_TEXT] = foregroundColour;
+	themeItems[daytime][THEME_ITEM_BG_HEADER_TEXT] = backgroundColour;
+	themeItems[daytime][THEME_ITEM_FG_RSSI_BAR] = foregroundColour;
+	themeItems[daytime][THEME_ITEM_FG_RSSI_BAR_S9P] = foregroundColour;
+	themeItems[daytime][THEME_ITEM_FG_CHANNEL_NAME] = foregroundColour;
+	themeItems[daytime][THEME_ITEM_FG_CHANNEL_CONTACT] = foregroundColour;
+	themeItems[daytime][THEME_ITEM_FG_CHANNEL_CONTACT_INFO] = foregroundColour;
+	themeItems[daytime][THEME_ITEM_FG_ZONE_NAME] = foregroundColour;
+	themeItems[daytime][THEME_ITEM_FG_RX_FREQ] = foregroundColour;
+	themeItems[daytime][THEME_ITEM_FG_TX_FREQ] = foregroundColour;
+	themeItems[daytime][THEME_ITEM_FG_CSS_SQL_VALUES] = foregroundColour;
+	themeItems[daytime][THEME_ITEM_FG_TX_COUNTER] = foregroundColour;
+	themeItems[daytime][THEME_ITEM_FG_POLAR_DRAWING] = foregroundColour;
+	themeItems[daytime][THEME_ITEM_FG_SATELLITE_COLOUR] = foregroundColour;
+	themeItems[daytime][THEME_ITEM_FG_GPS_NUMBER] = foregroundColour;
+	themeItems[daytime][THEME_ITEM_FG_GPS_COLOUR] = PLATFORM_COLOUR_FORMAT_SWAP_BYTES(RGB888_TO_PLATFORM_COLOUR_FORMAT(0x0000FFU));
+	themeItems[daytime][THEME_ITEM_FG_BD_COLOUR] = PLATFORM_COLOUR_FORMAT_SWAP_BYTES(RGB888_TO_PLATFORM_COLOUR_FORMAT(0xFF0000U));
+}
+
+void themeInit(bool SPIFlashAvailable)
+{
+	themeInitToDefaultValues(NIGHT, true);
+	themeInitToDefaultValues(DAY, false);
+
+	// Read and apply user's theme, if any
+	if (SPIFlashAvailable)
+	{
+		uint16_t themingTmp[THEME_ITEM_MAX];
+
+		if (codeplugGetOpenGD77CustomData(CODEPLUG_CUSTOM_DATA_TYPE_THEME_DAY, (uint8_t *) &themingTmp))
+		{
+			memcpy(&themeItems[DAY], &themingTmp, sizeof(themingTmp));
+
+			foregroundColour = themeItems[DAY][THEME_ITEM_FG_DEFAULT];
+			backgroundColour = themeItems[DAY][THEME_ITEM_BG];
+		}
+
+		if (codeplugGetOpenGD77CustomData(CODEPLUG_CUSTOM_DATA_TYPE_THEME_NIGHT, (uint8_t *) &themingTmp))
+		{
+			memcpy(&themeItems[NIGHT], &themingTmp, sizeof(themingTmp));
+		}
+	}
+
+	if (settingsIsOptionBitSet(BIT_AUTO_NIGHT_OVERRIDE) && (uiDataGlobal.daytimeOverridden == NIGHT))
+	{
+		displayThemeResetToDefault(); // Update colours to NIGHT theme (as default is DAY).
+	}
+}
+
+void displayThemeApply(themeItem_t fgItem, themeItem_t bgItem)
+{
+	if (fgItem < THEME_ITEM_MAX)
+	{
+		foregroundThemeItem = fgItem;
+		foregroundColour = themeItems[DAYTIME_CURRENT][fgItem];
+	}
+
+	if (bgItem < THEME_ITEM_MAX)
+	{
+		backgroundThemeItem = bgItem;
+		backgroundColour = themeItems[DAYTIME_CURRENT][bgItem];
+	}
+}
+
+void displayThemeResetToDefault(void)
+{
+	foregroundThemeItem = THEME_ITEM_FG_DEFAULT;
+	backgroundThemeItem = THEME_ITEM_BG;
+	displaySetForegroundAndBackgroundColours(themeItems[DAYTIME_CURRENT][THEME_ITEM_FG_DEFAULT], themeItems[DAYTIME_CURRENT][THEME_ITEM_BG]);
+}
+
+bool displayThemeIsForegroundColourEqualTo(themeItem_t fgItem)
+{
+	return (foregroundThemeItem == fgItem);
+}
+
+void displayThemeGetForegroundAndBackgroundItems(themeItem_t *fgItem, themeItem_t *bgItem)
+{
+	*fgItem = foregroundThemeItem;
+	*bgItem = backgroundThemeItem;
+}
+
+bool displayThemeSaveToFlash(DayTime_t daytime)
+{
+	return codeplugSetOpenGD77CustomData(((daytime == DAY) ? CODEPLUG_CUSTOM_DATA_TYPE_THEME_DAY : CODEPLUG_CUSTOM_DATA_TYPE_THEME_NIGHT),
+			(uint8_t *)&themeItems[daytime], (sizeof(uint16_t) * THEME_ITEM_MAX));
+}
+#endif // HAS_COLOURS

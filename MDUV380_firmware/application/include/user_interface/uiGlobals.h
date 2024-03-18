@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -31,11 +31,31 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <time.h>
+#include <math.h>
+#include "main.h"
 #include "functions/settings.h"
 #include "functions/codeplug.h"
 #include "functions/ticks.h"
+#include "functions/aprs.h"
 
-typedef unsigned int time_t_custom;     /* date/time in unix secs past 1-Jan-70 */
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+#define FEET_PER_METER 3.2808399
+#define MPS_PER_KNOT   0.51444444
+#define MPS_TO_KMPH    3.60
+#define MPS_TO_MPH     2.23693629
+#define MPH_PER_KNOT   1.15077945
+#define KMPH_PER_KNOT  1.852
+#define KNOT_PER_KMPH  0.53995680 //35
+#define MPS_PER_KMPH   0.277778
+
+
+#define MILLISECS_PER_MIN  60000L
+#define MILLISECS_PER_SEC  1000L
+
+typedef uint32_t time_t_custom;     /* date/time in unix secs past 1-Jan-70 */
 
 #define MAX_ZONE_SCAN_NUISANCE_CHANNELS       16
 #define NUM_LASTHEARD_STORED                  32
@@ -52,7 +72,9 @@ typedef unsigned int time_t_custom;     /* date/time in unix secs past 1-Jan-70 
 #define VFO_LETTER_Y_OFFSET                    0
 #define LH_ENTRY_V_OFFSET                      1
 #define DISPLAY_Y_POS_HEADER                   0
-#define DISPLAY_Y_POS_MENU_START             (16 + MENU_ENTRY_HEIGHT)
+#define DISPLAY_X_POS_MENU_OFFSET              0
+#define DISPLAY_X_POS_MENU_TEXT_OFFSET       (DISPLAY_X_POS_MENU_OFFSET + 0)
+#define DISPLAY_Y_POS_MENU_START             (16 + MENU_ENTRY_HEIGHT + 3)
 #define DISPLAY_Y_POS_MENU_ENTRY_HIGHLIGHT   (DISPLAY_Y_POS_MENU_START - 1)
 #define DISPLAY_Y_POS_BAR                      8
 #define DISPLAY_Y_POS_CONTACT                 12
@@ -82,24 +104,57 @@ typedef unsigned int time_t_custom;     /* date/time in unix secs past 1-Jan-70 
 #define VFO_LETTER_Y_OFFSET                    8
 #define LH_ENTRY_V_OFFSET                      0
 #define DISPLAY_Y_POS_HEADER                   2
-#define DISPLAY_X_POS_MENU_OFFSET			   4
+#define DISPLAY_X_POS_MENU_OFFSET              4
+#define DISPLAY_X_POS_MENU_TEXT_OFFSET       (DISPLAY_X_POS_MENU_OFFSET + 4)
 #define DISPLAY_Y_POS_MENU_START             (16 + MENU_ENTRY_HEIGHT)
-#define DISPLAY_Y_POS_MENU_ENTRY_HIGHLIGHT    64
+#define DISPLAY_Y_POS_MENU_ENTRY_HIGHLIGHT   (32 + DISPLAY_V_OFFSET)
 #define DISPLAY_Y_POS_BAR                     10
-#define DISPLAY_Y_POS_CONTACT                 (16 + 8)
-#define DISPLAY_Y_POS_CONTACT_TX              (34 + 32)
-#define DISPLAY_Y_POS_CONTACT_TX_FRAME        (34 + 16)
-#define DISPLAY_Y_POS_CHANNEL_FIRST_LINE      (32 + 32)
-#define DISPLAY_Y_POS_CHANNEL_SECOND_LINE     (48 + 48)
+#define DISPLAY_Y_POS_CONTACT                (16 + 8)
+#define DISPLAY_Y_POS_CONTACT_TX             (34 + DISPLAY_V_OFFSET)
+#define DISPLAY_Y_POS_CONTACT_TX_FRAME       (34 + DISPLAY_V_OFFSET)
+#define DISPLAY_Y_POS_CHANNEL_FIRST_LINE     (32 + DISPLAY_V_OFFSET)
+#define DISPLAY_Y_POS_CHANNEL_SECOND_LINE    (48 + 48)
 #define DISPLAY_Y_POS_SQUELCH_BAR             16
-#define DISPLAY_Y_POS_CSS_INFO                (16 + 8)
-#define DISPLAY_Y_POS_SQL_INFO                (25 + 8)
+#define DISPLAY_Y_POS_CSS_INFO               (16 + 8)
+#define DISPLAY_Y_POS_SQL_INFO               (25 + 8)
 #define DISPLAY_Y_POS_TX_TIMER                (8 + 16)
-#define DISPLAY_Y_POS_RX_FREQ                 (40 + 40)
-#define DISPLAY_Y_POS_TX_FREQ                 (48 + 48)
-#define DISPLAY_Y_POS_ZONE                    (50 + 64)
-#define DISPLAY_Y_POS_RSSI_VALUE              (18 + 16)
-#define DISPLAY_Y_POS_RSSI_BAR                (40 + 32)
+#define DISPLAY_Y_POS_RX_FREQ                (40 + 40)
+#define DISPLAY_Y_POS_TX_FREQ                (48 + 48)
+#define DISPLAY_Y_POS_ZONE                   (50 + DISPLAY_V_EXTRA_PIXELS)
+#define DISPLAY_Y_POS_RSSI_VALUE             (18 + 16)
+#define DISPLAY_Y_POS_RSSI_BAR               (40 + DISPLAY_V_OFFSET)
+#define TITLE_BOX_HEIGHT                      21
+#elif defined(PLATFORM_MD9600)
+#define DISPLAY_H_EXTRA_PIXELS                 0
+#define DISPLAY_H_OFFSET                       0
+#define DISPLAY_V_EXTRA_PIXELS                 0
+#define DISPLAY_V_OFFSET                       0
+#define MENU_ENTRY_HEIGHT                     16
+#define SQUELCH_BAR_H                          9
+#define V_OFFSET                               0
+#define OVERRIDE_FRAME_HEIGHT                 16
+#define VFO_LETTER_Y_OFFSET                    8
+#define LH_ENTRY_V_OFFSET                      0
+#define DISPLAY_Y_POS_HEADER                   2
+#define DISPLAY_X_POS_MENU_OFFSET              0
+#define DISPLAY_X_POS_MENU_TEXT_OFFSET       (DISPLAY_X_POS_MENU_OFFSET + 0)
+#define DISPLAY_Y_POS_MENU_START             (16 + MENU_ENTRY_HEIGHT)
+#define DISPLAY_Y_POS_MENU_ENTRY_HIGHLIGHT    32
+#define DISPLAY_Y_POS_BAR                     10
+#define DISPLAY_Y_POS_CONTACT                 16
+#define DISPLAY_Y_POS_CONTACT_TX              34
+#define DISPLAY_Y_POS_CONTACT_TX_FRAME        34
+#define DISPLAY_Y_POS_CHANNEL_FIRST_LINE      32
+#define DISPLAY_Y_POS_CHANNEL_SECOND_LINE     48
+#define DISPLAY_Y_POS_SQUELCH_BAR             16
+#define DISPLAY_Y_POS_CSS_INFO                16
+#define DISPLAY_Y_POS_SQL_INFO                25
+#define DISPLAY_Y_POS_TX_TIMER                8
+#define DISPLAY_Y_POS_RX_FREQ                 32
+#define DISPLAY_Y_POS_TX_FREQ                 48
+#define DISPLAY_Y_POS_ZONE                    50
+#define DISPLAY_Y_POS_RSSI_VALUE              18
+#define DISPLAY_Y_POS_RSSI_BAR                40
 #define TITLE_BOX_HEIGHT                      21
 #else
 #define DISPLAY_H_EXTRA_PIXELS                 0
@@ -113,6 +168,8 @@ typedef unsigned int time_t_custom;     /* date/time in unix secs past 1-Jan-70 
 #define VFO_LETTER_Y_OFFSET                    8
 #define LH_ENTRY_V_OFFSET                      0
 #define DISPLAY_Y_POS_HEADER                   2
+#define DISPLAY_X_POS_MENU_OFFSET              0
+#define DISPLAY_X_POS_MENU_TEXT_OFFSET       (DISPLAY_X_POS_MENU_OFFSET + 0)
 #define DISPLAY_Y_POS_MENU_START             (16 + MENU_ENTRY_HEIGHT)
 #define DISPLAY_Y_POS_MENU_ENTRY_HIGHLIGHT    32
 #define DISPLAY_Y_POS_BAR                     10
@@ -161,7 +218,6 @@ typedef unsigned int time_t_custom;     /* date/time in unix secs past 1-Jan-70 
 #define SCAN_DMR_DUPLEX_FAST_MIN_DWELL_TIME       TIMESLOT_DURATION        //minimum time between steps when scanning DMR Duplex in fast mode.
 #define SCAN_DMR_SIMPLEX_FAST_MIN_DWELL_TIME      (TIMESLOT_DURATION * 2)  //minimum time between steps when scanning DMR Simplex in fast mode. (needs extra time to capture TDMA Pulsing)
 
-
 #define SCAN_FREQ_CHANGE_SETTLING_INTERVAL     1 //Time after frequency is changed before RSSI sampling starts
 #define SCAN_SKIP_CHANNEL_INTERVAL             1 //This is actually just an implicit flag value to indicate the channel should be skipped
 
@@ -182,6 +238,7 @@ typedef unsigned int time_t_custom;     /* date/time in unix secs past 1-Jan-70 
 #define VFO_SWEEP_RSSI_NOISE_FLOOR_DEFAULT    14
 
 #define SCREEN_LINE_BUFFER_SIZE               17 // 16 characters (for a 8 pixels font width) + NULL
+#define LOCATION_TEXT_BUFFER_SIZE             32
 
 #define OUT_OF_BAND_FALLBACK_FREQUENCY       43000000
 
@@ -264,9 +321,9 @@ typedef enum
 
 typedef enum
 {
-	SCAN_SCANNING = 0,
-	SCAN_SHORT_PAUSED,
-	SCAN_PAUSED
+	SCAN_STATE_SCANNING = 0,
+	SCAN_STATE_SHORT_PAUSED,
+	SCAN_STATE_PAUSED
 } ScanState_t;
 
 typedef enum
@@ -366,6 +423,9 @@ typedef struct
 	bool				sk2latched;
 #endif
 	volatile uint8_t	rxBeepState;
+	bool				talkaround;
+	DayTime_t           daytime;
+	DayTime_t           daytimeOverridden;
 
 	struct
 	{
@@ -399,6 +459,8 @@ typedef struct
 		bool				tmpTxRxLockMode;
 		CodeplugCSSTypes_t	tmpToneScanCSS;
 		uint8_t				tmpVFONumber;
+		bool				tmpTalkaround;
+		bool				tmpSortOrderIsDistance;
 	} QuickMenu;
 
 	struct
@@ -461,6 +523,10 @@ extern uiDataGlobal_t 			uiDataGlobal;
 
 extern settingsStruct_t 		originalNonVolatileSettings; // used to store previous settings in options edition related menus.
 
+#if !defined(PLATFORM_GD77S)
+extern aprsBeaconingSettings_t 	aprsSettingsCopy; // used to store previous APRS settings in options edition related menu.
+#endif
+
 extern struct_codeplugZone_t 	currentZone;
 extern struct_codeplugRxGroup_t currentRxGroupData;
 extern int						lastLoadedRxGroup;
@@ -471,5 +537,15 @@ extern LinkItem_t 				*LinkHead;
 extern bool 					PTTToggledDown;
 extern uint32_t					xmitErrorTimer;
 
+#if ! defined(PLATFORM_GD77S)
+#define DAYTIME_CURRENT ((uiDataGlobal.daytimeOverridden != UNDEFINED) ? uiDataGlobal.daytimeOverridden : uiDataGlobal.daytime)
+
+extern ticksTimer_t autolockTimer;
+#endif
+
+extern const uint32_t DMRID_HEADER_LENGTH;
+extern const uint32_t DMRID_MEMORY_LOCATION_1;
+extern const uint32_t DMRID_MEMORY_LOCATION_2;
+extern uint32_t dmrIDDatabaseMemoryLocation2;
 
 #endif

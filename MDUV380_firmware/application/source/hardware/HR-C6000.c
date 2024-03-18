@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2019      Kai Ludwig, DG4KLU
- * Copyright (C) 2020-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2020-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -317,40 +317,32 @@ static void hrc6000TransitionToTx(void);
 static void hrc6000InitDigitalState(void);
 static void hrc6000TriggerPrivateCallQSODataDisplay(void);
 
-static uint8_t saveMode = 0;
-static uint8_t saveDev = 0;
-static uint8_t saveD1 =0;
+static HRC6000_Tone1Config_t savedTone1Config = { .Mode = 0, .Dev = 0, .D1 = 0 };
 
 uint8_t getCurrentTATxFlag(void)
 {
 	uint8_t flag;
-	uint8_t taTxFlagTS1 = currentChannelData->flag1 & 0b00000011;
-	uint8_t taTxFlagTS2 = (currentChannelData->flag1 >> 2) & 0b00000011;
+	uint8_t taTxFlagTS1 = currentChannelData->flag1 & 0x03;
+	uint8_t taTxFlagTS2 = (currentChannelData->flag1 >> 2) & 0x03;
+
 	if (trxDMRModeTx == DMR_MODE_DMO)
 	{
 		flag = taTxFlagTS1 | taTxFlagTS2;
 	}
 	else
 	{
-		if (trxGetDMRTimeSlot() == 0)
-		{
-			flag =  taTxFlagTS1;
-		}
-		else
-		{
-			flag =  taTxFlagTS2;
-		}
+		flag = ((trxGetDMRTimeSlot() == 0) ? taTxFlagTS1 : taTxFlagTS2);
 	}
 
-	if (flag == TA_TX_APRS && nonVolatileSettings.locationLat == SETTINGS_UNITIALISED_LOCATION_LAT)
+	if ((flag == TA_TX_APRS) && (nonVolatileSettings.locationLat == SETTINGS_UNITIALISED_LOCATION_LAT))
 	{
 		flag = TA_TX_OFF;
 	}
 #if defined(USING_EXTERNAL_DEBUGGER)
 	SEGGER_RTT_printf(0, "%02x\n",flag);
 #endif
-	return flag;
 
+	return flag;
 }
 
 static void hrc6000WriteSPIRegister0x04Multi(const uint8_t values[][2], uint8_t length)
@@ -463,7 +455,7 @@ void HRC6000SetMicGainDMR(uint8_t gain)
 
 static inline bool hrc6000CrcIsValid(void)
 {
-	if ((settingsUsbMode != USB_MODE_HOTSPOT) && (nonVolatileSettings.bitfieldOptions & BIT_DMR_CRC_IGNORED))
+	if ((settingsUsbMode != USB_MODE_HOTSPOT) && settingsIsOptionBitSet(BIT_DMR_CRC_IGNORED))
 	{
 		return true;
 	}
@@ -475,7 +467,7 @@ static int hrc6000GetTSTimeoutValue(void)
 {
 	if (uiDataGlobal.Scan.active)
 	{
-		if ((uiDataGlobal.Scan.state == SCAN_SHORT_PAUSED) || (uiDataGlobal.Scan.state == SCAN_SCANNING))
+		if ((uiDataGlobal.Scan.state == SCAN_STATE_SHORT_PAUSED) || (uiDataGlobal.Scan.state == SCAN_STATE_SCANNING))
 		{
 			return TS_SYNC_SCAN_TIMEOUT;
 		}
@@ -524,7 +516,19 @@ bool HRC6000CheckTalkGroupFilter(void)
 {
 	if (((hrc.receivedTgOrPcId >> 24) == PC_CALL_FLAG) && (settingsUsbMode != USB_MODE_HOTSPOT))
 	{
-		return ((nonVolatileSettings.privateCalls != 0) || ((trxTalkGroupOrPcId >> 24) == PC_CALL_FLAG));
+		// Handle private calls if they are allowed
+		if((nonVolatileSettings.privateCalls != 0) || ((trxTalkGroupOrPcId >> 24) == PC_CALL_FLAG))
+		{
+			// Monitor all private calls if DMR filter = None. Only allow private call to this radio in other cases.
+			if((nonVolatileSettings.dmrDestinationFilter == DMR_DESTINATION_FILTER_NONE) || (hrc.receivedTgOrPcId == (trxDMRID | (PC_CALL_FLAG << 24))))
+			{
+				return true;
+			}
+		}
+		else
+		{
+			return false;
+		}
 	}
 
 	// All call bypasses filtering
@@ -532,6 +536,7 @@ bool HRC6000CheckTalkGroupFilter(void)
 	{
 		return true;
 	}
+
 
 	switch(nonVolatileSettings.dmrDestinationFilter)
 	{
@@ -552,6 +557,12 @@ bool HRC6000CheckTalkGroupFilter(void)
 				}
 			}
 
+			// Also include currently selected talkgroup even if it is not in the RXG
+			if ((trxTalkGroupOrPcId & 0x00FFFFFF) == hrc.receivedTgOrPcId)
+			{
+				return true;
+			}
+
 			return false;
 			break;
 
@@ -570,7 +581,7 @@ static bool hrc6000CheckColourCodeFilter(void)
 static void hrc6000TransmitTalkerAlias(void)
 {
 	int loopSize;
-	uint8_t flag  = getCurrentTATxFlag();
+	uint8_t flag = getCurrentTATxFlag();
 
 	switch(flag)
 	{
@@ -581,7 +592,7 @@ static void hrc6000TransmitTalkerAlias(void)
 			loopSize = 9;
 		break;
 		case TA_TX_BOTH:
-			loopSize = (nonVolatileSettings.locationLat == SETTINGS_UNITIALISED_LOCATION_LAT)? 9 : 11;
+			loopSize = (nonVolatileSettings.locationLat == SETTINGS_UNITIALISED_LOCATION_LAT) ? 9 : 11;
 		break;
 		default:
 			loopSize = 0;// This should not occur as this function should not be called if the flag is TA_TX_OFF
@@ -651,7 +662,6 @@ static void hrc6000TransmitTalkerAlias(void)
 
 	hrc.TAPhase = ((hrc.TAPhase + 1) % loopSize);
 }
-
 
 static void hrc6000HandleLCData(void)
 {
@@ -777,7 +787,10 @@ void PORTC_IRQHandler(void)
 
 	if (interruptsWasPinTriggered(Port_INT_C6000_SYS, Pin_INT_C6000_SYS))
 	{
-		hrc6000SysInterruptHandler();
+		if (rxPowerSavingIsRxOn())
+		{
+			hrc6000SysInterruptHandler();
+		}
 		interruptsClearPinFlags(Port_INT_C6000_SYS, Pin_INT_C6000_SYS);
 	}
 
@@ -893,8 +906,7 @@ static inline void hrc6000SysPostAccessInt(void)
 	if ((slotState == DMR_STATE_IDLE) && hrc.ccHold && hrc6000CheckColourCodeFilter())
 	{
 		codecInit(false);
-
-		LedWrite(LED_GREEN, 1);//LEDs_PinWrite(GPIO_LEDgreen, Pin_LEDgreen, 1);
+		LedWrite(LED_GREEN, 1);
 
 		SPI0WritePageRegByte(0x04, 0x41, 0x50);     //Receive only in next timeslot
 		slotState = DMR_STATE_RX_1;
@@ -1010,7 +1022,10 @@ static inline void hrc6000SysReceivedDataInt(void)
 		else
 		{
 			disableAudioAmp(AUDIO_AMP_MODE_RF);
-			soundTerminateSound();															//stop any i2s sound transfers
+			if ((voicePromptsIsPlaying() == false) && (soundMelodyIsPlaying() == false))
+			{
+				soundTerminateSound(); //stop any i2s sound transfers
+			}
 		}
 	}
 
@@ -1028,8 +1043,7 @@ static inline void hrc6000SysReceivedDataInt(void)
 			if (hrc6000CheckColourCodeFilter())// Voice LC Header
 			{
 				codecInit(false);
-
-				LedWrite(LED_GREEN, 1);//LEDs_PinWrite(GPIO_LEDgreen, Pin_LEDgreen, 1);
+				LedWrite(LED_GREEN, 1);
 
 				SPI0WritePageRegByte(0x04, 0x41, 0x50);     //Receive only in next timeslot
 				slotState = DMR_STATE_RX_1;
@@ -1117,7 +1131,7 @@ static inline void hrc6000SysReceivedDataInt(void)
 						// sequence #1 before sending LC data to the UI. This avoid QSO_DISPLAY_CALLER_DATA retrigger,
 						// mostly at the end of a QSO run.
 						if ((hrc.tsAgreed == TS_IS_LOCKED) && (hrc.qsoDataSeqCount <= QSODATA_THRESHOLD_COUNT) &&
-								((uiDataGlobal.Scan.active == false) || (uiDataGlobal.Scan.active && (uiDataGlobal.Scan.state == SCAN_PAUSED))))
+								((uiDataGlobal.Scan.active == false) || (uiDataGlobal.Scan.active && (uiDataGlobal.Scan.state == SCAN_STATE_PAUSED))))
 						{
 							hrc.qsoDataSeqCount++;
 						}
@@ -1435,8 +1449,7 @@ void hrc6000SysInterruptHandler(void)
 static void hrc6000TransitionToTx(void)
 {
 	disableAudioAmp(AUDIO_AMP_MODE_RF);
-
-	LedWrite(LED_GREEN, 0);//	LEDs_PinWrite(GPIO_LEDgreen, Pin_LEDgreen, 0);
+	LedWrite(LED_GREEN, 0);
 
 	if (settingsUsbMode != USB_MODE_HOTSPOT)
 	{
@@ -1603,9 +1616,9 @@ void hrc6000TimeslotInterruptHandler(void)
 				}
 				else
 				{
-					if (LedRead(LED_GREEN) == false)//LEDs_PinRead(GPIO_LEDgreen, Pin_LEDgreen) == 0)
+					if (LedRead(LED_GREEN) == 0)
 					{
-						LedWrite(LED_GREEN, 1);//LEDs_PinWrite(GPIO_LEDgreen, Pin_LEDgreen, 1);
+						LedWrite(LED_GREEN, 1);
 					}
 
 					// TS lock acquired
@@ -1666,9 +1679,12 @@ void hrc6000TimeslotInterruptHandler(void)
 			HRC6000ClearActiveDMRID();
 			HRC6000InitDigitalDmrRx();
 			disableAudioAmp(AUDIO_AMP_MODE_RF);
-			soundTerminateSound();															//stop any i2s sound transfers
+			if ((voicePromptsIsPlaying() == false) && (soundMelodyIsPlaying() == false))
+			{
+				soundTerminateSound(); //stop any i2s sound transfers
+			}
 
-			LedWrite(LED_GREEN, 0);//					LEDs_PinWrite(GPIO_LEDgreen, Pin_LEDgreen, 0);
+			LedWrite(LED_GREEN, 0);
 
 			if (uiDataGlobal.rxBeepState & RX_BEEP_CARRIER_HAS_STARTED)
 			{
@@ -1689,8 +1705,7 @@ void hrc6000TimeslotInterruptHandler(void)
 			break;
 
 		case DMR_STATE_TX_START_1: // Start TX (second step)
-
-			LedWrite(LED_RED, 1);//	LEDs_PinWrite(GPIO_LEDred, Pin_LEDred, 1); // for repeater wakeup
+			LedWrite(LED_RED, 1); // for repeater wakeup
 			hrc6000SendPcOrTgLCHeader();
 			SPI0WritePageRegByte(0x04, 0x41, 0x80);    // Transmit during next Timeslot
 			SPI0WritePageRegByte(0x04, 0x50, 0x10);    // Set Data Type to 0001 (Voice LC Header), Data, LCSS=00
@@ -1858,7 +1873,7 @@ void hrc6000TimeslotInterruptHandler(void)
 			break;
 
 		case DMR_STATE_TX_END_3_RMO:
-			LedWrite(LED_GREEN, 1);//					LEDs_PinWrite(GPIO_LEDgreen, Pin_LEDgreen, 1);
+			LedWrite(LED_GREEN, 1);
 			SPI0WritePageRegByte(0x04, 0x41, 0x50);   // Receive during Next Timeslot And Layer2 Access success Bit
 			slotState = DMR_STATE_RX_1;
 			hrc.isWaking = WAKING_MODE_NONE;
@@ -1867,8 +1882,7 @@ void hrc6000TimeslotInterruptHandler(void)
 
 		case DMR_STATE_REPEATER_WAKE_1:
 			{
-				LedWrite(LED_RED, 1);//LEDs_PinWrite(GPIO_LEDred, Pin_LEDred, 1); // Turn on the Red LED while when we transmit the wakeup frame
-
+				LedWrite(LED_RED, 1); // Turn on the Red LED while when we transmit the wakeup frame
 				uint8_t spi_tx1[LC_DATA_LENGTH] = { 0xB8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 				spi_tx1[7] = (trxDMRID >> 16) & 0xFF;
 				spi_tx1[8] = (trxDMRID >> 8) & 0xFF;
@@ -1884,7 +1898,7 @@ void hrc6000TimeslotInterruptHandler(void)
 
 		case DMR_STATE_REPEATER_WAKE_2:
 			addTimerCallback(hrc6000TxBurstCallback, 29, MENU_ANY, false);				//allow time for the wakeup burst to be sent then return to receive
-			LedWrite(LED_GREEN, 0);//	LEDs_PinWrite(GPIO_LEDred, Pin_LEDred, 0); // Turn off the Red LED while we are waiting for the repeater to wakeup
+			LedWrite(LED_RED, 0); // Turn off the Red LED while we are waiting for the repeater to wakeup
 			HRC6000InitDigitalDmrRx();
 			hrc.rxTSToggled = 0; // Start to count the TS toggling times while waking up the repeater.
 			slotState = DMR_STATE_REPEATER_WAKE_3;
@@ -1923,9 +1937,12 @@ void hrc6000TimeslotInterruptHandler(void)
 			HRC6000InitDigitalDmrRx();
 			HRC6000ClearActiveDMRID();
 			disableAudioAmp(AUDIO_AMP_MODE_RF);
-			soundTerminateSound();															//stop any i2s sound transfers
+			if ((voicePromptsIsPlaying() == false) && (soundMelodyIsPlaying() == false))
+			{
+				soundTerminateSound(); //stop any i2s sound transfers
+			}
 
-			LedWrite(LED_GREEN, 0);//LEDs_PinWrite(GPIO_LEDgreen, Pin_LEDgreen, 0);
+			LedWrite(LED_GREEN, 0);
 
 			if (uiDataGlobal.rxBeepState & RX_BEEP_CARRIER_HAS_STARTED)
 			{
@@ -2045,9 +2062,12 @@ void HRC6000ResetTimeSlotDetection(void)
 	if (hrc.keepMonitorCapturedTSAfterTxing == false)
 	{
 		disableAudioAmp(AUDIO_AMP_MODE_RF);
-		soundTerminateSound();															//stop any i2s sound transfers
+		if ((voicePromptsIsPlaying() == false) && (soundMelodyIsPlaying() == false))
+		{
+			soundTerminateSound(); //stop any i2s sound transfers
+		}
 
-		LedWrite(LED_GREEN, 0);//		LEDs_PinWrite(GPIO_LEDgreen, Pin_LEDgreen, 0);
+		LedWrite(LED_GREEN, 0);
 
 		hrc.timeCode = -1; // Clear current timecode synchronisation
 		hrc.tsLockedTS = -1;
@@ -2074,9 +2094,12 @@ void HRC6000InitDigital(void)
 {
 	// Partial timeslot detection reset
 	disableAudioAmp(AUDIO_AMP_MODE_RF);
-	soundTerminateSound();															//stop any i2s sound transfers
+	if ((voicePromptsIsPlaying() == false) && (soundMelodyIsPlaying() == false))
+	{
+		soundTerminateSound(); //stop any i2s sound transfers
+	}
 
-	LedWrite(LED_GREEN, 0);//		LEDs_PinWrite(GPIO_LEDgreen, Pin_LEDgreen, 0);
+	LedWrite(LED_GREEN, 0);
 
 	hrc.timeCode = -1; // Clear current timecode synchronisation
 	hrc.tickCount = 0;
@@ -2104,7 +2127,10 @@ void HRC6000InitDigital(void)
 void HRC6000TerminateDigital(void)
 {
 	disableAudioAmp(AUDIO_AMP_MODE_RF);
-	soundTerminateSound();															//stop any i2s sound transfers
+	if ((voicePromptsIsPlaying() == false) && (soundMelodyIsPlaying() == false))
+	{
+		soundTerminateSound(); //stop any i2s sound transfers
+	}
 	LedWrite(LED_GREEN, 0);
 	hrc6000InitDigitalState();
 
@@ -2708,10 +2734,9 @@ void HRC6000SetTalkerAlias(const char *text)
 
 void HRC6000SetTalkerAliasLocation(uint32_t Lat, uint32_t Lon)
 {
-	double longDouble = latLongFixedToDouble(Lon);
+	double longDouble = latLongFixed32ToDouble(Lon);
 	int32_t intLong = (33554432 * longDouble) / 360;
-	double latDouble = latLongFixedToDouble(Lat);
-
+	double latDouble = latLongFixed32ToDouble(Lat);
 	int32_t intLat = (16777216 * latDouble) / 180;
 
 	hrc.talkAliasLocation[0] = (intLong >> 24) & 0x01;
@@ -2826,7 +2851,6 @@ void HRC6000SetFMRx(void)
 //restore all important registers that may have been changed by FM mode
 void HRC6000SetDMR(void)
 {
-
 	if(trxGetFrequency() > 30000000)
 	{
 		SPI0WritePageRegByte(0x04, 0x01, 0xF0);										//set 2 point Mod, receive mode IF, non inverted (for UHF)
@@ -2924,15 +2948,15 @@ bool HRC6000CheckCSS(void)
 	return (res & 0x01); //register 0x92 bit 0 has the CTCSS or DCS detected flag
 }
 
-	void HRC6000SetLineOut(bool isOn)
-	{
-			SPI0SeClearPageRegByteWithMask(0x04, 0xE2, 0xFD, isOn ? 0x02 : 0x00);				//Enable or disable the DAC output to Line out
-	}
+void HRC6000SetLineOut(bool isOn)
+{
+	SPI0SeClearPageRegByteWithMask(0x04, 0xE2, 0xFD, isOn ? 0x02 : 0x00);				//Enable or disable the DAC output to Line out
+}
 
-	void HRC6000SetMic(bool isOn)
-	{
-			SPI0SeClearPageRegByteWithMask(0x04, 0xE0, 0xBF, isOn ? 0x40 : 0x00);				//Enable or disable the Mic Input to Line in 1
-	}
+void HRC6000SetMic(bool isOn)
+{
+	SPI0SeClearPageRegByteWithMask(0x04, 0xE0, 0xBF, isOn ? 0x40 : 0x00);				//Enable or disable the Mic Input to Line in 1
+}
 
 void HRC6000SetFmAudio(bool isOn)
 {
@@ -2946,7 +2970,6 @@ void HRC6000SetFmAudio(bool isOn)
 		SPI0WritePageRegByte(0x04, 0x36, 0x00);					// Disable the FM audio FeedThrough
 		SPI0WritePageRegByte(0x04, 0x10, 0x6E);					//Set HRC6000 rx mode to DMR
 	}
-
 }
 
 void HRC6000MuteFmAudio(bool isMute)
@@ -2961,15 +2984,26 @@ void HRC6000MuteFmAudio(bool isMute)
 	}
 }
 
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701)
+void HRC6000GetTone1Config(HRC6000_Tone1Config_t *cfg)
+{
+	memcpy(cfg, &savedTone1Config, sizeof(HRC6000_Tone1Config_t));
+}
+
+void HRC6000SetTone1Config(HRC6000_Tone1Config_t *cfg)
+{
+	memcpy(&savedTone1Config, cfg, sizeof(HRC6000_Tone1Config_t));
+}
+#endif
 
 void HRC6000SetDTMF(uint8_t code)
 {
 	uint8_t deviation;
 
-	SPI0ReadPageRegByte(0x04,0xA1,&saveMode);					//save the current tone mode
-	SPI0WritePageRegByte(0x04, 0xA1, 0x82);					    //Enable DTMF Mode
-	SPI0ReadPageRegByte(0x04,0xA0,&saveDev);					//save the current tone deviation
-	SPI0ReadPageRegByte(0x04,0xD1,&saveD1);					    //save the current Register D1. (undocumented high order bits are important)
+	SPI0ReadPageRegByte(0x04, 0xA1, &savedTone1Config.Mode);	//save the current tone mode
+	SPI0WritePageRegByte(0x04, 0xA1, 0x82);						//Enable DTMF Mode
+	SPI0ReadPageRegByte(0x04, 0xA0, &savedTone1Config.Dev);		//save the current tone deviation
+	SPI0ReadPageRegByte(0x04, 0xD1, &savedTone1Config.D1);		//save the current Register D1. (undocumented high order bits are important)
 
 	if(trxGetFrequency() > 30000000)
 	{
@@ -2998,25 +3032,22 @@ void HRC6000SetDTMF(uint8_t code)
 	SPI0WritePageRegByte(0x04, 0xA4, 0xFA);				        //set the tone time to FA (this seems to set the tone to be continuous) ( Normally 2ms increments)
 	SPI0WritePageRegByte(0x04, 0xA3, 0x19);				        //set the tone gap  (2ms increments)
 	SPI0WritePageRegByte(0x04, 0xD1, 0x01);				        //set the number of codes to one
-	SPI0WritePageRegByte(0x04, 0xAF, (code<<4));		        //set the code to be sent
+	SPI0WritePageRegByte(0x04, 0xAF, (code << 4));		        //set the code to be sent
 	SPI0WritePageRegByte(0x04, 0x60, 0x00);		                //Set Analogue Voice Sending mode Off
 	SPI0WritePageRegByte(0x04, 0x60, 0x80);	                    //Set Analogue Voice Sending mode on again to send code
 }
 
 void HRC6000DTMFoff(bool enableMic)
 {
-
-
 	HRC6000SetMic(enableMic);									//turn on or mute the mic as required.
 
-	SPI0WritePageRegByte(0x04, 0xA0, saveDev);				    //restore the previous tone deviation
-	SPI0WritePageRegByte(0x04, 0xA1, saveMode);					//restore the previous tone Mode
-	SPI0WritePageRegByte(0x04, 0xD1, saveD1);					//restore the previous D1 Contents. (undocumented but seem to be important)
+	SPI0WritePageRegByte(0x04, 0xA0, savedTone1Config.Dev);		//restore the previous tone deviation
+	SPI0WritePageRegByte(0x04, 0xA1, savedTone1Config.Mode);	//restore the previous tone Mode
+	SPI0WritePageRegByte(0x04, 0xD1, savedTone1Config.D1);		//restore the previous D1 Contents. (undocumented but seem to be important)
 	SPI0WritePageRegByteExtended(0x01, 0x11B, 0x05);			//restore the DTMF 697 Hz tone in case it has been changed by SetTone
 	SPI0WritePageRegByteExtended(0x01, 0x11A, 0x93);			//
 	SPI0WritePageRegByteExtended(0x01, 0x123, 0x09);			//restore the DTMF 1209 Hz tone in case it has been changed by SetTone
 	SPI0WritePageRegByteExtended(0x01, 0x122, 0xAC);			//
-
 }
 
 void HRC6000SendTone(int tonefreq)
@@ -3027,6 +3058,7 @@ void HRC6000SendTone(int tonefreq)
 
 	SPI0WritePageRegByteExtended(0x01, 0x11B, (tval >> 8) & 0xFF);				//re-configure the DTMF 697 Hz tone to be this frequency
 	SPI0WritePageRegByteExtended(0x01, 0x11A, tval & 0xFF);						//
+
 	SPI0WritePageRegByteExtended(0x01, 0x123, (tval >> 8) & 0xFF);				//re-configure DTMF 1209 Hz tone to be this frequency
 	SPI0WritePageRegByteExtended(0x01, 0x122, tval & 0xFF);						//
 
@@ -3056,14 +3088,8 @@ void HRC6000InitDTMF(void)
 
 void HRC6000SetDmrRxGain(int8_t gain)
 {
-	if(gain < -31)
-	{
-		HRC6000SetLineOut(false);
-	}
-	else
-	{
-		HRC6000SetLineOut(true);
-	}
+	HRC6000SetLineOut((gain < -31) ? false : true);
+
 	gain = CLAMP(gain, -31, 31);
 	uint8_t val = (0x80 + ((gain > 0) * 0x40)) | (gain & 0x1F);
 	SPI0WritePageRegByte(0x04, 0x37, val);

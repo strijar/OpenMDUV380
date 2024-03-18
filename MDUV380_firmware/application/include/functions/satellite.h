@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2021-2023 Roger Clark, VK3KYY / G4KYF
  *
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions
@@ -30,14 +30,20 @@
 
 #include "user_interface/uiGlobals.h"
 
-#define NUM_SATELLITES 15
+#define NUM_SATELLITES 25
 #define NUM_SATELLITE_PREDICTIONS 15
+#define ADDITION_DATA_SIZE 24
 
-#define M_PI 3.14159265358979323846
 #define deg2rad(deg) M_PI / 180.0 * deg
 #define rad2deg(rad) rad * 180.0 / M_PI
 
-typedef enum {PREDICTION_RESULT_NONE, PREDICTION_RESULT_OK, PREDICTION_RESULT_LIMIT, PREDICTION_RESULT_TIMEOUT } predictionResult_t;
+typedef enum
+{
+	PREDICTION_RESULT_NONE,
+	PREDICTION_RESULT_OK,
+	PREDICTION_RESULT_LIMIT,
+	PREDICTION_RESULT_TIMEOUT
+} predictionResult_t;
 
 typedef struct
 {
@@ -101,17 +107,29 @@ typedef struct
 
 } satelliteKeps_t;
 
+
 typedef struct
 {
-	char 		name[17];
-	satelliteKeps_t keps;
-
-	uint32_t	rxFreq;
-	uint32_t	txFreq;
+	uint32_t 	rxFreq;// resultant  corrected for Doppler
+	uint32_t 	txFreq;	// resultant  corrected for Doppler
 	uint16_t	txCTCSS;
 	uint16_t	armCTCSS;
+} satellite_txRxFreqs;
 
-	satellitePredictions_t predictions;
+typedef enum
+{
+	SATELLITE_VOICE_FREQ 	= 0,
+	SATELLITE_APRS_FREQ,
+	SATELLITE_OTHER_FREQ,
+} satelliteFreq_t;
+
+typedef struct
+{
+	char 				name[17];
+	satelliteKeps_t 	keps;
+	satellite_txRxFreqs freqs[3];
+    char 				AdditionalData[ADDITION_DATA_SIZE];
+    satellitePredictions_t predictions;
 } satelliteData_t;
 
 typedef struct
@@ -135,6 +153,7 @@ typedef struct
 	float		HeightInKilometers;
 } satelliteObserver_t;
 
+
 typedef struct
 {
 	float		elevation;			// Elevaton
@@ -145,21 +164,32 @@ typedef struct
 	float		longitude;			// Lon, + East
 	float		latitude;			// Lat, + North
 #endif
-	uint32_t 	rxFreq;				// resultant rxFreq corrected for Doppler
-	uint32_t 	txFreq;				// resultant txFreq corrected for Doppler
+	satellite_txRxFreqs	freqs[3];
 } satelliteResults_t;
 
-typedef struct
+typedef struct __attribute__((__packed__))
 {
-	char 		TLE_Name[16];
-	char 		TLE_Line1[70];
-	char 		TLE_Line2[70];
-	uint32_t	rxFreq;
-	uint32_t	txFreq;
-	uint16_t	txCTCSS;
-	uint16_t	armCTCSS;
+	char 		TLE_Name[8];
+	uint8_t 	TLE_Line1[12];
+	uint8_t 	TLE_Line2[28];
+	uint32_t	rxFreq1;
+	uint32_t	txFreq1;
+	uint16_t	txCTCSS1;
+	uint16_t	armCTCSS1;
+	uint32_t 	rxFreq2;
+    uint32_t 	txFreq2;
+	uint32_t 	rxFreq3;
+    uint32_t 	txFreq3;
+    char 		AdditionalData[ADDITION_DATA_SIZE];
+
 } codeplugSatelliteData_t;
 
+
+typedef union
+{
+	codeplugSatelliteData_t data[NUM_SATELLITES];
+	uint8_t forceToSize[2520];
+} codeplugSatelliteCuctsomDataUnion_t;
 
 typedef enum
 {
@@ -168,9 +198,10 @@ typedef enum
 
 extern satelliteData_t satelliteDataNative[NUM_SATELLITES];
 extern satelliteData_t *currentActiveSatellite;
+extern satelliteFreq_t currentSatelliteFreqIndex;
 
 void satelliteSetObserverLocation(float lat,float lon,int height);
-bool satelliteTLE2Native(const char *kep0,const char *kep1,const char *kep2,satelliteData_t *kepDataOut);
+void satelliteTLE2Native(const char *satelliteName,const uint8_t *kep1,const uint8_t *kep2,satelliteData_t *kepDataOut);
 void satelliteCalculateForDateTimeSecs(const satelliteData_t *satelliteData, time_t_custom dateTimeSecs, satelliteResults_t *currentSatelliteData, satellitePredictionLevel_t predictionLevel);
 bool satellitePredictNextPassFromDateTimeSecs(predictionStateMachineData_t *stateData, const satelliteData_t *satelliteData, time_t_custom startDateTimeSecs, time_t_custom limitDateTimeSecs, int maxIterations, satellitePass_t *nextPass);
 uint16_t satelliteGetMaximumElevation(satelliteData_t *satelliteData, uint32_t passNumber);

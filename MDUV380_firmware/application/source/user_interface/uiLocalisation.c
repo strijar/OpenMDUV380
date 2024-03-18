@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -25,30 +25,21 @@
  * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
+#include "main.h"
 #include "user_interface/uiLocalisation.h"
 
 #include "user_interface/languages/english.h"
 #if defined(LANGUAGE_BUILD_JAPANESE)
 #include "user_interface/languages/japanese.h"
-#else
-#include "user_interface/languages/french.h"
-#include "user_interface/languages/german.h"
-#include "user_interface/languages/portuguese.h"
-#include "user_interface/languages/catalan.h"
-#include "user_interface/languages/spanish.h"
-#include "user_interface/languages/italian.h"
-#include "user_interface/languages/danish.h"
-#include "user_interface/languages/finnish.h"
-#include "user_interface/languages/polish.h"
-#include "user_interface/languages/turkish.h"
-#include "user_interface/languages/czech.h"
-#include "user_interface/languages/dutch.h"
-#include "user_interface/languages/slovenian.h"
-#include "user_interface/languages/portugues_brazil.h"
-#include "user_interface/languages/swedish.h"
-#include "user_interface/languages/hungarian.h"
-#include "user_interface/languages/croatian.h"
 #endif
+
+#if ! defined(LANGUAGE_BUILD_JAPANESE)
+#if defined(PLATFORM_GD77) || defined(PLATFORM_GD77S) || defined(PLATFORM_DM1801) || defined(PLATFORM_DM1801A) || defined(PLATFORM_RD5R)
+__attribute__((section(".upper_text")))
+#endif
+const stringsTable_t userLanguage = { .magicNumber = { LANGUAGE_TAG_MAGIC_NUMBER, { 0x00, 0x00, 0x00, 0x00 } }, .LANGUAGE_NAME = "User" }; // Don't change the version number
+#endif
+
 
 /*
  * Note.
@@ -58,59 +49,30 @@
  * Add new languages at the end of the list
  *
  */
-const stringsTable_t languages[NUM_LANGUAGES]= { 	englishLanguage,        // englishLanguageName
+const stringsTable_t languages[]=
+{
+		englishLanguage,        // englishLanguageName
 #if defined(LANGUAGE_BUILD_JAPANESE)
-													japaneseLanguage,       // japaneseLanguageName
+		japaneseLanguage       // japaneseLanguageName
 #else
-													catalanLanguage,        // catalanLanguageName
-													danishLanguage,         // danishLanguageName
-													frenchLanguage,         // frenchLanguageName
-													germanLanguage,         // deutschGermanLanguageName
-													italianLanguage,        // italianLanguageName
-													portuguesLanguage,      // portuguesLanguageName
-													spanishLanguage,        // spanishLanguageName
-													finnishLanguage,        // suomiFinnishLanguageName
-													polishLanguage,         // polishLanguageName
-													turkishLanguage,        // turkishLanguageName
-													czechLanguage,          // czechLanguageName
-													dutchLanguage,          // nederlandsDutchLanguageName
-													slovenianLanguage,      // slovenianLanguageName
-													portuguesBrazilLanguage,// portuguesBrazilLanguageName
-													swedishLanguage,        // swedishLanguageName
-													hungarianLanguage,      // hungarianLanguageName
-													croatianLanguage,       // croatianLanguageName
+		userLanguage // User language, written by the CPS
 #endif
-													};
+};
 const stringsTable_t *currentLanguage;
 
-// used in menuLanguage
-// needs to be sorted alphabetically, based on the text that is displayed for each language name. With English as the first / default language
-const int LANGUAGE_DISPLAY_ORDER[NUM_LANGUAGES] = {	englishLanguageName,
-#if defined(LANGUAGE_BUILD_JAPANESE)
-													japaneseLanguageName,
+
+uint8_t languagesGetCount(void)
+{
+#if ! defined(LANGUAGE_BUILD_JAPANESE)
+	uint8_t magic[3][4] = { LANGUAGE_TAG_MAGIC_NUMBER, LANGUAGE_TAG_VERSION };
+
+	return ((memcmp(languages[1].magicNumber, magic, sizeof(magic)) == 0) ? 2 : 1);
 #else
-													catalanLanguageName,
-													croatianLanguageName,
-													czechLanguageName,
-													danishLanguageName,
-													deutschGermanLanguageName,
-													frenchLanguageName,
-													hungarianLanguageName,
-													italianLanguageName,
-													nederlandsDutchLanguageName,
-													polishLanguageName,
-													portuguesLanguageName,
-													portuguesBrazilLanguageName,
-													slovenianLanguageName,
-													spanishLanguageName,
-													suomiFinnishLanguageName,
-													swedishLanguageName,
-													turkishLanguageName
+	return 2;
 #endif
-													};
+}
 
-
-char LanguageGetSymbol(LanguageSymbol_t s)
+char currentLanguageGetSymbol(LanguageSymbol_t s)
 {
 	return currentLanguage->symbols[s];
 }

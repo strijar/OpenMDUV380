@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2021-2023 Roger Clark, VK3KYY / G4KYF
  *
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions
@@ -41,8 +41,8 @@
 #endif
 
 static int satelliteGetDoppler(float dopplerFactor, uint32_t freq);
-static void satelliteSetElementsTLE2Native(float YE_in,  float TE_in,  float IN_in,  float RA_in,  float EC_in,  float WP_in,  float MA_in,
-                        float MM_in,  float M2_in,  float RV_in,  float ALON_in,satelliteKeps_t *kepDataOut);
+static void satelliteSetElementsTLE2Native(float YE_in,  float TE_in,  float M2_in,  float IN_in,  float RA_in,  float EC_in,  float WP_in,  float MA_in,
+                        float MM_in,  float RV_in,  float ALON_in,satelliteKeps_t *kepDataOut);
 
 #define ONEPPM 1.0e-6
 
@@ -108,59 +108,56 @@ satelliteData_t *currentActiveSatellite;
 static const int MAX_TOTAL_ITERATIONS = 1000;
 
 
-float satelliteGetElement(const char *gstr,int gstart,int gstop)
+static float satelliteGetElement(const uint8_t *gstr,int gstart,int glength)
 {
-	int k, glength;
 	char gestr[40];
 
-	glength = gstop - gstart + 1;
-	for (k = 0; k <= glength; k++ )
-    {
- 		gestr[k] = gstr[gstart+k-1];
-    }
-
+	memcpy(gestr, &gstr[gstart], glength);
 	gestr[glength] = 0;
 
 	return atof(gestr);
 }
 
-bool satelliteTLE2Native(const char *kep0,const char *kep1,const char *kep2,satelliteData_t *kepDataOut)
+static char *DECOMPRESSION_LOOKUP = "0123456789. +-*";// * not actually ever in the data, its just there so there are all possible indexes
+
+static void decompressTleData(const uint8_t *inStr, uint8_t *outStr,int len)
 {
-	if (!kep0 || !*kep0 )
-    {
-        kep0 = "NoName";
-    }
+	uint8_t *outBufPtr = outStr;
 
-	if (!kep1 || strlen(kep1) < 69 || kep1[0] != '1' )
-    {
-		return false;
-    }
-
-	if (!kep2 || strlen(kep2) < 69 || kep2[0] != '2' )
+	for(int i = 0; i < len; i++)
 	{
-		return false;
+		*outBufPtr++ = DECOMPRESSION_LOOKUP[inStr[i] >> 4];
+		*outBufPtr++ = DECOMPRESSION_LOOKUP[inStr[i] & 0x0F];
 	}
+}
 
-	strncpy(kepDataOut->name,kep0,16);
-	kepDataOut->name[16] = 0;
+void satelliteTLE2Native(const char *satelliteName,const uint8_t *kep1,const uint8_t *kep2,satelliteData_t *kepDataOut)
+{
+	uint8_t tle1DecompressBuffer[24];
+	uint8_t tle2DecompressBuffer[56];
+
+	decompressTleData(kep1,tle1DecompressBuffer,12);
+	decompressTleData(kep2,tle2DecompressBuffer,28);
+
+	memcpy(kepDataOut->name,satelliteName,8);//  satellite name is not always a string, it may not be null terminated.
+	kepDataOut->name[8] = 0;
 
 
 	satelliteSetElementsTLE2Native(
-		satelliteGetElement(kep1,19,20) + 2000,		// Year
-		satelliteGetElement(kep1,21,32),		// TE: Elapsed time (Epoch - YG)
-		satelliteGetElement(kep2,9,16), 		// IN: Inclination (deg)
-        satelliteGetElement(kep2,18,25), 		// RA: R.A.A.N (deg)
-		satelliteGetElement(kep2,27,33) * 1.0e-7,	// EC: Eccentricity
-		satelliteGetElement(kep2,35,42),		// WP: Arg perifee (deg)
-		satelliteGetElement(kep2,44,51),		// MA: Mean motion (rev/d)
-		satelliteGetElement(kep2,53,63), 		// MM: Mean motion (rev/d)
-        satelliteGetElement(kep1,34,43),		// M2: Decay rate (rev/d/d)
-		(satelliteGetElement(kep2,64,68) + ONEPPM),	// RV: Orbit number
+		satelliteGetElement(tle1DecompressBuffer,0,2) + 2000,		// Year
+		satelliteGetElement(tle1DecompressBuffer,2,12),		// TE: Elapsed time (Epoch - YG)
+        satelliteGetElement(tle1DecompressBuffer,14,10),		// M2: Decay rate (rev/d/d)
+
+		satelliteGetElement(tle2DecompressBuffer,0,8), 		// IN: Inclination (deg)
+        satelliteGetElement(tle2DecompressBuffer,8,8), 		// RA: R.A.A.N (deg)
+		satelliteGetElement(tle2DecompressBuffer,16,7) * 1.0e-7,	// EC: Eccentricity
+		satelliteGetElement(tle2DecompressBuffer,23,8),		// WP: Arg perifee (deg)
+		satelliteGetElement(tle2DecompressBuffer,31,8),		// MA: Mean motion (rev/d)
+		satelliteGetElement(tle2DecompressBuffer,39,11), 		// MM: Mean motion (rev/d)
+		(satelliteGetElement(tle2DecompressBuffer,50,5) + ONEPPM),	// RV: Orbit number
 		0,					// ALON: Sat attitude (deg)
 		&kepDataOut->keps);
 
-
-	return true;
 }
 
 uint32_t satelliteDayFn(int year,int month,int day)
@@ -258,8 +255,8 @@ void satelliteSetObserverLocation(float lat,float lon,int height)
 	observerData.VOy = observerData.Ox * currentSatelliteData_W0;
 }
 
-static void satelliteSetElementsTLE2Native(float YE_in,  float TE_in,  float IN_in,  float RA_in,  float EC_in,  float WP_in,  float MA_in,
-                        float MM_in,  float M2_in,  float RV_in,  float ALON_in,satelliteKeps_t *kepDataOut)
+static void satelliteSetElementsTLE2Native(float YE_in,  float TE_in,  float M2_in,  float IN_in,  float RA_in,  float EC_in,  float WP_in,  float MA_in,
+                        float MM_in,  float RV_in,  float ALON_in,satelliteKeps_t *kepDataOut)
 {
 	kepDataOut->RA = deg2rad(RA_in);
 	kepDataOut->EC = EC_in;
@@ -419,10 +416,18 @@ void satelliteCalculateForDateTimeSecs(const satelliteData_t *satelliteData, tim
 	float rangeRate = (tmpVx - observerData.VOx) * tmpRx + (tmpVy - observerData.VOy) * tmpRy + tmpVELz * tmpRz; // Range rate, km/sec
 	float dopplerFactor = rangeRate / 299792.0;
 
-	int rxDoppler = satelliteGetDoppler(dopplerFactor, satelliteData->rxFreq);
-	int txDoppler = satelliteGetDoppler(dopplerFactor, satelliteData->txFreq);
-	currentSatelliteData->rxFreq = satelliteData->rxFreq - rxDoppler;
-	currentSatelliteData->txFreq = satelliteData->txFreq + txDoppler;
+
+	currentSatelliteData->freqs[SATELLITE_VOICE_FREQ].rxFreq = satelliteData->freqs[SATELLITE_VOICE_FREQ].rxFreq - satelliteGetDoppler(dopplerFactor, satelliteData->freqs[SATELLITE_VOICE_FREQ].rxFreq);
+	currentSatelliteData->freqs[SATELLITE_VOICE_FREQ].txFreq = satelliteData->freqs[SATELLITE_VOICE_FREQ].txFreq + satelliteGetDoppler(dopplerFactor, satelliteData->freqs[SATELLITE_VOICE_FREQ].txFreq);
+
+	currentSatelliteData->freqs[SATELLITE_APRS_FREQ].rxFreq = satelliteData->freqs[SATELLITE_APRS_FREQ].rxFreq - satelliteGetDoppler(dopplerFactor, satelliteData->freqs[SATELLITE_APRS_FREQ].rxFreq);
+	currentSatelliteData->freqs[SATELLITE_APRS_FREQ].txFreq = satelliteData->freqs[SATELLITE_APRS_FREQ].txFreq + satelliteGetDoppler(dopplerFactor, satelliteData->freqs[SATELLITE_APRS_FREQ].txFreq);
+	currentSatelliteData->freqs[SATELLITE_APRS_FREQ].txCTCSS = currentSatelliteData->freqs[SATELLITE_APRS_FREQ].armCTCSS = 0;
+
+	currentSatelliteData->freqs[SATELLITE_OTHER_FREQ].rxFreq = satelliteData->freqs[SATELLITE_OTHER_FREQ].rxFreq - satelliteGetDoppler(dopplerFactor, satelliteData->freqs[SATELLITE_OTHER_FREQ].rxFreq);
+	currentSatelliteData->freqs[SATELLITE_OTHER_FREQ].txFreq = satelliteData->freqs[SATELLITE_OTHER_FREQ].txFreq + satelliteGetDoppler(dopplerFactor, satelliteData->freqs[SATELLITE_OTHER_FREQ].txFreq);
+	currentSatelliteData->freqs[SATELLITE_OTHER_FREQ].txCTCSS = currentSatelliteData->freqs[SATELLITE_OTHER_FREQ].armCTCSS = 0;
+
 }
 
 bool satellitePredictNextPassFromDateTimeSecs(predictionStateMachineData_t *stateData, const satelliteData_t *satelliteData, time_t_custom startDateTimeSecs, time_t_custom limitDateTimeSecs, int maxIterations, satellitePass_t *nextPass)

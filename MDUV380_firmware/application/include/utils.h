@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -51,6 +51,10 @@
 
 #if !defined(SAFE_SWAP)
 #define SAFE_SWAP(a, b) ({ typeof (a) _a = a; a = b; b = _a; })
+#endif
+
+#if !defined(MAP)
+#define MAP(x, im, iM, om, oM) ((x - im) * (oM - om) / (iM - im) + om)
 #endif
 
 #if !defined(XSTRINGIFY)

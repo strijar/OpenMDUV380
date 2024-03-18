@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2019      Kai Ludwig, DG4KLU
  * Copyright (C) 2019-2020 Alex, DL4LEX
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *                         Colin Durbridge, G4EML
  *
@@ -89,6 +89,22 @@
 
 #define KEY_DEBOUNCE_COUNTER   20
 
+#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#define KEY_INCREASE KEY_RIGHT
+#define KEY_DECREASE KEY_LEFT
+#else
+#define KEY_INCREASE KEY_FRONT_UP
+#define KEY_DECREASE KEY_FRONT_DOWN
+#endif
+#elif defined(PLATFORM_MD9600)
+#define KEY_INCREASE KEY_RIGHT
+#define KEY_DECREASE KEY_LEFT
+#else
+#define KEY_INCREASE KEY_RIGHT
+#define KEY_DECREASE KEY_LEFT
+#endif
+
 //#define KEYCHECK(keys,k) (((keys) & 0xffffff) == (k))
 //#define KEYCHECK_KEYMOD(keys, k, mask, mod) (((((keys) & 0xffffff) == (k)) && ((keys) & (mask)) == (mod)))
 //#define KEYCHECK_MOD(keys, mask, mod) (((keys) & (mask)) == (mod))
@@ -120,6 +136,7 @@ typedef struct keyboardCode
 
 typedef struct
 {
+	GPIO_PinState lastB;
 	int32_t       Count;
 	int8_t        Direction;
 } rotaryData_t;
@@ -128,12 +145,12 @@ extern volatile rotaryData_t rotaryData;
 
 void keyboardInit(void);
 void keyboardReset(void);
+uint32_t keyboardRead(void);
 bool keyboardKeyIsDTMFKey(char key);
 void keyboardCheckKeyEvent(keyboardCode_t *keys, int *event);
 bool keyboardScanKey(uint32_t scancode, char *keycode);
 
 void rotaryEncoderISR(void);
-void keyboardRotaryDebounceCallback(void);
 
 
 

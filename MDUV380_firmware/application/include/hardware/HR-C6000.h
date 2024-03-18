@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2019      Kai Ludwig, DG4KLU
- * Copyright (C) 2020-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2020-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -74,8 +74,18 @@ enum DMR_Embedded_Data
 	DMR_EMBEDDED_DATA_GPS_INFO            = 8U
 };
 
-void PORTC_IRQHandler(void);
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701)
+typedef struct
+{
+	uint8_t Mode;
+	uint8_t Dev;
+#if ! defined(PLATFORM_MD9600)
+	uint8_t D1;
+#endif
+} HRC6000_Tone1Config_t;
+#endif
 
+void PORTC_IRQHandler(void);
 
 void HRC6000Init(void);
 void HRC6000InitInterrupts(void);
@@ -103,7 +113,7 @@ bool HRC6000CheckTalkGroupFilter(void);
 void HRC6000SetMicGainDMR(uint8_t gain);
 void HRC6000FlushMusic(void);
 
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701)
 void HRC6000SetMicGainFM(uint8_t gain);
 void HRC6000SetFMTx(void);
 void HRC6000SetFMRx(void);
@@ -116,6 +126,8 @@ bool HRC6000CheckCSS(void);
 void HRC6000SetMicGainFM(uint8_t gain);
 void HRC6000SetLineOut(bool isOn);
 void HRC6000SetFmAudio(bool isOn);
+void HRC6000GetTone1Config(HRC6000_Tone1Config_t *cfg);
+void HRC6000SetTone1Config(HRC6000_Tone1Config_t *cfg);
 void HRC6000SetDTMF(uint8_t code);
 void HRC6000InitDTMF(void);
 void HRC6000DTMFoff(bool enableMic);

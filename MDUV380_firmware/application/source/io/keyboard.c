@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2019      Kai Ludwig, DG4KLU
  * Copyright (C) 2019-2020 Alex, DL4LEX
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *                         Colin Durbridge, G4EML
  *
@@ -51,7 +51,6 @@ static char keypadAlphaKey;
 static int keypadAlphaIndex;
 volatile bool keypadAlphaEnable;
 volatile bool keypadLocked = false;
-static bool rotaryDebounceDone = true;
 
 
 /*
@@ -64,6 +63,7 @@ static const uint32_t keyMap[] = {
  */
 volatile rotaryData_t rotaryData =
 {
+		.lastB = (GPIO_PinState)(GPIO_PIN_SET + 1), // To be sure it will be different on the first run (Hackish ? Yeah !)
 		.Count = 0,
 		.Direction = 0
 };
@@ -217,6 +217,65 @@ void keyboardReset(void)
 	keyState = KEY_WAIT_RELEASED;
 }
 
+uint32_t keyboardRead(void)
+{
+	uint32_t result = 0;
+
+	GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+	GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+	GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+
+	GPIO_InitStruct.Pin = LCD_D0_Pin | LCD_D1_Pin | LCD_D2_Pin | LCD_D3_Pin;
+	HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+	GPIO_InitStruct.Pin = LCD_D4_Pin | LCD_D5_Pin | LCD_D6_Pin | LCD_D7_Pin;
+	HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+
+
+	for (size_t i = 0; i < (sizeof(KeyboardMatrix) / sizeof(KeyboardMatrix[0])); i++)
+	{
+
+		//Set the Row Pin as Output
+		GPIO_InitStruct.Pin = KeyboardMatrix[i].GPIOCtrlPin;
+		GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+		GPIO_InitStruct.Pull = GPIO_NOPULL;
+		GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+		HAL_GPIO_Init(KeyboardMatrix[i].GPIOCtrlPort, &GPIO_InitStruct);
+
+		//Set the row pin high to select that row of keys
+		HAL_GPIO_WritePin(KeyboardMatrix[i].GPIOCtrlPort, KeyboardMatrix[i].GPIOCtrlPin, GPIO_PIN_SET);
+
+		for(volatile int xx = 0; xx < 100; xx++); // arbitrary settling delay
+
+		for (size_t k = 0; k < KEYBOARD_KEYS_PER_ROW; k++)
+		{
+			if(HAL_GPIO_ReadPin(KeyboardMatrix[i].Rows[k].GPIOPort, KeyboardMatrix[i].Rows[k].GPIOPin) == GPIO_PIN_SET)
+			{
+				result = KeyboardMatrix[i].Rows[k].Key;
+				break;
+			}
+		}
+
+		//set the row pin back to floating. This prevents conflicts between multiple key presses.
+		GPIO_InitStruct.Pin = KeyboardMatrix[i].GPIOCtrlPin;
+		GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+		GPIO_InitStruct.Pull = GPIO_NOPULL;
+		GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+		HAL_GPIO_Init(KeyboardMatrix[i].GPIOCtrlPort, &GPIO_InitStruct);
+
+
+		// Stop on first down key (we don't support multiple key presses).
+		if (result != 0)
+		{
+			break;
+		}
+	}
+
+	return result;
+}
+
 bool keyboardKeyIsDTMFKey(char key)
 {
 	switch (key)
@@ -233,34 +292,18 @@ bool keyboardKeyIsDTMFKey(char key)
 	return false;
 }
 
-
 void rotaryEncoderISR(void)
 {
-	if(rotaryDebounceDone)
+	GPIO_PinState pinA = HAL_GPIO_ReadPin(ROTARY_SW_A_GPIO_Port, ROTARY_SW_A_Pin);
+	GPIO_PinState pinB = HAL_GPIO_ReadPin(ROTARY_SW_B_GPIO_Port, ROTARY_SW_B_Pin);
+
+	if (pinB != rotaryData.lastB)
 	{
-		int pinA = HAL_GPIO_ReadPin(ROTARY_SW_A_GPIO_Port, ROTARY_SW_A_Pin);
-		int pinB = HAL_GPIO_ReadPin(ROTARY_SW_B_GPIO_Port, ROTARY_SW_B_Pin);
-
-		if(pinB == pinA)
-		{
-		rotaryData.Direction = -1;
-		}
-		else
-		{
-		rotaryData.Direction = 1;
-		}
-
+		rotaryData.lastB = pinB;
+		rotaryData.Direction = ((pinA == pinB) ? -1 : 1);
 		rotaryData.Count += rotaryData.Direction;
-		rotaryDebounceDone=false;
-		addTimerCallback(keyboardRotaryDebounceCallback, 5, -1, false);
 	}
 }
-
-void keyboardRotaryDebounceCallback(void)
-{
-	rotaryDebounceDone=true;
-}
-
 
 void keyboardCheckKeyEvent(keyboardCode_t *keys, int *event)
 {
@@ -286,58 +329,7 @@ void keyboardCheckKeyEvent(keyboardCode_t *keys, int *event)
 	}
 	else
 	{
-		GPIO_InitTypeDef GPIO_InitStruct = {0};
-
-		GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-		GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-		GPIO_InitStruct.Pull = GPIO_PULLDOWN;
-
-		GPIO_InitStruct.Pin = LCD_D0_Pin | LCD_D1_Pin | LCD_D2_Pin | LCD_D3_Pin;
-		HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
-
-		GPIO_InitStruct.Pin = LCD_D4_Pin | LCD_D5_Pin | LCD_D6_Pin | LCD_D7_Pin;
-		HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
-
-
-		for (size_t i = 0; i < (sizeof(KeyboardMatrix) / sizeof(KeyboardMatrix[0])); i++)
-		{
-
-			//Set the Row Pin as Output
-			GPIO_InitStruct.Pin = KeyboardMatrix[i].GPIOCtrlPin;
-			GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-			GPIO_InitStruct.Pull = GPIO_NOPULL;
-			GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-			HAL_GPIO_Init(KeyboardMatrix[i].GPIOCtrlPort, &GPIO_InitStruct);
-
-			//Set the row pin high to select that row of keys
-			HAL_GPIO_WritePin(KeyboardMatrix[i].GPIOCtrlPort, KeyboardMatrix[i].GPIOCtrlPin, GPIO_PIN_SET);
-
-			for(volatile int xx = 0; xx < 100; xx++); // arbitrary settling delay
-
-			for (size_t k = 0; k < KEYBOARD_KEYS_PER_ROW; k++)
-			{
-				if(HAL_GPIO_ReadPin(KeyboardMatrix[i].Rows[k].GPIOPort, KeyboardMatrix[i].Rows[k].GPIOPin) == GPIO_PIN_SET)
-				{
-					keycode = KeyboardMatrix[i].Rows[k].Key;
-					break;
-				}
-			}
-
-			//set the row pin back to floating. This prevents conflicts between multiple key presses.
-			GPIO_InitStruct.Pin = KeyboardMatrix[i].GPIOCtrlPin;
-			GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-			GPIO_InitStruct.Pull = GPIO_NOPULL;
-			GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-			HAL_GPIO_Init(KeyboardMatrix[i].GPIOCtrlPort, &GPIO_InitStruct);
-
-
-			// Stop on first down key (we don't support multiple key presses).
-			if (keycode != 0)
-			{
-				break;
-			}
-		}
-
+		keycode = (char) keyboardRead();
 		scancode = keycode;
 	}
 

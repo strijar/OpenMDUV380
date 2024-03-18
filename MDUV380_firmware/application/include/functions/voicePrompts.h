@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -78,9 +78,9 @@ typedef enum
 	PROMPT_ECO_MODE,
 	PROMPT_DURATION,
 	PROMPT_REVERSE_REPEATER,
-	PROMPT_UNUSED_5,
-	PROMPT_UNUSED_6,
-	PROMPT_UNUSED_7,
+	PROMPT_DISTANCE,
+	PROMPT_KMPH,
+	PROMPT_KILOMETERS,
 	PROMPT_UNUSED_8,
 	PROMPT_UNUSED_9,
 	PROMPT_UNUSED_10,
@@ -98,9 +98,9 @@ void voicePromptsTick(void);// Called from HR-C6000.c
 
 void voicePromptsInit(void);// Call before building the prompt sequence
 void voicePromptsAppendPrompt(voicePrompt_t prompt);// Append an individual prompt item. This can be a single letter number or a phrase
-void voicePromptsAppendString(char *);// Append a text string e.g. "VK3KYY"
+void voicePromptsAppendString(const char *);// Append a text string e.g. "VK3KYY"
 void voicePromptsAppendInteger(int32_t value); // Append a signed integer
-void voicePromptsAppendLanguageString(const char * const *);//Append a text from the current language e.g. &currentLanguage->battery
+void voicePromptsAppendLanguageString(const char *);//Append a text from the current language e.g. &currentLanguage->battery
 void voicePromptsPlay(void);// Starts prompt playback
 extern bool voicePromptsIsPlaying(void);
 bool voicePromptsHasDataToPlay(void);

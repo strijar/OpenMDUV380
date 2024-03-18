@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -98,18 +98,19 @@ static void updateScreen(bool forceRedraw, bool isFirstRun)
 	dBm = trxGetRSSIdBm();
 	int rssi = dBm;
 
-	if (isFirstRun && (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_LEVEL_1))
+	if (isFirstRun && (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_THRESHOLD))
 	{
 		voicePromptsInit();
 		voicePromptsAppendPrompt(PROMPT_SILENCE);
-		voicePromptsAppendLanguageString(&currentLanguage->rssi);
-		voicePromptsAppendLanguageString(&currentLanguage->menu);
+		voicePromptsAppendLanguageString(currentLanguage->rssi);
+		voicePromptsAppendLanguageString(currentLanguage->menu);
 		voicePromptsAppendPrompt(PROMPT_SILENCE);
 		updateVoicePrompts(false, true);
 	}
 
 	if (forceRedraw)
 	{
+		displayThemeApply(THEME_ITEM_FG_DECORATION, THEME_ITEM_BG);
 		// Clear whole drawing region
 		displayFillRect(0, 14, DISPLAY_SIZE_X, DISPLAY_SIZE_Y - 14, true);
 
@@ -118,7 +119,6 @@ static void updateScreen(bool forceRedraw, bool isFirstRun)
 		// Clear the right V line of the frame
 		displayDrawFastVLine((DISPLAY_SIZE_X - 1), (DISPLAY_Y_POS_RSSI_BAR - 1), (8 + 2), false);
 		// S9+xx H Dots
-
 		for (int16_t i = ((barX - 2) + (rssiMeterBar[9] * 2) + 1); i < DISPLAY_SIZE_X; i += STRONG_SIGNAL_RSSI_BARS)
 		{
 			displayDrawFastHLine(i, (DISPLAY_Y_POS_RSSI_BAR - 2), 2, false);
@@ -163,6 +163,8 @@ static void updateScreen(bool forceRedraw, bool isFirstRun)
 						, buf, FONT_SIZE_2);
 			}
 		}
+
+		displayThemeResetToDefault();
 	}
 	else
 	{
@@ -196,7 +198,9 @@ static void updateScreen(bool forceRedraw, bool isFirstRun)
 
 	if (barWidth)
 	{
+		displayThemeApply(THEME_ITEM_FG_RSSI_BAR, THEME_ITEM_BG);
 		displayFillRect(barX, DISPLAY_Y_POS_RSSI_BAR, barWidth, 8, false);
+		displayThemeResetToDefault();
 	}
 
 	// Clear the end of the bar area, if needed
@@ -204,6 +208,22 @@ static void updateScreen(bool forceRedraw, bool isFirstRun)
 	{
 		displayFillRect(barX + barWidth, DISPLAY_Y_POS_RSSI_BAR, (DISPLAY_SIZE_X - barX) - barWidth, 8, true);
 	}
+
+#if defined(HAS_COLOURS)
+	if (rssi > SMETER_S9)
+	{
+		int xPos;
+
+		xPos = (rssiMeterBar[9] * 2);
+
+		if (barWidth > xPos)
+		{
+			displayThemeApply(THEME_ITEM_FG_RSSI_BAR_S9P, THEME_ITEM_BG);
+			displayFillRect((barX + xPos), DISPLAY_Y_POS_RSSI_BAR, (barWidth - xPos), 8, false);
+			displayThemeResetToDefault();
+		}
+	}
+#endif
 
 	if (forceRedraw)
 	{
@@ -222,6 +242,12 @@ static void updateScreen(bool forceRedraw, bool isFirstRun)
 
 static void handleEvent(uiEvent_t *ev)
 {
+	if ((ev->events & FUNCTION_EVENT) && (ev->function == FUNC_REDRAW))
+	{
+		updateScreen(true, false);
+		return;
+	}
+
 	if (ev->events & BUTTON_EVENT)
 	{
 		bool wasPlaying = false;
@@ -248,18 +274,16 @@ static void handleEvent(uiEvent_t *ev)
 	if (KEYCHECK_SHORTUP(ev->keys, KEY_GREEN) || KEYCHECK_SHORTUP(ev->keys, KEY_RED))
 	{
 		menuSystemPopPreviousMenu();
-		return;
 	}
-	else if (KEYCHECK_SHORTUP_NUMBER(ev->keys)  && (BUTTONCHECK_DOWN(ev, BUTTON_SK2)))
+	else if (KEYCHECK_SHORTUP_NUMBER(ev->keys) && (BUTTONCHECK_DOWN(ev, BUTTON_SK2)))
 	{
 		saveQuickkeyMenuIndex(ev->keys.key, menuSystemGetCurrentMenuNumber(), 0, 0);
-		return;
 	}
 }
 
 static void updateVoicePrompts(bool flushIt, bool spellIt)
 {
-	if (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_LEVEL_1)
+	if (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_THRESHOLD)
 	{
 		uint8_t S = getSignalStrength(dBm);
 

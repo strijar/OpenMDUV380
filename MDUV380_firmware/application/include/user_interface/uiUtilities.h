@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -28,6 +28,7 @@
 #ifndef _OPENGD77_UIUTILITIES_H_
 #define _OPENGD77_UIUTILITIES_H_
 
+#include <math.h>
 #include "user_interface/uiGlobals.h"
 #include "user_interface/menuSystem.h"
 #include "functions/settings.h"
@@ -166,7 +167,7 @@ typedef enum
 	DISPLAY_INFO_CONTACT_OVERRIDE_FRAME,
 	DISPLAY_INFO_CHANNEL,
 	DISPLAY_INFO_CHANNEL_INVERTED,
-	DISPLAY_INFO_TONE_AND_SQUELCH,
+	DISPLAY_INFO_CHANNEL_DETAILS,
 	DISPLAY_INFO_TX_TIMER,
 	DISPLAY_INFO_ZONE
 } displayInformation_t;
@@ -191,17 +192,19 @@ bool tsIsContactHasBeenOverridden(Channel_t chan);
 bool tsIsContactHasBeenOverriddenFromCurrentChannel(void);
 
 bool isQSODataAvailableForCurrentTalker(void);
-int alignFrequencyToStep(int freq, int step);
+//int alignFrequencyToStep(int freq, int step);
 char *chomp(char *str);
 int32_t getFirstSpacePos(char *str);
 void dmrIDCacheInit(void);
+void dmrIDCacheClear(void);
+uint32_t dmrIDCacheGetCount(void);
 bool dmrIDLookup(uint32_t targetId, dmrIdDataStruct_t *foundRecord);
 bool contactIDLookup(uint32_t id, uint32_t calltype, char *buffer);
 void uiUtilityRenderQSOData(void);
 void uiUtilityRenderHeader(bool isVFODualWatchScanning, bool isVFOSweepScanning);
 void uiUtilityRedrawHeaderOnly(bool isVFODualWatchScanning, bool isVFOSweepScanning);
-LinkItem_t *lastheardFindInList(uint32_t id);
-void lastheardInitList(void);
+LinkItem_t *lastHeardFindInList(uint32_t id);
+void lastHeardInitList(void);
 void lastHeardClearWorkingTAData(void);
 bool lastHeardListUpdate(uint8_t *dmrDataBuffer, bool forceOnHotspot);
 void lastHeardClearLastID(void);
@@ -234,7 +237,6 @@ void announceCSSCode(uint16_t tone, CodeplugCSSTypes_t cssType, Direction_t dire
 void announceItemWithInit(bool init, voicePromptItem_t item, audioPromptThreshold_t immediateAnnounceThreshold);
 void announceItem(voicePromptItem_t item, audioPromptThreshold_t immediateAnnouceThreshold);
 void promptsPlayNotAfterTx(void);
-void playNextSettingSequence(void);
 void uiUtilityBuildTgOrPCDisplayName(char *nameBuf, int bufferLen);
 void acceptPrivateCall(uint32_t id, int timeslot);
 bool rebuildVoicePromptOnExtraLongSK1(uiEvent_t *ev);
@@ -252,7 +254,9 @@ void cssIncrement2(uint16_t *tone, uint8_t *index, CodeplugCSSTypes_t *type, boo
 void cssIncrement(uint16_t *tone, uint8_t *index, uint8_t step, CodeplugCSSTypes_t *type, bool loop, bool stayInCSSType);
 uint16_t cssGetTone(uint8_t index, CodeplugCSSTypes_t type);
 
-bool uiShowQuickKeysChoices(char *buf, const int bufferLen, const char *menuTitle);
+bool uiQuickKeysShowChoices(char *buf, const int bufferLen, const char *menuTitle);
+bool uiQuickKeysIsStoring(uiEvent_t *ev);
+void uiQuickKeysStore(uiEvent_t *ev, menuStatus_t *status);
 
 // DTMF contact sequences
 void dtmfSequenceReset(void);
@@ -263,18 +267,69 @@ void dtmfSequenceStop(void);
 void dtmfSequenceTick(bool popPreviousMenuOnEnding);
 
 void resetOriginalSettingsData(void);
-void showErrorMessage(const char *message);// MDUV380
+void showErrorMessage(const char *message);
 
-uint8_t getDayOfTheWeek(uint8_t day, uint8_t month, uint8_t year);
+uint8_t *coordsToMaidenhead(uint8_t *maidenheadBuffer, double longitude, double latitude);
+void buildLocationAndMaidenheadStrings(char *locationBufferOrNull, char *maidenheadBufferOrNull, bool locIsValid);
+double latLongFixed32ToDouble(uint32_t fixedVal);
+uint32_t latLongDoubleToFixed32(double value);
+
+double latLongFixed24ToDouble(uint32_t fixedVal);
+uint32_t latLongDoubleToFixed24(double value);
+
+double distanceToLocation(double latitude, double longitude);
+
+void uiSetUTCDateTimeInSecs(time_t_custom UTCdateTimeInSecs);
+
 #ifdef USE_RTC
+uint8_t getDayOfTheWeek(uint8_t day, uint8_t month, uint8_t year);
 time_t getEpochTime(RTC_TimeTypeDef *rtcTime, RTC_DateTypeDef *rtcDate);
 #endif
 
 struct tm *gmtime_r_Custom(const time_t_custom *__restrict tim_p, struct tm *__restrict res);
 time_t_custom mktime_custom(const struct tm * tb);
+
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
 time_t_custom getRtcTime_custom(void);
 void setRtc_custom(time_t_custom tc);
+#endif
 
-uint8_t *coordsToMaidenhead(uint8_t *maidenheadBuffer, double longitude, double latitude);
-double latLongFixedToDouble(uint32_t fixedVal);
+
+#if ! defined(PLATFORM_GD77S)
+#define DAYTIME_THEME_TIMER_INTERVAL  ((60 * 1000) * 5) // 5 minutes
+extern ticksTimer_t daytimeThemeTimer;
+
+
+#define HOURS(h) ((int)(floor(h)))
+#define MINUTES(h) ((int)(60*(h-floor(h))))
+
+/* A macro to compute the number of days elapsed since 2000 Jan 0.0 */
+/* (which is equal to 1999 Dec 31, 0h UT)                           */
+/* Dan R sez: This is some pretty fucking high magic. */
+#define DAYS_SINCE_2000_JAN_0(y,m,d) (367L*(y)-((7*((y)+(((m)+9)/12)))/4)+((275*(m))/9)+(d)-730530L)
+/* Some conversion factors between radians and degrees */
+
+#define RADEG     (180.0 / M_PI)
+#define DEGRAD    (M_PI / 180.0)
+
+/* The trigonometric functions in degrees */
+
+#define SIND(x)  sin((x)*DEGRAD)
+#define COSD(x)  cos((x)*DEGRAD)
+#define TAND(x)  tan((x)*DEGRAD)
+
+#define ATAND(x)    (RADEG*atan(x))
+#define ASIND(x)    (RADEG*asin(x))
+#define ACOSD(x)    (RADEG*acos(x))
+#define ATAN2D(y,x) (RADEG*atan2(y,x))
+
+int sunriset(int year, int month, int day, double lon, double lat, double altit, int upper_limb, double *rise, double *set);
+void daytimeThemeChangeUpdate(bool startup);
+void daytimeThemeApply(DayTime_t daytime);
+void daytimeThemeTick(void);
+void uiChannelModeOrVFOModeThemeDaytimeChange(bool toggle, bool isChannelMode);
+#else
+#define uiChannelModeOrVFOModeThemeDaytimeChange(x, y) do { } while(0)
+#endif
+
 #endif

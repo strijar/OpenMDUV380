@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2021-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -36,6 +36,8 @@
 #include "hardware/HR-C6000.h"
 #include "usb/usb_com.h"
 #include "functions/ticks.h"
+#include "interfaces/clockManager.h"
+#include "functions/codeplug.h"
 #include "hardware/radioHardwareInterface.h"
 #include "interfaces/gps.h"
 #include "interfaces/settingsStorage.h"
@@ -49,16 +51,28 @@ static uint32_t lowBatteryCount = 0;
 #define BATTERY_VOLTAGE_TICK_RELOAD                100
 #define BATTERY_VOLTAGE_CALLBACK_TICK_RELOAD       20
 
-
 static int batteryVoltageCallbackTick = 0;
 static int batteryVoltageTick = BATTERY_VOLTAGE_TICK_RELOAD;
 
 volatile float averageBatteryVoltage = 0;
 static volatile float previousAverageBatteryVoltage;
 volatile int batteryVoltage = 0;
+volatile uint16_t micLevel = 0;
+volatile uint16_t potLevel = 0;
+volatile uint16_t temperatureLevel = 0;
+volatile int lastValidBatteryVoltage = 64;
+volatile uint32_t resumeTicks = 0;
+
 
 #if !defined(PLATFORM_GD77S)
 ticksTimer_t apoTimer;
+#endif
+
+#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+bool powerRotarySwitchIsOn(void)
+{
+	return (batteryVoltage > POWEROFF_VOLTAGE_THRESHOLD);
+}
 #endif
 
 void showLowBattery(void)
@@ -73,20 +87,27 @@ bool batteryIsLowWarning(void)
 
 bool batteryIsLowVoltageWarning(void)
 {
-	return (batteryVoltage < (CUTOFF_VOLTAGE_LOWER_HYST + LOW_BATTERY_WARNING_VOLTAGE_DIFFERENTIAL));
+	return (powerRotarySwitchIsOn() ? (batteryVoltage < (CUTOFF_VOLTAGE_LOWER_HYST + LOW_BATTERY_WARNING_VOLTAGE_DIFFERENTIAL)) : false);
 }
 
-bool batteryIsLowCriticalVoltage(bool isSuspended)
+bool batteryIsLowCriticalVoltage(void)
 {
-	return (batteryVoltage < CUTOFF_VOLTAGE_LOWER_HYST);
+	return (powerRotarySwitchIsOn() ? (batteryVoltage < CUTOFF_VOLTAGE_LOWER_HYST) : false);
 }
 
-bool batteryLastReadingIsCritical(bool isSuspended)
+bool batteryLastReadingIsCritical(void)
 {
-	return (adcGetBatteryVoltage() < CUTOFF_VOLTAGE_UPPER_HYST);
+	if (powerRotarySwitchIsOn() == false)
+	{
+		return (lastValidBatteryVoltage < CUTOFF_VOLTAGE_UPPER_HYST);
+	}
+
+	lastValidBatteryVoltage = adcGetBatteryVoltage();
+
+	return (lastValidBatteryVoltage < CUTOFF_VOLTAGE_UPPER_HYST);
 }
 
-void batteryChecking(void)
+void batteryChecking(uiEvent_t *ev)
 {
 	static ticksTimer_t lowBatteryBeepTimer = { 0, 0 };
 	static ticksTimer_t lowBatteryHeaderRedrawTimer = { 0, 0 };
@@ -94,7 +115,7 @@ void batteryChecking(void)
 	bool lowBatteryWarning = batteryIsLowVoltageWarning();
 	bool batIsLow = false;
 
-	if (batteryVoltage < 20)
+	if (powerRotarySwitchIsOn() && (batteryVoltage < 20))
 	{
 		if (menuSystemGetCurrentMenuNumber() != UI_POWER_OFF)
 		{
@@ -129,14 +150,14 @@ void batteryChecking(void)
 
 		if (melody_play == NULL)
 		{
-			if (nonVolatileSettings.audioPromptMode < AUDIO_PROMPT_MODE_VOICE_LEVEL_1)
+			if (nonVolatileSettings.audioPromptMode < AUDIO_PROMPT_MODE_VOICE_THRESHOLD)
 			{
 				soundSetMelody(MELODY_LOW_BATTERY);
 			}
 			else
 			{
 				voicePromptsInit();
-				voicePromptsAppendLanguageString(&currentLanguage->low_battery);
+				voicePromptsAppendLanguageString(currentLanguage->low_battery);
 				voicePromptsPlay();
 			}
 
@@ -163,14 +184,18 @@ void batteryChecking(void)
 	}
 
 	// Check if the battery has reached critical voltage (power off)
-	bool lowBatteryCritical = batteryIsLowCriticalVoltage(false);
+	bool lowBatteryCritical = powerRotarySwitchIsOn() ? batteryIsLowCriticalVoltage() : false;
 
 	// Critical battery threshold is reached after 30 seconds, in total, of lowBatteryCritical.
 	lowBatteryCriticalCount += (lowBatteryCritical ? 1 : (lowBatteryCriticalCount ? -1 : 0));
 
 	// Low battery or poweroff (non RD-5R)
-	bool powerSwitchIsOff = false;
-
+	bool powerSwitchIsOff =
+#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+			(powerRotarySwitchIsOn() == false);
+#else
+			false;
+#endif
 
 	if ((powerSwitchIsOff || lowBatteryCritical) && (menuSystemGetCurrentMenuNumber() != UI_POWER_OFF))
 	{
@@ -194,7 +219,29 @@ void batteryChecking(void)
 #if ! defined(PLATFORM_RD5R)
 		else
 		{
-			menuSystemPushNewMenu(UI_POWER_OFF);
+			bool suspend = false;
+
+#if !(defined(PLATFORM_GD77S) || defined(STM32F405xx))
+			suspend = settingsIsOptionBitSet(BIT_POWEROFF_SUSPEND);
+
+			// Suspend bit is set, but user pressed the SK2, asking for a real poweroff
+			if (suspend && BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+			{
+				suspend = false;
+			} // Suspend bit is NOT set, but user pressed the SK2, asking for a suspend
+			else if ((suspend == false) && BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+			{
+				suspend = true;
+			}
+#endif
+			if (suspend)
+			{
+				powerOffFinalStage(true, false);
+			}
+			else
+			{
+				menuSystemPushNewMenu(UI_POWER_OFF);
+			}
 		}
 #endif // ! PLATFORM_RD5R
 	}
@@ -205,35 +252,25 @@ void batteryUpdate(void)
 	batteryVoltageTick++;
 	if (batteryVoltageTick >= BATTERY_VOLTAGE_TICK_RELOAD)
 	{
-		if (previousAverageBatteryVoltage != averageBatteryVoltage)
+		if (powerRotarySwitchIsOn())
 		{
-			previousAverageBatteryVoltage = averageBatteryVoltage;
-			headerRowIsDirty = true;
-		}
+			if (previousAverageBatteryVoltage != averageBatteryVoltage)
+			{
+				previousAverageBatteryVoltage = averageBatteryVoltage;
+				headerRowIsDirty = true;
+			}
 
-		batteryVoltageCallbackTick++;
-		if (batteryVoltageCallbackTick >= BATTERY_VOLTAGE_CALLBACK_TICK_RELOAD)
-		{
-			menuRadioInfosPushBackVoltage(averageBatteryVoltage);
-			batteryVoltageCallbackTick = 0;
+			batteryVoltageCallbackTick++;
+			if (batteryVoltageCallbackTick >= BATTERY_VOLTAGE_CALLBACK_TICK_RELOAD)
+			{
+				menuRadioInfosPushBackVoltage(averageBatteryVoltage);
+				batteryVoltageCallbackTick = 0;
+			}
 		}
 
 		batteryVoltageTick = 0;
 	}
 }
-
-void powerOff(void)
-{
-	MX_USB_DEVICE_DeInit(); // Deinit USB
-	gpioSetDisplayBacklightIntensityPercentage(0);
-	displaySetDisplayPowerMode(false);
-#if !(defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017))
-	gpsPower(false);  // Turn off the power to the GPS
-#endif
-	radioPowerOff(true);
-	HAL_GPIO_WritePin(PWR_SW_GPIO_Port, PWR_SW_Pin, GPIO_PIN_RESET);// Don't hold the power on
-}
-
 
 void powerDown(bool doNotSavePowerOffState)
 {
@@ -242,30 +279,42 @@ void powerDown(bool doNotSavePowerOffState)
 	if (!doNotSavePowerOffState)
 	{
 #if defined(PLATFORM_MD9600)
-		uint16_t radioIsInStandby;
-		radioIsInStandby = RADIO_IN_STANDBY_FLAG_PATTERN;
+		uint16_t radioIsInStandby = RADIO_IN_STANDBY_FLAG_PATTERN;
 		batteryRAM_Write(0,(uint8_t *)&radioIsInStandby,2);
 #endif
 	}
 
-//	settingsStorageWriteVFO(&settingsVFOChannel[CHANNEL_VFO_A], CHANNEL_VFO_A);
-//	settingsStorageWriteVFO(&settingsVFOChannel[CHANNEL_VFO_B], CHANNEL_VFO_B);
 	settingsSaveSettings(true);
+	codeplugSaveLastUsedChannelInZone();
+
+#if defined(HAS_GPS)
+#if defined(LOG_GPS_DATA)
+	gpsLoggingStop();
+#endif
+	gpsOff();
+#endif
 
 	// Give it a bit of time to finish to write the flash (avoiding corruptions).
-	while (1U)
+	while (true)
 	{
 		if ((ticksGetMillis() - m) > 100)
 		{
 			break;
 		}
+
+		osDelay(1);
 	}
-	powerOff();
+
+	gpioSetDisplayBacklightIntensityPercentage(0);
+	displaySetDisplayPowerMode(false);
+	radioPowerOff(true);
 
 	//Reset the display, saves about 1mA
 	HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_SET);
 	HAL_GPIO_WritePin(LCD_RST_GPIO_Port, LCD_RST_Pin, GPIO_PIN_RESET);
 	osDelay(20);
+
+	MX_USB_DEVICE_DeInit(); // Deinit USB
 
 	HAL_SuspendTick();
 	HAL_PWR_DisableWakeUpPin(PWR_WAKEUP_PIN1);
@@ -274,17 +323,20 @@ void powerDown(bool doNotSavePowerOffState)
 	__HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(&hrtc, RTC_FLAG_WUTF);
 
 	HAL_PWR_EnterSTANDBYMode();
+
+	HAL_GPIO_WritePin(PWR_SW_GPIO_Port, PWR_SW_Pin, GPIO_PIN_RESET);
 }
 
 void die(bool usbMonitoring, bool maintainRTC, bool forceSuspend)
 {
+	int8_t batteryCriticalCount = 0;
 #if !defined(PLATFORM_RD5R) && !defined(PLATFORM_GD77S)
 	uint32_t lowBatteryCriticalCount = 0;
-	ticksTimer_t nextPITCounterRunTimer = { ticksGetMillis(), SUSPEND_LOW_BATTERY_RATE };
+	ticksTimer_t nextPITCounterRunTimer = { .start = ticksGetMillis(), .timeout = SUSPEND_LOW_BATTERY_RATE };
 
 	if (!maintainRTC)
 	{
-		HAL_GPIO_WritePin(PWR_SW_GPIO_Port, PWR_SW_Pin, GPIO_PIN_RESET);
+		HAL_GPIO_WritePin(PWR_SW_GPIO_Port, PWR_SW_Pin, GPIO_PIN_RESET); // This is normally already done before this function is called.
 		// But do it again, just in case, as its important that the radio will turn off when the power control is turned to off
 	}
 #endif
@@ -292,80 +344,134 @@ void die(bool usbMonitoring, bool maintainRTC, bool forceSuspend)
 	disableAudioAmp(AUDIO_AMP_MODE_RF);
 	disableAudioAmp(AUDIO_AMP_MODE_BEEP);
 	disableAudioAmp(AUDIO_AMP_MODE_PROMPT);
-
 	LedWrite(LED_GREEN, 0);
 	LedWrite(LED_RED, 0);
-
 	trxResetSquelchesState(); // Could be put in sleep state and awaken with a signal, so this will re-enable the audio AMP
 
 	trxPowerUpDownRxAndC6000(false, true);
 
 	if (usbMonitoring)
 	{
-		while(1U)
+		ticksTimer_t checkBatteryTimer = { .start = ticksGetMillis(), .timeout = 1000U };
+
+		while(true)
 		{
 			tick_com_request();
+			vTaskDelay((0 / portTICK_PERIOD_MS));
+
+			if (ticksTimerHasExpired(&checkBatteryTimer))
+			{
+				batteryCriticalCount += (batteryLastReadingIsCritical() ? 1 : (batteryCriticalCount ? -1 : 0));
+
+				if (batteryCriticalCount > (LOW_BATTERY_VOLTAGE_RECOVERY_TIME / 1000))
+				{
+					powerDown(true);
+					while(true); // won't reach this.
+				}
+
+				ticksTimerStart(&checkBatteryTimer, 1000U);
+			}
 		}
 	}
 	else
 	{
+		uint8_t batteryLowRetries = 50;
+#if !defined(PLATFORM_GD77S)
+		uint32_t prevPowerSwitchState =
+#if !defined(PLATFORM_RD5R)
+				(powerRotarySwitchIsOn() ? 0 : 1)
+#else
+				1
+#endif
+				;
+#endif
 
-/* vk3yy commented out as not supported by the MD9600
-		clockManagerSetRunMode(kAPP_PowerModeHsrun,CLOCK_MANAGER_SPEED_RUN);
-*/
-		bool batteryIsCritical = batteryLastReadingIsCritical(maintainRTC);
+#if defined(HAS_GPS)
+#if defined(LOG_GPS_DATA)
+		gpsLoggingStop();
+#endif
+		gpsOff();
+#endif
 
+		while(batteryLowRetries-- > 0)
+		{
+			batteryCriticalCount += (batteryLastReadingIsCritical() ? 1 : (batteryCriticalCount ? -1 : 0));
+			osDelay(1);
+		}
+		bool batteryIsCritical = batteryCriticalCount > 25;
+
+		clockManagerSetRunMode(kAPP_PowerModeRun, CLOCK_MANAGER_RUN_SUSPEND_MODE);
+		isSuspended = true;
 /* VK3KYY Need to port 
 		watchdogDeinit();
 */
-		if (batteryIsCritical == false)
+		if (batteryIsCritical)
+		{
+			powerDown(true);
+			while(true); // won't reach this.
+		}
+		else
 		{
 			displaySetDisplayPowerMode(false);
 		}
 
+		MX_USB_DEVICE_DeInit(); // Deinit USB
+
 		while(true)
 		{
-			if (batteryIsCritical)
-			{
-#if !defined(PLATFORM_RD5R)
+			batteryUpdate();
 
-			HAL_GPIO_WritePin(PWR_SW_GPIO_Port, PWR_SW_Pin, GPIO_PIN_RESET);
-#endif
-
-				powerDown(true);
-				while(true);
-			}
-
-#if !defined(PLATFORM_RD5R) && !defined(PLATFORM_GD77S)
+#if !defined(PLATFORM_GD77S)
 			if (uiDataGlobal.SatelliteAndAlarmData.alarmType == ALARM_TYPE_NONE)
 			{
+				uint32_t powerSwitchState =
+#if !defined(PLATFORM_RD5R)
+						(powerRotarySwitchIsOn() ? 0 : 1)
+#else
+						1
+#endif
+						;
 
-				/* vk3yy commented out as not supported by the MD9600
-				if (GPIO_Power_Switch, Pin_Power_Switch) == 0)
+				// Safe Power On option is ON, user didn't press SK1 on power ON, so
+				// forceSuspend is true.
+				// Now, user just turned OFF the power switch, clear the forceSuspend flag to
+				// be able to handle the power ON event.
+				if ((powerSwitchState != 0) && forceSuspend)
 				{
+					forceSuspend = false;
+				}
 
-
+				if ((powerSwitchState == 0) && (forceSuspend == false) &&
+						((settingsIsOptionBitSet(BIT_SAFE_POWER_ON) ?
+								(((buttonsRead() & BUTTON_SK1) != 0) && (powerSwitchState != prevPowerSwitchState))
+								: true)))
+				{
 					// User wants to go in bootloader mode
-					if (buttonsRead() == (BUTTON_SK1 | BUTTON_SK2))
+					if (buttonsRead() == (BUTTON_SK1 | BUTTON_PTT))
 					{
-						watchdogRebootNow();
+						NVIC_SystemReset();
 					}
 
 					wakeFromSleep();
 					return;
 				}
-				*/
-			}
 
+				prevPowerSwitchState = powerSwitchState;
+			}
+#endif
+
+#if !defined(PLATFORM_RD5R) && !defined(PLATFORM_GD77S)
 			if (ticksTimerHasExpired(&nextPITCounterRunTimer))
 			{
 				// Check if the battery has reached critical voltage (power off)
-				bool lowBatteryCritical = batteryIsLowCriticalVoltage(maintainRTC);
+				bool powerSwitchIsOn = powerRotarySwitchIsOn();
+				bool lowBatteryCritical = powerSwitchIsOn ? batteryIsLowCriticalVoltage() : false;
 
 				// Critical battery threshold is reached after 30 seconds, in total, of lowBatteryCritical.
 				lowBatteryCriticalCount += (lowBatteryCritical ? 1 : (lowBatteryCriticalCount ? -1 : 0));
 
-				if (lowBatteryCritical && (lowBatteryCriticalCount > (LOW_BATTERY_VOLTAGE_RECOVERY_TIME / 1000) /* 30s in total */))
+				if ((powerSwitchIsOn == false) ||
+						(lowBatteryCritical && (lowBatteryCriticalCount > (LOW_BATTERY_VOLTAGE_RECOVERY_TIME / 1000) /* 30s in total */)))
 				{
 					HAL_GPIO_WritePin(PWR_SW_GPIO_Port, PWR_SW_Pin, GPIO_PIN_RESET);
 					while(true);
@@ -376,31 +482,43 @@ void die(bool usbMonitoring, bool maintainRTC, bool forceSuspend)
 
 			if (uiDataGlobal.SatelliteAndAlarmData.alarmType != ALARM_TYPE_NONE)
 			{
-
-/* vk3yy commented out as not supported by the MD9600
-				bool powerSwitchIsOff =	(GPIO_PinRead(GPIO_Power_Switch, Pin_Power_Switch) != 0);
+				bool powerSwitchIsOff =	(powerRotarySwitchIsOn() == false);
 				if (powerSwitchIsOff)
 				{
 					uiDataGlobal.SatelliteAndAlarmData.alarmType = ALARM_TYPE_NONE;
 				}
-*/
 			}
-
 
 			if (uiDataGlobal.SatelliteAndAlarmData.alarmType != ALARM_TYPE_NONE)
 			{
+				bool wakingUp =
+#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+						(buttonsRead() & BUTTON_ORANGE);
+#else // MD-UV3x0 | RT3S
+						((buttonsRead() & (BUTTON_SK2 | BUTTON_PTT)) == (BUTTON_SK2 | BUTTON_PTT));
 
-/* vk3yy commented out as not supported by the MD9600
-				bool isOrange = (GPIO_PinRead(GPIO_Orange, Pin_Orange) == 0);
-				if (isOrange)
-								{
+#endif
+				if (wakingUp)
+				{
+					// Wait for button(s) release
+					while (
+#if (defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017))
+							(buttonsRead() & BUTTON_ORANGE)
+#else
+							(buttonsRead() & (BUTTON_SK2 | BUTTON_PTT))
+#endif
+					)
+					{
+						osDelay(10);
+					}
+
 					wakeFromSleep();
 					return;
 				}
-*/
 			}
 
-			if (uiDataGlobal.SatelliteAndAlarmData.alarmType == ALARM_TYPE_SATELLITE || uiDataGlobal.SatelliteAndAlarmData.alarmType == ALARM_TYPE_CLOCK)
+			if (uiDataGlobal.SatelliteAndAlarmData.alarmType == ALARM_TYPE_SATELLITE ||
+					uiDataGlobal.SatelliteAndAlarmData.alarmType == ALARM_TYPE_CLOCK)
 			{
 				if (uiDataGlobal.dateTimeSecs >= uiDataGlobal.SatelliteAndAlarmData.alarmTime)
 				{
@@ -409,6 +527,7 @@ void die(bool usbMonitoring, bool maintainRTC, bool forceSuspend)
 				}
 			}
 #endif
+			osDelay(100);
 		}
 
 	}
@@ -416,19 +535,17 @@ void die(bool usbMonitoring, bool maintainRTC, bool forceSuspend)
 
 void wakeFromSleep(void)
 {
+	MX_USB_DEVICE_Init();
+
 #if !defined(PLATFORM_RD5R)
-	if (menuSystemGetPreviousMenuNumber() == MENU_SATELLITE)\
+	if (menuSystemGetPreviousMenuNumber() == MENU_SATELLITE)
 	{
-/* vk3yy commented out as not supported by the MD9600
 //		clockManagerSetRunMode(kAPP_PowerModeRun, CLOCK_MANAGER_SPEED_HS_RUN);
 		clockManagerSetRunMode(kAPP_PowerModeRun, CLOCK_MANAGER_SPEED_RUN);
-*/
 	}
 	else
 	{
-/* vk3yy commented out as not supported by the MD9600
 		clockManagerSetRunMode(kAPP_PowerModeRun, CLOCK_MANAGER_SPEED_RUN);
-*/
 	}
 
 /*
@@ -438,10 +555,13 @@ void wakeFromSleep(void)
 
 	trxPowerUpDownRxAndC6000(true, true);
 
+	// Reset counters before enabling watchdog
+	hrc6000Task.AliveCount = TASK_FLAGGED_ALIVE;
+	beepTask.AliveCount = TASK_FLAGGED_ALIVE;
+
 /* VK3KYY Need to port to MD9600
 	watchdogInit();
 */
-
 	displaySetDisplayPowerMode(true);
 
 	if (trxGetMode() == RADIO_MODE_DIGITAL)
@@ -450,6 +570,37 @@ void wakeFromSleep(void)
 		HRC6000InitDigitalDmrRx();
 	}
 #endif
+
+#if defined(HAS_GPS)
+	if (nonVolatileSettings.gps >= GPS_MODE_OFF)
+	{
+		gpsOn();
+#if defined(LOG_GPS_DATA)
+		gpsLoggingStart();
+#endif
+	}
+#endif
+
+#if !defined(PLATFORM_GD77S)
+	if (nonVolatileSettings.apo > 0)
+	{
+		ticksTimerStart(&apoTimer, ((nonVolatileSettings.apo * 30) * 60000U));
+	}
+
+	if ((nonVolatileSettings.autolockTimer > 0) && ticksTimerIsEnabled(&autolockTimer))
+	{
+		ticksTimerStart(&autolockTimer, (nonVolatileSettings.autolockTimer * 30000U));
+	}
+#endif
+
+	// Trick to compensate the fact that VBat is disconnected from the battery when
+	// the power switch is set to OFF. Hence, we need to display the non averaged
+	// voltage value, to avoid the long ramp up.
+	resumeTicks = (ticksGetMillis() + BATTERY_VOLTAGE_STABILISATION_TIME);
+
+	voicePromptsInit(); // Flush the VPs
+
+	isSuspended = false;
 }
 
 
@@ -483,22 +634,36 @@ void powerOffFinalStage(bool maintainRTC, bool forceSuspend)
 
 	menuHotspotRestoreSettings();
 
+	codeplugSaveLastUsedChannelInZone();
+
+#if defined(LOG_GPS_DATA)
+	gpsLoggingStop();
+#endif
+
 	m = ticksGetMillis();
-	settingsSaveForPowerOff();
+	settingsSaveSettings(true);
 
 	// Give it a bit of time before pulling the plug as DM-1801 EEPROM looks slower
 	// than GD-77 to write, then quickly power cycling triggers settings reset.
-	while (1U)
+	while (true)
 	{
 		if ((ticksGetMillis() - m) > 50)
 		{
 			break;
 		}
+
+		osDelay(1);
 	}
 
 	displayEnableBacklight(false, 0);
 
-	HAL_GPIO_WritePin(PWR_SW_GPIO_Port, PWR_SW_Pin, GPIO_PIN_RESET);
+#if ! (defined(PLATFORM_RD5R))// || defined(PLATFORM_MD9600) || defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017))
+	// This turns the power off to the CPU.
+	if (!maintainRTC)
+	{
+		HAL_GPIO_WritePin(PWR_SW_GPIO_Port, PWR_SW_Pin, GPIO_PIN_RESET);
+	}
+#endif
 
 	die(false, maintainRTC, forceSuspend);
 }
@@ -540,14 +705,14 @@ void apoTick(bool eventFromOperator)
 			if ((ticksTimerRemaining(&apoTimer) <= 60000U) &&
 					((uiNotificationIsVisible() && (uiNotificationGetId() == NOTIFICATION_ID_USER_APO)) == false))
 			{
-				if (nonVolatileSettings.audioPromptMode < AUDIO_PROMPT_MODE_VOICE_LEVEL_1)
+				if (nonVolatileSettings.audioPromptMode < AUDIO_PROMPT_MODE_VOICE_THRESHOLD)
 				{
 					soundSetMelody(MELODY_APO_TRIGGERED);
 				}
 				else
 				{
 					voicePromptsInit();
-					voicePromptsAppendLanguageString(&currentLanguage->auto_power_off);
+					voicePromptsAppendLanguageString(currentLanguage->auto_power_off);
 					voicePromptsPlay();
 				}
 

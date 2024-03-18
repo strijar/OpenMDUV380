@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -38,12 +38,28 @@
 #include "user_interface/uiLocalisation.h"
 #include "user_interface/uiUtilities.h"
 
+#if defined(PLATFORM_GD77) || defined(PLATFORM_GD77S) || defined(PLATFORM_DM1801) || defined(PLATFORM_DM1801A) || defined(PLATFORM_RD5R)
+#define DMR_RX_AGC_MAX 16
+#define FM_MIC_GAIN_MIN 1  // Limit to min 1, as 0: no audio
+#define FM_MIC_GAIN_MAX 31
+#elif defined(PLATFORM_MD9600)
+#define DMR_RX_AGC_MAX 16
+#define FM_MIC_GAIN_MIN 0
+#define FM_MIC_GAIN_MAX 15
+#else
+#define DMR_RX_AGC_MAX 8
+#define FM_MIC_GAIN_MIN 0
+#define FM_MIC_GAIN_MAX 15
+#endif
+
 static void updateScreen(bool isFirstRun);
 static void handleEvent(uiEvent_t *ev);
+static void applySettings(void);
+static void exitCallback(void *data);
 
 static menuStatus_t menuSoundExitCode = MENU_STATUS_SUCCESS;
 
-enum SOUND_MENU_LIST
+enum
 {
 	OPTIONS_MENU_TIMEOUT_BEEP = 0,
 	OPTIONS_MENU_BEEP_VOLUME,
@@ -79,9 +95,11 @@ menuStatus_t menuSoundOptions(uiEvent_t *ev, bool isFirstRun)
 
 		voicePromptsInit();
 		voicePromptsAppendPrompt(PROMPT_SILENCE);
-		voicePromptsAppendLanguageString(&currentLanguage->sound_options);
-		voicePromptsAppendLanguageString(&currentLanguage->menu);
+		voicePromptsAppendLanguageString(currentLanguage->sound_options);
+		voicePromptsAppendLanguageString(currentLanguage->menu);
 		voicePromptsAppendPrompt(PROMPT_SILENCE);
+
+		menuSystemRegisterExitCallback(exitCallback, NULL);
 
 		updateScreen(isFirstRun);
 		return (MENU_STATUS_LIST_TYPE | MENU_STATUS_SUCCESS);
@@ -103,14 +121,14 @@ static void updateScreen(bool isFirstRun)
 {
 	int mNum = 0;
 	char buf[SCREEN_LINE_BUFFER_SIZE];
-	char * const *leftSide = NULL;// initialise to please the compiler
-	char * const *rightSideConst = NULL;// initialise to please the compiler
+	const char *leftSide = NULL;// initialise to please the compiler
+	const char *rightSideConst = NULL;// initialise to please the compiler
 	char rightSideVar[SCREEN_LINE_BUFFER_SIZE];
 	voicePrompt_t rightSideUnitsPrompt;
-	const char * rightSideUnitsStr;
+	const char *rightSideUnitsStr;
 
 	displayClearBuf();
-	bool settingOption = uiShowQuickKeysChoices(buf, SCREEN_LINE_BUFFER_SIZE, currentLanguage->sound_options);
+	bool settingOption = uiQuickKeysShowChoices(buf, SCREEN_LINE_BUFFER_SIZE, currentLanguage->sound_options);
 
 	for(int i = 1 - ((MENU_MAX_DISPLAYED_ENTRIES - 1) / 2) - 1; i <= (MENU_MAX_DISPLAYED_ENTRIES - ((MENU_MAX_DISPLAYED_ENTRIES - 1) / 2) - 1); i++)
 	{
@@ -136,10 +154,10 @@ static void updateScreen(bool isFirstRun)
 			switch(mNum)
 			{
 				case OPTIONS_MENU_TIMEOUT_BEEP:
-					leftSide = (char * const *)&currentLanguage->timeout_beep;
+					leftSide = currentLanguage->timeout_beep;
 					if (nonVolatileSettings.audioPromptMode == AUDIO_PROMPT_MODE_SILENT)
 					{
-						rightSideConst = (char * const *)&currentLanguage->n_a;
+						rightSideConst = currentLanguage->n_a;
 					}
 					else
 					{
@@ -151,15 +169,15 @@ static void updateScreen(bool isFirstRun)
 						}
 						else
 						{
-							rightSideConst = (char * const *)&currentLanguage->n_a;
+							rightSideConst = currentLanguage->n_a;
 						}
 					}
 					break;
 				case OPTIONS_MENU_BEEP_VOLUME: // Beep volume reduction
-					leftSide = (char * const *)&currentLanguage->beep_volume;
+					leftSide = currentLanguage->beep_volume;
 					if (nonVolatileSettings.audioPromptMode == AUDIO_PROMPT_MODE_SILENT)
 					{
-						rightSideConst = (char * const *)&currentLanguage->n_a;
+						rightSideConst = currentLanguage->n_a;
 					}
 					else
 					{
@@ -169,56 +187,56 @@ static void updateScreen(bool isFirstRun)
 
 					break;
 				case OPTIONS_MENU_DMR_BEEP:
-					leftSide = (char * const *)&currentLanguage->dmr_beep;
+					leftSide = currentLanguage->dmr_beep;
 					if (nonVolatileSettings.audioPromptMode == AUDIO_PROMPT_MODE_SILENT)
 					{
-						rightSideConst = (char * const *)&currentLanguage->n_a;
+						rightSideConst = currentLanguage->n_a;
 					}
 					else
 					{
-						const char * const *beepTX[] = { &currentLanguage->none, &currentLanguage->start, &currentLanguage->stop, &currentLanguage->both };
-						rightSideConst = (char * const *)beepTX[(nonVolatileSettings.beepOptions & 0x03)];
+						const char *beepTX[] = { currentLanguage->none, currentLanguage->start, currentLanguage->stop, currentLanguage->both };
+						rightSideConst = beepTX[(nonVolatileSettings.beepOptions & 0x03)];
 					}
 					break;
 				case OPTIONS_MENU_RX_BEEP:
-					leftSide = (char * const *)&currentLanguage->rx_beep;
+					leftSide = currentLanguage->rx_beep;
 					if (nonVolatileSettings.audioPromptMode == AUDIO_PROMPT_MODE_SILENT)
 					{
-						rightSideConst = (char * const *)&currentLanguage->n_a;
+						rightSideConst = currentLanguage->n_a;
 					}
 					else
 					{
-						const char * const *beepRX[] = { &currentLanguage->none, &currentLanguage->carrier, &currentLanguage->talker, &currentLanguage->both };
-						rightSideConst = (char * const *)beepRX[((nonVolatileSettings.beepOptions >> 2) & 0x03)];
+						const char *beepRX[] = { currentLanguage->none, currentLanguage->carrier, currentLanguage->talker, currentLanguage->both };
+						rightSideConst = beepRX[((nonVolatileSettings.beepOptions >> 2) & 0x03)];
 					}
 					break;
 				case OPTIONS_MENU_RX_TALKER_BEGIN_BEEP:
-					leftSide = (char * const *)&currentLanguage->talker;
+					leftSide = currentLanguage->talker;
 					if ((nonVolatileSettings.audioPromptMode == AUDIO_PROMPT_MODE_SILENT) ||
 							((nonVolatileSettings.beepOptions & BEEP_RX_TALKER) == 0) || (((nonVolatileSettings.beepOptions >> 2) & 0x03) == 0))
 					{
-						rightSideConst = (char * const *)&currentLanguage->n_a;
+						rightSideConst = currentLanguage->n_a;
 					}
 					else
 					{
-						const char * const *beepRXTalker[] = { &currentLanguage->end_only, &currentLanguage->both };
-						rightSideConst = (char * const *)beepRXTalker[((nonVolatileSettings.beepOptions & BEEP_RX_TALKER_BEGIN) >> 4)];
+						const char *beepRXTalker[] = { currentLanguage->end_only, currentLanguage->both };
+						rightSideConst = beepRXTalker[((nonVolatileSettings.beepOptions & BEEP_RX_TALKER_BEGIN) >> 4)];
 					}
 					break;
 				case OPTIONS_MIC_GAIN_DMR: // DMR Mic gain
-					leftSide = (char * const *)&currentLanguage->dmr_mic_gain;
+					leftSide = currentLanguage->dmr_mic_gain;
 					snprintf(rightSideVar, SCREEN_LINE_BUFFER_SIZE, "%ddB", (nonVolatileSettings.micGainDMR - SETTINGS_DMR_MIC_ZERO) * 3);
 					break;
 				case OPTIONS_MIC_GAIN_FM: // FM Mic gain
-					leftSide = (char * const *)&currentLanguage->fm_mic_gain;
+					leftSide = currentLanguage->fm_mic_gain;
 					snprintf(rightSideVar, SCREEN_LINE_BUFFER_SIZE, "%ddB", (nonVolatileSettings.micGainFM - SETTINGS_FM_MIC_ZERO) * 3);
 					break;
 				case OPTIONS_VOX_THRESHOLD:
-					leftSide = (char * const *)&currentLanguage->vox_threshold;
+					leftSide = currentLanguage->vox_threshold;
 					snprintf(rightSideVar, SCREEN_LINE_BUFFER_SIZE, "%d", nonVolatileSettings.voxThreshold);
 					break;
 				case OPTIONS_VOX_TAIL:
-					leftSide = (char * const *)&currentLanguage->vox_tail;
+					leftSide = currentLanguage->vox_tail;
 					if (nonVolatileSettings.voxThreshold != 0)
 					{
 						float tail = (nonVolatileSettings.voxTailUnits * 0.5);
@@ -231,37 +249,37 @@ static void updateScreen(bool isFirstRun)
 					}
 					else
 					{
-						rightSideConst = (char * const *)&currentLanguage->n_a;
+						rightSideConst = currentLanguage->n_a;
 					}
 					break;
 				case OPTIONS_AUDIO_PROMPT_MODE:
 					{
-						leftSide = (char * const *)&currentLanguage->audio_prompt;
-						const char * const *audioPromptOption[] = { &currentLanguage->silent, &currentLanguage->beep,
-								&currentLanguage->voice_prompt_level_1, &currentLanguage->voice_prompt_level_2, &currentLanguage->voice_prompt_level_3 };
-						rightSideConst = (char * const *)audioPromptOption[nonVolatileSettings.audioPromptMode];
+						leftSide = currentLanguage->audio_prompt;
+						const char *audioPromptOption[] = { currentLanguage->silent, currentLanguage->beep, currentLanguage->no_keys,
+								currentLanguage->voice_prompt_level_1, currentLanguage->voice_prompt_level_2, currentLanguage->voice_prompt_level_3 };
+						rightSideConst = audioPromptOption[nonVolatileSettings.audioPromptMode];
 					}
 					break;
 				case OPTIONS_AUDIO_DMR_RX_AGC:
-					leftSide = (char * const *)&currentLanguage->dmr_rx_agc;
+					leftSide = currentLanguage->dmr_rx_agc;
 					if (nonVolatileSettings.DMR_RxAGC != 0)
 					{
 						snprintf(rightSideVar, SCREEN_LINE_BUFFER_SIZE, "%ddB", ((nonVolatileSettings.DMR_RxAGC - 1) * 3));
 					}
 					else
 					{
-						rightSideConst = (char * const *)&currentLanguage->off;
+						rightSideConst = currentLanguage->off;
 					}
 					break;
 #if defined(PLATFORM_MD9600)
 				case OPTIONS_SPEAKER_CLICK_SUPPRESS:
-					leftSide = (char * const *)&currentLanguage->speaker_click_suppress;
-					rightSideConst = (char * const *)(settingsIsOptionBitSet(BIT_SPEAKER_CLICK_SUPPRESS) ? &currentLanguage->on : &currentLanguage->off);
+					leftSide = currentLanguage->speaker_click_suppress;
+					rightSideConst = (settingsIsOptionBitSet(BIT_SPEAKER_CLICK_SUPPRESS) ? currentLanguage->on : currentLanguage->off);
 					break;
 #endif
 			}
 
-			snprintf(buf, SCREEN_LINE_BUFFER_SIZE, "%s:%s", *leftSide, (rightSideVar[0] ? rightSideVar : (rightSideConst ? *rightSideConst : "")));
+			snprintf(buf, SCREEN_LINE_BUFFER_SIZE, "%s:%s", leftSide, (rightSideVar[0] ? rightSideVar : (rightSideConst ? rightSideConst : "")));
 
 			if (i == 0)
 			{
@@ -272,9 +290,9 @@ static void updateScreen(bool isFirstRun)
 					voicePromptsInit();
 				}
 
-				if (!wasPlaying || menuDataGlobal.newOptionSelected)
+				if (!wasPlaying || (menuDataGlobal.newOptionSelected || (menuDataGlobal.menuOptionsTimeout > 0)))
 				{
-					voicePromptsAppendLanguageString((const char * const *)leftSide);
+					voicePromptsAppendLanguageString(leftSide);
 				}
 
 				if ((rightSideVar[0] != 0) || ((rightSideVar[0] == 0) && (rightSideConst == NULL)))
@@ -283,7 +301,7 @@ static void updateScreen(bool isFirstRun)
 				}
 				else
 				{
-					voicePromptsAppendLanguageString((const char * const *)rightSideConst);
+					voicePromptsAppendLanguageString(rightSideConst);
 				}
 
 				if (rightSideUnitsPrompt != PROMPT_SILENCE)
@@ -309,7 +327,7 @@ static void updateScreen(bool isFirstRun)
 			// QuickKeys
 			if (menuDataGlobal.menuOptionsTimeout > 0)
 			{
-				menuDisplaySettingOption(*leftSide, (rightSideVar[0] ? rightSideVar : *rightSideConst));
+				menuDisplaySettingOption(leftSide, (rightSideVar[0] ? rightSideVar : rightSideConst));
 			}
 			else
 			{
@@ -318,7 +336,7 @@ static void updateScreen(bool isFirstRun)
 					strncat(buf, rightSideUnitsStr, SCREEN_LINE_BUFFER_SIZE);
 				}
 
-				menuDisplayEntry(i, mNum, buf);
+				menuDisplayEntry(i, mNum, buf, (strlen(leftSide) + 1), THEME_ITEM_FG_MENU_ITEM, THEME_ITEM_FG_OPTIONS_VALUE, THEME_ITEM_BG);
 			}
 		}
 	}
@@ -340,27 +358,36 @@ static void handleEvent(uiEvent_t *ev)
 
 	if ((menuDataGlobal.menuOptionsTimeout > 0) && (!BUTTONCHECK_DOWN(ev, BUTTON_SK2)))
 	{
-		menuDataGlobal.menuOptionsTimeout--;
-		if (menuDataGlobal.menuOptionsTimeout == 0)
+		if (voicePromptsIsPlaying() == false)
 		{
-			resetOriginalSettingsData();
-			menuSystemPopPreviousMenu();
-			return;
+			menuDataGlobal.menuOptionsTimeout--;
+			if (menuDataGlobal.menuOptionsTimeout == 0)
+			{
+				applySettings();
+				menuSystemPopPreviousMenu();
+				return;
+			}
 		}
 	}
+
 	if (ev->events & FUNCTION_EVENT)
 	{
 		isDirty = true;
-		if ((QUICKKEY_TYPE(ev->function) == QUICKKEY_MENU) && (QUICKKEY_ENTRYID(ev->function) < NUM_SOUND_MENU_ITEMS))
+		if (ev->function == FUNC_REDRAW)
+		{
+			updateScreen(false);
+			return;
+		}
+		else if ((QUICKKEY_TYPE(ev->function) == QUICKKEY_MENU) && (QUICKKEY_ENTRYID(ev->function) < NUM_SOUND_MENU_ITEMS))
 		{
 			menuDataGlobal.currentItemIndex = QUICKKEY_ENTRYID(ev->function);
 		}
+
 		if ((QUICKKEY_FUNCTIONID(ev->function) != 0))
 		{
 			menuDataGlobal.menuOptionsTimeout = 1000;
 		}
 	}
-
 
 	if ((ev->events & KEY_EVENT) && (menuDataGlobal.menuOptionsSetQuickkey == 0) && (menuDataGlobal.menuOptionsTimeout == 0))
 	{
@@ -380,22 +407,12 @@ static void handleEvent(uiEvent_t *ev)
 		}
 		else if (KEYCHECK_SHORTUP(ev->keys, KEY_GREEN))
 		{
-			// All parameters has already been applied
-			settingsSaveIfNeeded(true);
-			resetOriginalSettingsData();
+			applySettings();
 			menuSystemPopAllAndDisplayRootMenu();
 			return;
 		}
 		else if (KEYCHECK_SHORTUP(ev->keys, KEY_RED))
 		{
-			// Restore original settings.
-			memcpy(&nonVolatileSettings, &originalNonVolatileSettings, sizeof(settingsStruct_t));
-			soundBeepVolumeDivider = nonVolatileSettings.beepVolumeDivider;
-			HRC6000SetMicGainDMR(nonVolatileSettings.micGainDMR);
-			trxSetMicGainFM(nonVolatileSettings.micGainFM);
-			voxSetParameters(nonVolatileSettings.voxThreshold, nonVolatileSettings.voxTailUnits);
-			settingsSaveIfNeeded(true);
-			resetOriginalSettingsData();
 			menuSystemPopPreviousMenu();
 			return;
 		}
@@ -407,7 +424,11 @@ static void handleEvent(uiEvent_t *ev)
 	}
 	if ((ev->events & (KEY_EVENT | FUNCTION_EVENT)) && (menuDataGlobal.menuOptionsSetQuickkey == 0))
 	{
-		if (KEYCHECK_PRESS(ev->keys, KEY_RIGHT) || (QUICKKEY_FUNCTIONID(ev->function) == FUNC_RIGHT))
+		if (KEYCHECK_PRESS(ev->keys, KEY_RIGHT)
+#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+				|| KEYCHECK_SHORTUP(ev->keys, KEY_ROTARY_INCREMENT)
+#endif
+				|| (QUICKKEY_FUNCTIONID(ev->function) == FUNC_RIGHT))
 		{
 			isDirty = true;
 			menuDataGlobal.newOptionSelected = false;
@@ -480,7 +501,7 @@ static void handleEvent(uiEvent_t *ev)
 					}
 					break;
 				case OPTIONS_MIC_GAIN_FM: // FM Mic gain
-					if (nonVolatileSettings.micGainFM < 15)
+					if (nonVolatileSettings.micGainFM < FM_MIC_GAIN_MAX)
 					{
 						settingsIncrement(nonVolatileSettings.micGainFM, 1);
 						trxSetMicGainFM(nonVolatileSettings.micGainFM);
@@ -501,20 +522,13 @@ static void handleEvent(uiEvent_t *ev)
 					}
 					break;
 				case OPTIONS_AUDIO_PROMPT_MODE:
-					if (nonVolatileSettings.audioPromptMode < (NUM_AUDIO_PROMPT_MODES - 2 + (int)voicePromptDataIsLoaded))
+					if (nonVolatileSettings.audioPromptMode <= ((voicePromptDataIsLoaded ? NUM_AUDIO_PROMPT_MODES : AUDIO_PROMPT_MODE_VOICE_THRESHOLD) - 2))
 					{
-						if ((nonVolatileSettings.audioPromptMode == AUDIO_PROMPT_MODE_BEEP) && !voicePromptDataIsLoaded)
-						{
-							soundSetMelody(MELODY_ERROR_BEEP);
-						}
-						else
-						{
-							settingsIncrement(nonVolatileSettings.audioPromptMode, 1);
-						}
+						settingsIncrement(nonVolatileSettings.audioPromptMode, 1);
 					}
 					break;
 				case OPTIONS_AUDIO_DMR_RX_AGC:
-					if (nonVolatileSettings.DMR_RxAGC < 8)
+					if (nonVolatileSettings.DMR_RxAGC < DMR_RX_AGC_MAX)
 					{
 						settingsIncrement(nonVolatileSettings.DMR_RxAGC, 1);
 					}
@@ -526,7 +540,11 @@ static void handleEvent(uiEvent_t *ev)
 #endif
 			}
 		}
-		else if (KEYCHECK_PRESS(ev->keys, KEY_LEFT) || (QUICKKEY_FUNCTIONID(ev->function) == FUNC_LEFT))
+		else if (KEYCHECK_PRESS(ev->keys, KEY_LEFT)
+#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+				|| KEYCHECK_SHORTUP(ev->keys, KEY_ROTARY_DECREMENT)
+#endif
+				|| (QUICKKEY_FUNCTIONID(ev->function) == FUNC_LEFT))
 		{
 			isDirty = true;
 			menuDataGlobal.newOptionSelected = false;
@@ -601,7 +619,7 @@ static void handleEvent(uiEvent_t *ev)
 					}
 					break;
 				case OPTIONS_MIC_GAIN_FM: // FM Mic gain
-					if (nonVolatileSettings.micGainFM > 0)
+					if (nonVolatileSettings.micGainFM > FM_MIC_GAIN_MIN)
 					{
 						settingsDecrement(nonVolatileSettings.micGainFM, 1);
 						trxSetMicGainFM(nonVolatileSettings.micGainFM);
@@ -616,7 +634,7 @@ static void handleEvent(uiEvent_t *ev)
 					}
 					break;
 				case OPTIONS_VOX_TAIL:
-					if (nonVolatileSettings.voxTailUnits >= 1)
+					if (nonVolatileSettings.voxTailUnits > 1) // 500ms tail minimum.
 					{
 						settingsDecrement(nonVolatileSettings.voxTailUnits, 1);
 						voxSetParameters(nonVolatileSettings.voxThreshold, nonVolatileSettings.voxTailUnits);
@@ -626,7 +644,7 @@ static void handleEvent(uiEvent_t *ev)
 					if (nonVolatileSettings.audioPromptMode > AUDIO_PROMPT_MODE_SILENT)
 					{
 						// Stop the voice prompt playback as soon as the level is set to 'Beep'
-						if ((nonVolatileSettings.audioPromptMode == AUDIO_PROMPT_MODE_VOICE_LEVEL_1) && voicePromptsIsPlaying())
+						if ((nonVolatileSettings.audioPromptMode == AUDIO_PROMPT_MODE_VOICE_THRESHOLD) && voicePromptsIsPlaying())
 						{
 							voicePromptsTerminate();
 						}
@@ -641,10 +659,13 @@ static void handleEvent(uiEvent_t *ev)
 
 						if (nonVolatileSettings.DMR_RxAGC == 0)
 						{
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_GD77) || defined(PLATFORM_GD77S) || defined(PLATFORM_DM1801) || defined(PLATFORM_DM1801A) || defined(PLATFORM_RD5R)
+							HRC6000SetDmrRxGain(0);
+#else
 							HRC6000SetDmrAGCGain(0);
+#endif
 						}
 					}
-
 					break;
 #if defined(PLATFORM_MD9600)
 				case OPTIONS_SPEAKER_CLICK_SUPPRESS:
@@ -662,34 +683,36 @@ static void handleEvent(uiEvent_t *ev)
 		}
 	}
 
-	if ((ev->events & KEY_EVENT) && (menuDataGlobal.menuOptionsSetQuickkey != 0) && (menuDataGlobal.menuOptionsTimeout == 0))
+	if (uiQuickKeysIsStoring(ev))
 	{
-		if (KEYCHECK_SHORTUP(ev->keys, KEY_RED))
-		{
-			menuDataGlobal.menuOptionsSetQuickkey = 0;
-			menuDataGlobal.menuOptionsTimeout = 0;
-			menuSoundExitCode |= MENU_STATUS_ERROR;
-		}
-		else if (KEYCHECK_SHORTUP(ev->keys, KEY_GREEN))
-		{
-			saveQuickkeyMenuIndex(menuDataGlobal.menuOptionsSetQuickkey, menuSystemGetCurrentMenuNumber(), menuDataGlobal.currentItemIndex, 0);
-			menuDataGlobal.menuOptionsSetQuickkey = 0;
-		}
-		else if (KEYCHECK_SHORTUP(ev->keys, KEY_LEFT))
-		{
-			saveQuickkeyMenuIndex(menuDataGlobal.menuOptionsSetQuickkey, menuSystemGetCurrentMenuNumber(), menuDataGlobal.currentItemIndex, FUNC_LEFT);
-			menuDataGlobal.menuOptionsSetQuickkey = 0;
-		}
-		else if (KEYCHECK_SHORTUP(ev->keys, KEY_RIGHT))
-		{
-			saveQuickkeyMenuIndex(menuDataGlobal.menuOptionsSetQuickkey, menuSystemGetCurrentMenuNumber(), menuDataGlobal.currentItemIndex, FUNC_RIGHT);
-			menuDataGlobal.menuOptionsSetQuickkey = 0;
-		}
+		uiQuickKeysStore(ev, &menuSoundExitCode);
 		isDirty = true;
 	}
 
 	if (isDirty)
 	{
 		updateScreen(false);
+	}
+}
+
+static void applySettings(void)
+{
+	// All parameters has already been applied
+	settingsSaveIfNeeded(true);
+	resetOriginalSettingsData();
+}
+
+static void exitCallback(void *data)
+{
+	if (originalNonVolatileSettings.magicNumber != 0xDEADBEEF)
+	{
+		// Restore original settings.
+		memcpy(&nonVolatileSettings, &originalNonVolatileSettings, sizeof(settingsStruct_t));
+		soundBeepVolumeDivider = nonVolatileSettings.beepVolumeDivider;
+		HRC6000SetMicGainDMR(nonVolatileSettings.micGainDMR);
+		trxSetMicGainFM(nonVolatileSettings.micGainFM);
+		voxSetParameters(nonVolatileSettings.voxThreshold, nonVolatileSettings.voxTailUnits);
+		settingsSaveIfNeeded(true);
+		resetOriginalSettingsData();
 	}
 }

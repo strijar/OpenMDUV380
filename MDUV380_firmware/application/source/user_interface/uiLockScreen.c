@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -39,6 +39,7 @@ static void handleEvent(uiEvent_t *ev);
 static bool lockDisplayed = false;
 static const uint32_t TIMEOUT_MS = 500;
 static int lockState = LOCK_NONE;
+bool lockscreenIsRearming = false;
 
 menuStatus_t menuLockScreen(uiEvent_t *ev, bool isFirstRun)
 {
@@ -53,10 +54,11 @@ menuStatus_t menuLockScreen(uiEvent_t *ev, bool isFirstRun)
 	else
 	{
 		if ((lockDisplayed) && (
-				((nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_LEVEL_1) && (voicePromptsIsPlaying() == false)) ||
-				((nonVolatileSettings.audioPromptMode <= AUDIO_PROMPT_MODE_BEEP) && ((ev->time - m) > TIMEOUT_MS))))
+				((nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_THRESHOLD) && (voicePromptsIsPlaying() == false)) ||
+				((nonVolatileSettings.audioPromptMode < AUDIO_PROMPT_MODE_VOICE_THRESHOLD) && ((ev->time - m) > TIMEOUT_MS))))
 		{
 			lockDisplayed = false;
+			keyboardReset();
 			menuSystemPopPreviousMenu();
 			return MENU_STATUS_SUCCESS;
 		}
@@ -73,6 +75,9 @@ menuStatus_t menuLockScreen(uiEvent_t *ev, bool isFirstRun)
 
 static void redrawScreen(bool update, bool state)
 {
+
+	displayThemeApply(THEME_ITEM_FG_DECORATION, THEME_ITEM_BG_NOTIFICATION);
+
 	if (update)
 	{
 		// Clear inner rect only
@@ -84,6 +89,8 @@ static void redrawScreen(bool update, bool state)
 		displayClearBuf();
 		displayDrawRoundRectWithDropShadow(4, 4, 120 + DISPLAY_H_EXTRA_PIXELS, DISPLAY_SIZE_Y - 6, 5, true);
 	}
+
+	displayThemeApply((state ? THEME_ITEM_FG_ERROR_NOTIFICATION : THEME_ITEM_FG_WARNING_NOTIFICATION), THEME_ITEM_BG_NOTIFICATION);
 
 	if (state)
 	{
@@ -111,18 +118,18 @@ static void redrawScreen(bool update, bool state)
 #if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
 		displayPrintCentered(16, buf, FONT_SIZE_3);
 		displayPrintCentered(32, currentLanguage->locked, FONT_SIZE_3);
-		displayPrintCentered(DISPLAY_SIZE_Y - 48, currentLanguage->press_blue_plus_star, FONT_SIZE_1);
+		displayPrintCentered(DISPLAY_SIZE_Y - 48, currentLanguage->press_sk2_plus_star, FONT_SIZE_1);
 		displayPrintCentered(DISPLAY_SIZE_Y - 32, currentLanguage->to_unlock, FONT_SIZE_1);
 #else
 		displayPrintCentered(6, buf, FONT_SIZE_3);
 
   #if defined(PLATFORM_RD5R)
 		displayPrintCentered(14, currentLanguage->locked, FONT_SIZE_3);
-		displayPrintCentered(24, currentLanguage->press_blue_plus_star, FONT_SIZE_1);
+		displayPrintCentered(24, currentLanguage->press_sk2_plus_star, FONT_SIZE_1);
 		displayPrintCentered(32, currentLanguage->to_unlock, FONT_SIZE_1);
   #else
 		displayPrintCentered(22, currentLanguage->locked, FONT_SIZE_3);
-		displayPrintCentered(40, currentLanguage->press_blue_plus_star, FONT_SIZE_1);
+		displayPrintCentered(40, currentLanguage->press_sk2_plus_star, FONT_SIZE_1);
 		displayPrintCentered(48, currentLanguage->to_unlock, FONT_SIZE_1);
   #endif
 #endif
@@ -131,23 +138,23 @@ static void redrawScreen(bool update, bool state)
 
 		if (lockState & LOCK_KEYPAD)
 		{
-			voicePromptsAppendLanguageString(&currentLanguage->keypad);
+			voicePromptsAppendLanguageString(currentLanguage->keypad);
 			voicePromptsAppendPrompt(PROMPT_SILENCE);
 		}
 
 		if (lockState & LOCK_PTT)
 		{
-			voicePromptsAppendLanguageString(&currentLanguage->ptt);
+			voicePromptsAppendLanguageString(currentLanguage->ptt);
 			voicePromptsAppendPrompt(PROMPT_SILENCE);
 		}
 
-		voicePromptsAppendLanguageString(&currentLanguage->locked);
+		voicePromptsAppendLanguageString(currentLanguage->locked);
 
 		if (nonVolatileSettings.audioPromptMode > AUDIO_PROMPT_MODE_VOICE_LEVEL_2)
 		{
 			voicePromptsAppendPrompt(PROMPT_SILENCE);
-			voicePromptsAppendLanguageString(&currentLanguage->press_blue_plus_star);
-			voicePromptsAppendLanguageString(&currentLanguage->to_unlock);
+			voicePromptsAppendLanguageString(currentLanguage->press_sk2_plus_star);
+			voicePromptsAppendLanguageString(currentLanguage->to_unlock);
 			voicePromptsAppendPrompt(PROMPT_SILENCE);
 		}
 
@@ -159,11 +166,12 @@ static void redrawScreen(bool update, bool state)
 
 		voicePromptsInit();
 		voicePromptsAppendPrompt(PROMPT_SILENCE);
-		voicePromptsAppendLanguageString(&currentLanguage->unlocked);
+		voicePromptsAppendLanguageString(currentLanguage->unlocked);
 		voicePromptsAppendPrompt(PROMPT_SILENCE);
 		voicePromptsPlay();
 	}
 
+	displayThemeResetToDefault();
 	displayRender();
 	lockDisplayed = true;
 }
@@ -238,9 +246,15 @@ static void handleEvent(uiEvent_t *ev)
 		}
 	}
 
+	if ((ev->events & FUNCTION_EVENT) && (ev->function == FUNC_REDRAW))
+	{
+		updateScreen(false);
+		return;
+	}
+
 	if (KEYCHECK_DOWN(ev->keys, KEY_STAR) && BUTTONCHECK_DOWN(ev, BUTTON_SK2))
 	{
-		if ((nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_LEVEL_1) && voicePromptsIsPlaying())
+		if ((nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_THRESHOLD) && voicePromptsIsPlaying())
 		{
 			voicePromptsTerminate();
 		}
@@ -248,10 +262,15 @@ static void handleEvent(uiEvent_t *ev)
 		keypadLocked = false;
 		PTTLocked = false;
 		lockDisplayed = false;
+#if ! defined(PLATFORM_GD77S)
+		ticksTimerStart(&autolockTimer, (nonVolatileSettings.autolockTimer * 30000U));
+#endif
+		lockscreenIsRearming = true;
 		menuSystemPopAllAndDisplayRootMenu();
+		lockscreenIsRearming = false;
 		menuSystemPushNewMenu(UI_LOCK_SCREEN);
 	}
-	else if ((nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_LEVEL_1) && voicePromptsIsPlaying() && (ev->keys.key != 0) && (ev->keys.event & KEY_MOD_UP))
+	else if ((nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_THRESHOLD) && voicePromptsIsPlaying() && (ev->keys.key != 0) && (ev->keys.event & KEY_MOD_UP))
 	{
 		// Cancel the voice on any key event (that hides the lock screen earlier)
 		voicePromptsTerminate();

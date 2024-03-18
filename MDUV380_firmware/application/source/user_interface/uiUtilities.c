@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -27,36 +27,42 @@
  */
 
 #include <math.h>
+#if defined(PLATFORM_GD77) || defined(PLATFORM_GD77S) || defined(PLATFORM_DM1801) || defined(PLATFORM_DM1801A) || defined(PLATFORM_RD5R)
+#include "hardware/EEPROM.h"
+#endif
+#include "user_interface/uiGlobals.h"
 #include "user_interface/menuSystem.h"
 #include "user_interface/uiUtilities.h"
 #include "user_interface/uiLocalisation.h"
-#include "functions/settings.h"
 #include "hardware/SPI_Flash.h"
-#include "functions/ticks.h"
 #include "functions/trx.h"
 #include "functions/rxPowerSaving.h"
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
 #include "interfaces/batteryAndPowerManagement.h"
+#endif
+
+#if defined(HAS_GPS)
+#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
 #include "interfaces/gps.h"
+#endif
+#endif
 
 static const uint8_t DECOMPRESS_LUT[64] = { ' ', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '.' };
 
-static __attribute__((section(".ccmram"))) LinkItem_t callsList[NUM_LASTHEARD_STORED];
+#if defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+static  __attribute__((section(".ccmram")))
+#else // MD9600 and MK22
+static  __attribute__((section(".data.$RAM2")))
+#endif
+LinkItem_t callsList[NUM_LASTHEARD_STORED];
 
 static uint32_t dmrIdDataArea_1_Size;
-static const uint32_t DMRID_HEADER_LENGTH = 0x0C;
-static const uint32_t DMRID_MEMORY_LOCATION_1 = 0x30000
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380)  || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
-		+ FLASH_ADDRESS_OFFSET
-#endif
-;
-static uint32_t dmrIDDatabaseMemoryLocation2 = 0xB8000
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380)  || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
-		+ FLASH_ADDRESS_OFFSET
-#endif
-;
+const uint32_t DMRID_HEADER_LENGTH = 0x0C;
+const uint32_t DMRID_MEMORY_LOCATION_1 = 0x30000 + FLASH_ADDRESS_OFFSET;
+const uint32_t DMRID_MEMORY_LOCATION_2 = 0xB8000 + FLASH_ADDRESS_OFFSET;
+uint32_t dmrIDDatabaseMemoryLocation2 = DMRID_MEMORY_LOCATION_2;
 
 static dmrIDsCache_t dmrIDsCache;
-static voicePromptItem_t voicePromptSequenceState = PROMPT_SEQUENCE_CHANNEL_NAME_OR_VFO_FREQ;
 static uint32_t lastTG = 0;
 
 volatile uint32_t lastID = 0;// This needs to be volatile as lastHeardClearLastID() is called from an ISR
@@ -97,9 +103,9 @@ void tsSetManualOverride(Channel_t chan, int8_t ts)
 // contact: apply TS override from contact setting
 void tsSetFromContactOverride(Channel_t chan, struct_codeplugContact_t *contact)
 {
-	if ((contact->reserve1 & 0x01) == 0x00)
+	if ((contact->reserve1 & CODEPLUG_CONTACT_FLAG_NO_TS_OVERRIDE) == 0x00)
 	{
-		tsSetManualOverride(chan, (((contact->reserve1 & 0x02) >> 1) + 1));
+		tsSetManualOverride(chan, (((contact->reserve1 & CODEPLUG_CONTACT_FLAG_TS_OVERRIDE_TIMESLOT_MASK) >> 1) + 1));
 	}
 	else
 	{
@@ -178,7 +184,7 @@ bool isQSODataAvailableForCurrentTalker(void)
 	if ((trxTransmissionEnabled == false) && ((trxGetMode() == RADIO_MODE_DIGITAL) && (rxID != 0) && (lastID != 0) && (HRC6000GetReceivedTgOrPcId() != 0)) &&
 			(getAudioAmpStatus() & AUDIO_AMP_MODE_RF)
 			&& HRC6000CheckTalkGroupFilter() &&
-			(((item = lastheardFindInList(rxID)) != NULL) && (item == LinkHead)))
+			(((item = lastHeardFindInList(rxID)) != NULL) && (item == LinkHead)))
 	{
 		return true;
 	}
@@ -186,13 +192,14 @@ bool isQSODataAvailableForCurrentTalker(void)
 	return false;
 }
 
-
+#if 0
 int alignFrequencyToStep(int freq, int step)
 {
 	int r = freq % step;
 
 	return (r ? freq + (step - r) : freq);
 }
+#endif
 
 /*
  * Remove space at the end of the array, and return pointer to first non space character
@@ -250,7 +257,7 @@ int32_t getFirstSpacePos(char *str)
 	return -1;
 }
 
-void lastheardInitList(void)
+void lastHeardInitList(void)
 {
 	LinkHead = callsList;
 
@@ -290,7 +297,7 @@ void lastheardInitList(void)
 	uiDataGlobal.lastHeardCount = 0;
 }
 
-LinkItem_t *lastheardFindInList(uint32_t id)
+LinkItem_t *lastHeardFindInList(uint32_t id)
 {
 	LinkItem_t *item = LinkHead;
 
@@ -368,31 +375,120 @@ uint8_t *coordsToMaidenhead(uint8_t *maidenheadBuffer, double latitude, double l
 	return maidenheadBuffer;
 }
 
-double latLongFixedToDouble(uint32_t fixedVal)
+static void buildMaidenHead(char *maidenheadBuffer, uint32_t intPartLat, uint32_t decPartLat, bool isSouthern, uint32_t intPartLon, uint32_t decPartLon, bool isWestern)
+{
+	double latitude = intPartLat + (((double)decPartLat) /  LOCATION_DECIMAL_PART_MULIPLIER_FIXED_32);
+	double longitude = intPartLon + (((double)decPartLon) / LOCATION_DECIMAL_PART_MULIPLIER_FIXED_32);
+
+	if (isSouthern)
+	{
+		latitude *= -1;
+	}
+
+	if (isWestern)
+	{
+		longitude *= -1;
+	}
+
+	coordsToMaidenhead((uint8_t *)maidenheadBuffer, latitude, longitude);
+}
+
+void buildLocationAndMaidenheadStrings(char *locationBufferOrNull, char *maidenheadBufferOrNull, bool locIsValid)
+{
+	if (locIsValid)
+	{
+		bool southernHemisphere = ((nonVolatileSettings.locationLat & 0x80000000) != 0);
+		bool westernHemisphere  = ((nonVolatileSettings.locationLon & 0x80000000) != 0);
+		uint32_t intPartLat     = (nonVolatileSettings.locationLat & 0x7FFFFFFF) >> 23;
+		uint32_t decPartLat     = (nonVolatileSettings.locationLat & 0x7FFFFF);
+		uint32_t intPartLon     = (nonVolatileSettings.locationLon & 0x7FFFFFFF) >> 23;
+		uint32_t decPartLon     = (nonVolatileSettings.locationLon & 0x7FFFFF);
+
+		if (maidenheadBufferOrNull)
+		{
+			buildMaidenHead(maidenheadBufferOrNull, intPartLat, decPartLat, southernHemisphere, intPartLon, decPartLon, westernHemisphere);
+		}
+
+		if (locationBufferOrNull)
+		{
+			snprintf(locationBufferOrNull, LOCATION_TEXT_BUFFER_SIZE, "%02u.%04u%c %03u.%04u%c",
+					intPartLat, decPartLat/10, currentLanguageGetSymbol(southernHemisphere ? SYMBOLS_SOUTH : SYMBOLS_NORTH),
+					intPartLon, decPartLon/10, currentLanguageGetSymbol(westernHemisphere ? SYMBOLS_WEST : SYMBOLS_EAST));
+		}
+	}
+	else
+	{
+		if (locationBufferOrNull)
+		{
+			snprintf(locationBufferOrNull, LOCATION_TEXT_BUFFER_SIZE, "%s", "??.???? ???.????");
+		}
+
+		if (maidenheadBufferOrNull)
+		{
+			maidenheadBufferOrNull[0] = 0;
+		}
+	}
+}
+
+double latLongFixed24ToDouble(uint32_t fixedVal)
+{
+	// MS bit is the sign
+	// Lower 10 bits are the fixed point to the right of the point.
+	// Bits 15,14,13,12,11 are the integer part
+	double inPart = (fixedVal & 0x7FFFFF) >> 15;
+	double decimalPart = (fixedVal & 0x7FFF);
+
+	if (fixedVal & 0x800000)
+	{
+		inPart *= -1;// MS bit is set, so tha number is negative
+		decimalPart *= -1;
+	}
+
+	return inPart + (decimalPart / ((double)LOCATION_DECIMAL_PART_MULIPLIER_FIXED_24));
+}
+
+uint32_t latLongDoubleToFixed24(double value)
+{
+	uint32_t intPart = abs((uint32_t)value);
+	uint32_t decimalPart = abs(value - intPart);
+	uint32_t fixedVal = (intPart << 23) + decimalPart;
+
+	if (value < 0)
+	{
+		fixedVal |= 0x80000000;// set MSB to indicate negative number
+	}
+
+	return fixedVal;
+}
+
+double latLongFixed32ToDouble(uint32_t fixedVal)
 {
 	// MS bit is the sign
 	// Lower 10 bits are the fixed point to the right of the point.
 	// Bits 15,14,13,12,11 are the integer part
 	double inPart = (fixedVal & 0x7FFFFFFF) >> 23;
 	double decimalPart = (fixedVal & 0x7FFFFF);
+
 	if (fixedVal & 0x80000000)
 	{
 		inPart *= -1;// MS bit is set, so tha number is negative
 		decimalPart *= -1;
 	}
-	return inPart + (decimalPart / ((double)LOCATION_DECIMAL_PART_MULIPLIER));
+
+	return inPart + (decimalPart / ((double)LOCATION_DECIMAL_PART_MULIPLIER_FIXED_32));
 }
 
-uint32_t latLongDoubleToFixed(double value)
+uint32_t latLongDoubleToFixed32(double value)
 {
-
 	uint32_t intPart = abs((uint32_t)value);
 	uint32_t decimalPart = abs(value - intPart);
 	uint32_t fixedVal = (intPart << 23) + decimalPart;
+
 	if (value < 0)
 	{
 		fixedVal |= 0x80000000;// set MSB to indicate negative number
 	}
+
 	return fixedVal;
 }
 
@@ -400,14 +496,15 @@ double distanceToLocation(double latitude, double longitude)
 {
 	double lat1 = latitude;
 	double lon1 = longitude;
-	double lat2 = latLongFixedToDouble(nonVolatileSettings.locationLat);
-	double lon2 = latLongFixedToDouble(nonVolatileSettings.locationLon);
+	double lat2 = latLongFixed32ToDouble(nonVolatileSettings.locationLat);
+	double lon2 = latLongFixed32ToDouble(nonVolatileSettings.locationLon);
 
 	double r = 6371; //radius of Earth (KM)
 	double p = 0.017453292519943295;//  Pi/180
 	double a = 0.5 - cos((lat2 - lat1)*p)/2 + cos(lat1 * p)*cos(lat2 * p) * (1 - cos((lon2 - lon1) * p )) / 2;
 
 	double d = 2 * r * asin(sqrt(a));
+
 	return d;
 }
 
@@ -415,6 +512,7 @@ static double roundPosition(double val)
 {
 	return ((double)((int)((val * 10000) + ((val > 0 ) ? 0.5:-0.5)))) / 10000;
 }
+
 static void decodeGPSPosition(uint8_t *data, double *latitude, double *longitude)
 {
 #if 0
@@ -462,69 +560,72 @@ static void decodeGPSPosition(uint8_t *data, double *latitude, double *longitude
 	*latitude =  roundPosition(lat);
 }
 
-static uint8_t *decodeTA(uint8_t *TA)
+static uint8_t decodeTA(uint8_t *dest, uint8_t destLen, uint8_t *talkerAlias)
 {
-	uint8_t *b;
-	uint8_t c;
-	int8_t j;
-	uint8_t i, t1, t2;
-	static uint8_t buffer[32];
-	uint8_t *talkerAlias = TA;
 	uint8_t TAformat = (talkerAlias[0] >> 6U) & 0x03U;
 	uint8_t TAsize   = (talkerAlias[0] >> 1U) & 0x1FU;
 
+	*dest = 0;
+
 	switch (TAformat)
 	{
-	case 0U:		// 7 bit
-	memset(&buffer, 0, sizeof(buffer));
-	b = &talkerAlias[0];
-	t1 = 0U; t2 = 0U; c = 0U;
-
-	for (i = 0U; (i < 32U) && (t2 < TAsize); i++)
-	{
-		for (j = 7; j >= 0; j--)
-		{
-			c = (c << 1U) | (b[i] >> j);
-
-			if (++t1 == 7U)
+		case 0U:		// 7 bit
 			{
-				if (i > 0U)
+				uint8_t *b = &talkerAlias[0];
+				uint8_t t1 = 0U, t2 = 0U, c = 0U;
+
+				memset(dest, 0x00U, destLen);
+
+				for (uint8_t i = 0U; (i < 32U) && (t2 < TAsize); i++)
 				{
-					buffer[t2++] = c & 0x7FU;
+					for (int8_t j = 7; j >= 0; j--)
+					{
+						c = (c << 1U) | (b[i] >> j);
+
+						if (++t1 == 7U)
+						{
+							if (i > 0U)
+							{
+								dest[t2++] = c & 0x7FU;
+							}
+
+							t1 = 0U;
+							c = 0U;
+						}
+					}
 				}
-
-				t1 = 0U;
-				c = 0U;
+				dest[TAsize] = 0;
 			}
-		}
-	}
-	buffer[TAsize] = 0;
-	break;
+			break;
 
-	case 1U:		// ISO 8 bit
-	case 2U:		// UTF8
-		memcpy(&buffer, talkerAlias + 1U, sizeof(buffer));
-		break;
+		case 1U:		// ISO 8 bit
+		case 2U:		// UTF8
+			memcpy(dest, talkerAlias + 1U, (destLen - 1));
+			break;
 
-	case 3U:		// UTF16 poor man's conversion
-		t2=0;
-		memset(&buffer, 0, sizeof(buffer));
-		for (i = 0U; (i < 15U) && (t2 < TAsize); i++)
-		{
-			if (talkerAlias[2U * i + 1U] == 0)
+		case 3U:		// UTF16 poor man's conversion
 			{
-				buffer[t2++] = talkerAlias[2U * i + 2U];
+				uint8_t t2 = 0U;
+
+				memset(dest, 0x00U, destLen);
+
+				for (uint8_t i = 0U; (i < 15U) && (t2 < TAsize); i++)
+				{
+					if (talkerAlias[2U * i + 1U] == 0)
+					{
+						dest[t2++] = talkerAlias[2U * i + 2U];
+					}
+					else
+					{
+						dest[t2++] = '?';
+					}
+				}
+				dest[TAsize] = 0;
 			}
-			else
-			{
-				buffer[t2++] = '?';
-			}
-		}
-		buffer[TAsize] = 0;
-		break;
+			break;
 	}
 
-	return &buffer[0];
+	return (strlen((char *)dest));
 }
 
 void lastHeardClearLastID(void)
@@ -547,37 +648,37 @@ static void updateLHItem(LinkItem_t *item)
 		// Its a Private call
 		switch (nonVolatileSettings.contactDisplayPriority)
 		{
-		case CONTACT_DISPLAY_PRIO_CC_DB_TA:
-		case CONTACT_DISPLAY_PRIO_TA_CC_DB:
-			if (contactIDLookup(item->id, CONTACT_CALLTYPE_PC, buffer) == true)
-			{
-				snprintf(item->contact, SCREEN_LINE_BUFFER_SIZE, "%s", buffer);
-			}
-			else
-			{
-				dmrIDLookup(item->id, &currentRec);
-				snprintf(item->contact, SCREEN_LINE_BUFFER_SIZE, "%s", currentRec.text);
-			}
-			break;
-
-		case CONTACT_DISPLAY_PRIO_DB_CC_TA:
-		case CONTACT_DISPLAY_PRIO_TA_DB_CC:
-			if (dmrIDLookup(item->id, &currentRec) == true)
-			{
-				snprintf(item->contact, SCREEN_LINE_BUFFER_SIZE, "%s", currentRec.text);
-			}
-			else
-			{
+			case CONTACT_DISPLAY_PRIO_CC_DB_TA:
+			case CONTACT_DISPLAY_PRIO_TA_CC_DB:
 				if (contactIDLookup(item->id, CONTACT_CALLTYPE_PC, buffer) == true)
 				{
 					snprintf(item->contact, SCREEN_LINE_BUFFER_SIZE, "%s", buffer);
 				}
 				else
 				{
+					dmrIDLookup(item->id, &currentRec);
 					snprintf(item->contact, SCREEN_LINE_BUFFER_SIZE, "%s", currentRec.text);
 				}
-			}
-			break;
+				break;
+
+			case CONTACT_DISPLAY_PRIO_DB_CC_TA:
+			case CONTACT_DISPLAY_PRIO_TA_DB_CC:
+				if (dmrIDLookup(item->id, &currentRec) == true)
+				{
+					snprintf(item->contact, SCREEN_LINE_BUFFER_SIZE, "%s", currentRec.text);
+				}
+				else
+				{
+					if (contactIDLookup(item->id, CONTACT_CALLTYPE_PC, buffer) == true)
+					{
+						snprintf(item->contact, SCREEN_LINE_BUFFER_SIZE, "%s", buffer);
+					}
+					else
+					{
+						snprintf(item->contact, SCREEN_LINE_BUFFER_SIZE, "%s", currentRec.text);
+					}
+				}
+				break;
 		}
 
 		if (item->talkGroupOrPcId != (trxDMRID | (PC_CALL_FLAG << 24)))
@@ -614,37 +715,37 @@ static void updateLHItem(LinkItem_t *item)
 
 		switch (nonVolatileSettings.contactDisplayPriority)
 		{
-		case CONTACT_DISPLAY_PRIO_CC_DB_TA:
-		case CONTACT_DISPLAY_PRIO_TA_CC_DB:
-			if (contactIDLookup(item->id, CONTACT_CALLTYPE_PC, buffer) == true)
-			{
-				snprintf(item->contact, MAX_DMR_ID_CONTACT_TEXT_LENGTH, "%s", buffer);
-			}
-			else
-			{
-				dmrIDLookup((item->id & 0x00FFFFFF), &currentRec);
-				snprintf(item->contact, MAX_DMR_ID_CONTACT_TEXT_LENGTH, "%s", currentRec.text);
-			}
-			break;
-
-		case CONTACT_DISPLAY_PRIO_DB_CC_TA:
-		case CONTACT_DISPLAY_PRIO_TA_DB_CC:
-			if (dmrIDLookup((item->id & 0x00FFFFFF), &currentRec) == true)
-			{
-				snprintf(item->contact, MAX_DMR_ID_CONTACT_TEXT_LENGTH, "%s", currentRec.text);
-			}
-			else
-			{
+			case CONTACT_DISPLAY_PRIO_CC_DB_TA:
+			case CONTACT_DISPLAY_PRIO_TA_CC_DB:
 				if (contactIDLookup(item->id, CONTACT_CALLTYPE_PC, buffer) == true)
 				{
 					snprintf(item->contact, MAX_DMR_ID_CONTACT_TEXT_LENGTH, "%s", buffer);
 				}
 				else
 				{
+					dmrIDLookup((item->id & 0x00FFFFFF), &currentRec);
 					snprintf(item->contact, MAX_DMR_ID_CONTACT_TEXT_LENGTH, "%s", currentRec.text);
 				}
-			}
-			break;
+				break;
+
+			case CONTACT_DISPLAY_PRIO_DB_CC_TA:
+			case CONTACT_DISPLAY_PRIO_TA_DB_CC:
+				if (dmrIDLookup((item->id & 0x00FFFFFF), &currentRec) == true)
+				{
+					snprintf(item->contact, MAX_DMR_ID_CONTACT_TEXT_LENGTH, "%s", currentRec.text);
+				}
+				else
+				{
+					if (contactIDLookup(item->id, CONTACT_CALLTYPE_PC, buffer) == true)
+					{
+						snprintf(item->contact, MAX_DMR_ID_CONTACT_TEXT_LENGTH, "%s", buffer);
+					}
+					else
+					{
+						snprintf(item->contact, MAX_DMR_ID_CONTACT_TEXT_LENGTH, "%s", currentRec.text);
+					}
+				}
+				break;
 		}
 	}
 }
@@ -656,6 +757,7 @@ void lastHeardClearWorkingTAData(void)
 	overrideTA = false;
 	contactDefinedForTA = false;
 }
+
 bool lastHeardListUpdate(uint8_t *dmrDataBuffer, bool forceOnHotspot)
 {
 	uint32_t talkGroupOrPcId = (dmrDataBuffer[0] << 24) + (dmrDataBuffer[3] << 16) + (dmrDataBuffer[4] << 8) + (dmrDataBuffer[5] << 0);
@@ -674,7 +776,7 @@ bool lastHeardListUpdate(uint8_t *dmrDataBuffer, bool forceOnHotspot)
 
 					lastID = id;
 
-					LinkItem_t *item = lastheardFindInList(id);
+					LinkItem_t *item = lastHeardFindInList(id);
 
 					// Already in the list
 					if (item != NULL)
@@ -773,7 +875,7 @@ bool lastHeardListUpdate(uint8_t *dmrDataBuffer, bool forceOnHotspot)
 				}
 				else // update TG even if the DMRID did not change
 				{
-					LinkItem_t *item = lastheardFindInList(id);
+					LinkItem_t *item = lastHeardFindInList(id);
 
 					if (lastTG != talkGroupOrPcId)
 					{
@@ -849,14 +951,15 @@ bool lastHeardListUpdate(uint8_t *dmrDataBuffer, bool forceOnHotspot)
 								// Format and length infos are available, we can decode now
 								if (bufferTA[0] != 0x0)
 								{
-									uint8_t *decodedTA;
+									uint8_t bufferTADest[32];
+									uint8_t taLen = 0U;
 
-									if ((decodedTA = decodeTA(&bufferTA[0])) != NULL)
+									if ((taLen = decodeTA(&bufferTADest[0], sizeof(bufferTADest), &bufferTA[0])) > 0)
 									{
 										// TAs doesn't match, update contact and screen.
-										if (overrideTA || (strlen((const char *)decodedTA) > strlen((const char *)&LinkHead->talkerAlias)))
+										if (overrideTA || (taLen > strlen((const char *)&LinkHead->talkerAlias)))
 										{
-											memcpy(&LinkHead->talkerAlias, decodedTA, 31);// Brandmeister seems to send callsign as 6 chars only
+											memcpy(&LinkHead->talkerAlias, &bufferTADest[0], 31);// Brandmeister seems to send callsign as 6 chars only
 
 											if ((blocksTA & (1 << 1)) != 0) // we already received the 2nd TA block, check for 'DMR ID:'
 											{
@@ -904,7 +1007,6 @@ bool lastHeardListUpdate(uint8_t *dmrDataBuffer, bool forceOnHotspot)
 	return true;
 }
 
-
 static bool dmrIDReadContactInFlash(uint32_t contactOffset, uint8_t *data, uint32_t len)
 {
 	uint32_t address;
@@ -925,7 +1027,7 @@ void dmrIDCacheInit(void)
 {
 	uint8_t headerBuf[32];
 
-	memset(&dmrIDsCache, 0, sizeof(dmrIDsCache_t));
+	dmrIDCacheClear();
 	memset(&headerBuf, 0, sizeof(headerBuf));
 
 	SPI_Flash_read(DMRID_MEMORY_LOCATION_1, headerBuf, DMRID_HEADER_LENGTH);
@@ -986,6 +1088,16 @@ void dmrIDCacheInit(void)
 			}
 		}
 	}
+}
+
+void dmrIDCacheClear(void)
+{
+	memset(&dmrIDsCache, 0, sizeof(dmrIDsCache_t));
+}
+
+uint32_t dmrIDCacheGetCount(void)
+{
+	return dmrIDsCache.entries;
 }
 
 static void dmrDbTextDecode(uint8_t *decompressedBufOut, uint8_t *compressedBufIn, int compressedSize)
@@ -1186,7 +1298,7 @@ static void displayChannelNameOrRxFrequency(char *buffer, size_t maxLen)
 	if (menuSystemGetCurrentMenuNumber() == UI_CHANNEL_MODE)
 	{
 #if defined(PLATFORM_MD9600)
-		if (codeplugChannelIsFlagSet(currentChannelData, CHANNEL_FLAG_OUT_OF_BAND))
+		if (codeplugChannelGetFlag(currentChannelData, CHANNEL_FLAG_OUT_OF_BAND) != 0)
 		{
 			snprintf(buffer, maxLen, "%s", currentLanguage->out_of_band);
 		}
@@ -1194,13 +1306,16 @@ static void displayChannelNameOrRxFrequency(char *buffer, size_t maxLen)
 #endif
 		{
 			codeplugUtilConvertBufToString(currentChannelData->name, buffer, 16);
+			displayThemeApply(THEME_ITEM_FG_CHANNEL_NAME, THEME_ITEM_BG);
 		}
 	}
 	else
 	{
 		int val_before_dp = currentChannelData->rxFreq / 100000;
 		int val_after_dp = currentChannelData->rxFreq - val_before_dp * 100000;
+
 		snprintf(buffer, maxLen, "%d.%05d MHz", val_before_dp, val_after_dp);
+		displayThemeApply(THEME_ITEM_FG_RX_FREQ, THEME_ITEM_BG);
 	}
 
 	uiUtilityDisplayInformation(buffer, DISPLAY_INFO_ZONE, -1);
@@ -1280,7 +1395,6 @@ static void displaySplitOrSpanText(uint8_t y, char *text)
 	}
 }
 
-
 /*
  * Try to extract callsign and extra text from TA or DMR ID data, then display that on
  * two lines, if possible.
@@ -1293,6 +1407,8 @@ static void displayContactTextInfos(char *text, size_t maxLen, bool isFromTalker
 	// Max for DMRID Database is MAX_DMR_ID_CONTACT_TEXT_LENGTH (50 + NULL)
 	char buffer[MAX_DMR_ID_CONTACT_TEXT_LENGTH];
 
+	displayThemeApply(THEME_ITEM_FG_CHANNEL_CONTACT_INFO, THEME_ITEM_BG);
+
 	if (strlen(text) >= 5 && isFromTalkerAlias) // if it's Talker Alias and there is more text than just the callsign, split across 2 lines
 	{
 		char    *pbuf;
@@ -1304,9 +1420,10 @@ static void displayContactTextInfos(char *text, size_t maxLen, bool isFromTalker
 		{
 			memcpy(buffer, text, 16);
 			buffer[16] = 0;
-
 			uiUtilityDisplayInformation(chomp(buffer), DISPLAY_INFO_CHANNEL, -1);
+			displayThemeApply(THEME_ITEM_FG_CHANNEL_CONTACT_INFO, THEME_ITEM_BG);
 			displayChannelNameOrRxFrequency(buffer, (sizeof(buffer) / sizeof(buffer[0])));
+			displayThemeResetToDefault();
 			return;
 		}
 
@@ -1317,6 +1434,7 @@ static void displayContactTextInfos(char *text, size_t maxLen, bool isFromTalker
 			buffer[cpos] = 0;
 
 			uiUtilityDisplayInformation(chomp(buffer), DISPLAY_INFO_CHANNEL, -1);
+			displayThemeApply(THEME_ITEM_FG_CHANNEL_CONTACT_INFO, THEME_ITEM_BG);
 
 			memcpy(buffer, text + (cpos + 1), (maxLen - (cpos + 1)));
 			buffer[(maxLen - (cpos + 1))] = 0;
@@ -1337,8 +1455,8 @@ static void displayContactTextInfos(char *text, size_t maxLen, bool isFromTalker
 			// No space found, use a chainsaw
 			memcpy(buffer, text, 16);
 			buffer[16] = 0;
-
 			uiUtilityDisplayInformation(chomp(buffer), DISPLAY_INFO_CHANNEL, -1);
+			displayThemeApply(THEME_ITEM_FG_CHANNEL_CONTACT_INFO, THEME_ITEM_BG);
 
 			memcpy(buffer, text + 16, (maxLen - 16));
 			buffer[(strlen(text) - 16)] = 0;
@@ -1359,10 +1477,12 @@ static void displayContactTextInfos(char *text, size_t maxLen, bool isFromTalker
 	{
 		memcpy(buffer, text, 16);
 		buffer[16] = 0;
-
 		uiUtilityDisplayInformation(chomp(buffer), DISPLAY_INFO_CHANNEL, -1);
+		displayThemeApply(THEME_ITEM_FG_CHANNEL_CONTACT_INFO, THEME_ITEM_BG);
 		displayChannelNameOrRxFrequency(buffer, (sizeof(buffer) / sizeof(buffer[0])));
 	}
+
+	displayThemeResetToDefault();
 }
 
 void uiUtilityDisplayInformation(const char *str, displayInformation_t line, int8_t yOverride)
@@ -1371,89 +1491,154 @@ void uiUtilityDisplayInformation(const char *str, displayInformation_t line, int
 
 	switch (line)
 	{
-	case DISPLAY_INFO_CONTACT_INVERTED:
+		case DISPLAY_INFO_CONTACT_INVERTED:
 #if defined(PLATFORM_RD5R) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
-		displayFillRect(0, DISPLAY_Y_POS_CONTACT + 1, DISPLAY_SIZE_X, MENU_ENTRY_HEIGHT, false);
+			displayThemeApply(THEME_ITEM_FG_CHANNEL_CONTACT, THEME_ITEM_BG);
+			displayFillRect(0, DISPLAY_Y_POS_CONTACT + 1, DISPLAY_SIZE_X, MENU_ENTRY_HEIGHT, false);
 #else
-		displayClearRows(2, 4, true);
+			displayClearRows(2, 4, true);
 #endif
-		inverted = true;
-	case DISPLAY_INFO_CONTACT:
-		displayPrintCore(0, ((yOverride == -1) ? (DISPLAY_Y_POS_CONTACT + V_OFFSET) : yOverride), str, FONT_SIZE_3, TEXT_ALIGN_CENTER, inverted);
-		break;
+			inverted = true;
+		case DISPLAY_INFO_CONTACT:
+			displayThemeApply(THEME_ITEM_FG_CHANNEL_CONTACT, THEME_ITEM_BG);
+			displayPrintCore(0, ((yOverride == -1) ? (DISPLAY_Y_POS_CONTACT + V_OFFSET) : yOverride), str, FONT_SIZE_3, TEXT_ALIGN_CENTER, inverted);
+			break;
 
-	case DISPLAY_INFO_CONTACT_OVERRIDE_FRAME:
-		displayDrawRect(0, ((yOverride == -1) ? DISPLAY_Y_POS_CONTACT : yOverride), DISPLAY_SIZE_X, OVERRIDE_FRAME_HEIGHT, true);
-		break;
+		case DISPLAY_INFO_CONTACT_OVERRIDE_FRAME:
+			displayThemeApply(THEME_ITEM_FG_CHANNEL_CONTACT, THEME_ITEM_BG);
+			displayDrawRect(0, ((yOverride == -1) ? DISPLAY_Y_POS_CONTACT : yOverride), DISPLAY_SIZE_X, OVERRIDE_FRAME_HEIGHT, true);
+			break;
 
-	case DISPLAY_INFO_CHANNEL_INVERTED:
-		inverted = true;
-		{
-			/*
-			int row = ((yOverride == -1) ? DISPLAY_Y_POS_CHANNEL_FIRST_LINE : yOverride)/8;
-			displayClearRows(row, row + 2, true);
-			*/
-			displayFillRect(0, ((yOverride == -1) ? DISPLAY_Y_POS_CHANNEL_FIRST_LINE : yOverride), DISPLAY_SIZE_X, OVERRIDE_FRAME_HEIGHT, false);
-		}
-	case DISPLAY_INFO_CHANNEL:
-		displayPrintCore(0, ((yOverride == -1) ? DISPLAY_Y_POS_CHANNEL_FIRST_LINE : yOverride), str, FONT_SIZE_3, TEXT_ALIGN_CENTER, inverted);
-		break;
-	case DISPLAY_INFO_TONE_AND_SQUELCH:
-	{
-		static const int bufLen = 24;
-		char buf[bufLen];
-		char *p = buf;
-
-		if (trxGetMode() == RADIO_MODE_ANALOG)
-		{
-			CodeplugCSSTypes_t type = codeplugGetCSSType(currentChannelData->rxTone);
-
-			p += snprintf(p, bufLen, "Rx:");
-
-			if (type == CSS_TYPE_CTCSS)
+		case DISPLAY_INFO_CHANNEL_INVERTED:
+			displayThemeApply(THEME_ITEM_FG_CHANNEL_NAME, THEME_ITEM_BG);
+			inverted = true;
 			{
-				p += snprintf(p, bufLen - (p - buf), "%d.%dHz", currentChannelData->rxTone / 10 , currentChannelData->rxTone % 10);
+#if defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+				displayFillRect(0, ((yOverride == -1) ? DISPLAY_Y_POS_CHANNEL_FIRST_LINE : yOverride), DISPLAY_SIZE_X, OVERRIDE_FRAME_HEIGHT, false);
+#else
+				int row = ((yOverride == -1) ? DISPLAY_Y_POS_CHANNEL_FIRST_LINE : yOverride)/8;
+				displayClearRows(row, row + 2, true);
+#endif
 			}
-			else if (type & CSS_TYPE_DCS)
+		case DISPLAY_INFO_CHANNEL:
+#if defined(HAS_COLOURS)
+			if (! displayThemeIsForegroundColourEqualTo(THEME_ITEM_FG_CHANNEL_CONTACT_INFO)) // displayContactTextInfos() override theme color
 			{
-				p += dcsPrintf(p, bufLen - (p - buf), NULL, currentChannelData->rxTone);
+				displayThemeApply(THEME_ITEM_FG_CHANNEL_NAME, THEME_ITEM_BG);
+			}
+#endif
+			displayPrintCore(0, ((yOverride == -1) ? DISPLAY_Y_POS_CHANNEL_FIRST_LINE : yOverride), str, FONT_SIZE_3, TEXT_ALIGN_CENTER, inverted);
+			break;
+
+		case DISPLAY_INFO_CHANNEL_DETAILS:
+		{
+			static const int bufLen = 24;
+			char buf[bufLen];
+			char *p = buf;
+			int radioMode = trxGetMode();
+
+			if (radioMode == RADIO_MODE_ANALOG)
+			{
+				CodeplugCSSTypes_t type = codeplugGetCSSType(currentChannelData->rxTone);
+
+				p += snprintf(p, bufLen, "Rx:");
+
+				if (type == CSS_TYPE_CTCSS)
+				{
+					p += snprintf(p, bufLen - (p - buf), "%d.%dHz", currentChannelData->rxTone / 10 , currentChannelData->rxTone % 10);
+				}
+				else if (type & CSS_TYPE_DCS)
+				{
+					p += dcsPrintf(p, bufLen - (p - buf), NULL, currentChannelData->rxTone);
+				}
+				else
+				{
+					p += snprintf(p, bufLen - (p - buf), "%s", currentLanguage->none);
+				}
+
+				p += snprintf(p, bufLen - (p - buf), "|Tx:");
+
+				type = codeplugGetCSSType(currentChannelData->txTone);
+				if (type == CSS_TYPE_CTCSS)
+				{
+					p += snprintf(p, bufLen - (p - buf), "%d.%dHz", currentChannelData->txTone / 10 , currentChannelData->txTone % 10);
+				}
+				else if (type & CSS_TYPE_DCS)
+				{
+					p += dcsPrintf(p, bufLen - (p - buf), NULL, currentChannelData->txTone);
+				}
+				else
+				{
+					p += snprintf(p, bufLen - (p - buf), "%s", currentLanguage->none);
+				}
+
+				displayThemeApply(THEME_ITEM_FG_CSS_SQL_VALUES, THEME_ITEM_BG);
+				displayPrintCentered(DISPLAY_Y_POS_CSS_INFO, buf, FONT_SIZE_1);
+
+				p = buf;
+				p += snprintf(p, bufLen, "SQL:%d%%", 5 * (((currentChannelData->sql == 0) ? nonVolatileSettings.squelchDefaults[trxCurrentBand[TRX_RX_FREQ_BAND]] : currentChannelData->sql) - 1));
 			}
 			else
 			{
-				p += snprintf(p, bufLen - (p - buf), "%s", currentLanguage->none);
+				// Digital
+				uint32_t PCorTG = ((nonVolatileSettings.overrideTG != 0) ? nonVolatileSettings.overrideTG : codeplugContactGetPackedId(&currentContactData));
+
+				p = buf;
+				p += snprintf(p, bufLen, "%s %u",
+						(((PCorTG >> 24) == PC_CALL_FLAG) ? currentLanguage->pc : currentLanguage->tg),
+						(PCorTG & 0xFFFFFF));
 			}
 
-			p += snprintf(p, bufLen - (p - buf), "|Tx:");
-
-			type = codeplugGetCSSType(currentChannelData->txTone);
-			if (type == CSS_TYPE_CTCSS)
-			{
-				p += snprintf(p, bufLen - (p - buf), "%d.%dHz", currentChannelData->txTone / 10 , currentChannelData->txTone % 10);
-			}
-			else if (type & CSS_TYPE_DCS)
-			{
-				p += dcsPrintf(p, bufLen - (p - buf), NULL, currentChannelData->txTone);
-			}
-			else
-			{
-				p += snprintf(p, bufLen - (p - buf), "%s", currentLanguage->none);
-			}
-			displayPrintCentered(DISPLAY_Y_POS_CSS_INFO, buf, FONT_SIZE_1);
-
-			snprintf(buf, bufLen, "SQL:%d%%", 5 * (((currentChannelData->sql == 0) ? nonVolatileSettings.squelchDefaults[trxCurrentBand[TRX_RX_FREQ_BAND]] : currentChannelData->sql)-1));
-			displayPrintCentered(DISPLAY_Y_POS_SQL_INFO, buf, FONT_SIZE_1);
+#if (defined(CPU_MK22FN512VLL12) || defined(PLATFORM_MD9600))
+				if (currentChannelData->NOT_IN_CODEPLUG_CALCULATED_DISTANCE_X10 != -1)
+				{
+					int intPart = currentChannelData->NOT_IN_CODEPLUG_CALCULATED_DISTANCE_X10 / 10;
+					int decPart = currentChannelData->NOT_IN_CODEPLUG_CALCULATED_DISTANCE_X10 - (intPart * 10);
+					p += snprintf(p, bufLen, "|%d.%dkm",intPart,decPart);
+				}
+				displayPrintCentered((radioMode == RADIO_MODE_DIGITAL)? (DISPLAY_Y_POS_CSS_INFO + (FONT_SIZE_2_HEIGHT / 2)): DISPLAY_Y_POS_SQL_INFO, buf, (radioMode == RADIO_MODE_DIGITAL)? FONT_SIZE_2: FONT_SIZE_1);
+#else
+				displayPrintCentered((radioMode == RADIO_MODE_DIGITAL)? (DISPLAY_Y_POS_CSS_INFO): DISPLAY_Y_POS_SQL_INFO, buf, (radioMode == RADIO_MODE_DIGITAL)? FONT_SIZE_3: FONT_SIZE_1);
+#endif
 		}
-	}
-	break;
-
-	case DISPLAY_INFO_TX_TIMER:
-		displayPrintCentered(DISPLAY_Y_POS_TX_TIMER, str, FONT_SIZE_4);
 		break;
 
-	case DISPLAY_INFO_ZONE:
-		displayPrintCentered(DISPLAY_Y_POS_ZONE, str, FONT_SIZE_1);
-		break;
+		case DISPLAY_INFO_TX_TIMER:
+			displayThemeApply(THEME_ITEM_FG_TX_COUNTER, THEME_ITEM_BG);
+			displayPrintCentered(DISPLAY_Y_POS_TX_TIMER, str, FONT_SIZE_4);
+			break;
+
+		case DISPLAY_INFO_ZONE:
+			{
+				bool distanceEnabled = (((uiDataGlobal.Scan.active == false) || (uiDataGlobal.Scan.active && (uiDataGlobal.Scan.state == SCAN_STATE_PAUSED))) &&
+						(settingsIsOptionBitSet(BIT_SORT_CHANNEL_DISTANCE) && (CODEPLUG_ZONE_IS_ALLCHANNELS(currentZone) == false)));
+				bool displayingZone = (yOverride == -2);
+
+				if (displayingZone)
+				{
+					if (distanceEnabled)
+					{
+						displayThemeApply(THEME_ITEM_FG_DECORATION, THEME_ITEM_BG);
+#if defined(HAS_COLOURS)
+						displayDrawRoundRect(5, (DISPLAY_Y_POS_ZONE - 3), (DISPLAY_SIZE_X - 10), (8 + 2 + 3), 3, true);
+#else
+						displayFillRect(0, (DISPLAY_Y_POS_ZONE - 2), DISPLAY_SIZE_X, (8 + 2 + 2), false);
+#endif
+					}
+
+					displayThemeApply(THEME_ITEM_FG_ZONE_NAME, THEME_ITEM_BG);
+				}
+
+#if defined(HAS_COLOURS)
+				displayPrintCentered(DISPLAY_Y_POS_ZONE, str, FONT_SIZE_1);
+#else
+				displayPrintCore(0, DISPLAY_Y_POS_ZONE, str, FONT_SIZE_1, TEXT_ALIGN_CENTER, (displayingZone && distanceEnabled));
+#endif
+			}
+			break;
 	}
+
+	displayThemeResetToDefault();
 }
 
 void uiUtilityRenderQSODataAndUpdateScreen(void)
@@ -1469,6 +1654,8 @@ void uiUtilityRenderQSODataAndUpdateScreen(void)
 
 void uiUtilityRenderQSOData(void)
 {
+	displayThemeApply(THEME_ITEM_FG_CHANNEL_CONTACT_INFO, THEME_ITEM_BG);
+
 	uiDataGlobal.receivedPcId = 0x00; //reset the received PcId
 
 	/*
@@ -1495,6 +1682,7 @@ void uiUtilityRenderQSOData(void)
 			if (LinkHead->talkGroupOrPcId != (trxDMRID | (PC_CALL_FLAG << 24)))
 			{
 				uiUtilityDisplayInformation((((LinkHead->talkGroupOrPcId & 0x00FFFFFF) == ALL_CALL_VALUE) ? currentLanguage->all_call : LinkHead->talkgroup), DISPLAY_INFO_ZONE, -1);
+				displayThemeApply(THEME_ITEM_FG_CHANNEL_CONTACT_INFO, THEME_ITEM_BG);
 				displayPrintAt(1, DISPLAY_Y_POS_ZONE, "=>", FONT_SIZE_1);
 			}
 		}
@@ -1513,64 +1701,67 @@ void uiUtilityRenderQSOData(void)
 				soundSetMelody(MELODY_RX_TGTSCC_WARNING_BEEP);
 			}
 
+			displayThemeApply(THEME_ITEM_FG_CHANNEL_CONTACT_INFO, THEME_ITEM_BG);
 			switch (nonVolatileSettings.contactDisplayPriority)
 			{
-			case CONTACT_DISPLAY_PRIO_CC_DB_TA:
-			case CONTACT_DISPLAY_PRIO_DB_CC_TA:
-				// No contact found in codeplug and DMRIDs, use TA as fallback, if any.
-				if ((strncmp(LinkHead->contact, "ID:", 3) == 0) && (LinkHead->talkerAlias[0] != 0x00))
-				{
-					if (LinkHead->locationLat <= 90)
+				case CONTACT_DISPLAY_PRIO_CC_DB_TA:
+				case CONTACT_DISPLAY_PRIO_DB_CC_TA:
+					// No contact found in codeplug and DMRIDs, use TA as fallback, if any.
+					if ((strncmp(LinkHead->contact, "ID:", 3) == 0) && (LinkHead->talkerAlias[0] != 0x00))
 					{
-						char tmpBufferTA[37]; // TA + ' [' + Maidenhead + ']' + NULL
+						if (LinkHead->locationLat <= 90)
+						{
+							char tmpBufferTA[37]; // TA + ' [' + Maidenhead + ']' + NULL
 
-						memset(tmpBufferTA, 0, sizeof(tmpBufferTA));
-						char maidenheadBuffer[8];
+							memset(tmpBufferTA, 0, sizeof(tmpBufferTA));
+							char maidenheadBuffer[8];
 
-						coordsToMaidenhead((uint8_t *)maidenheadBuffer, LinkHead->locationLat, LinkHead->locationLon);
-						snprintf(tmpBufferTA, 37, "%s [%s]", LinkHead->talkerAlias, maidenheadBuffer);
-						displayContactTextInfos(tmpBufferTA, sizeof(tmpBufferTA), true);
+							coordsToMaidenhead((uint8_t *)maidenheadBuffer, LinkHead->locationLat, LinkHead->locationLon);
+							snprintf(tmpBufferTA, 37, "%s [%s]", LinkHead->talkerAlias, maidenheadBuffer);
+							displayContactTextInfos(tmpBufferTA, sizeof(tmpBufferTA), true);
+						}
+						else
+						{
+							displayContactTextInfos(LinkHead->talkerAlias, sizeof(LinkHead->talkerAlias), !(nonVolatileSettings.splitContact == SPLIT_CONTACT_SINGLE_LINE_ONLY));
+						}
 					}
 					else
 					{
-						displayContactTextInfos(LinkHead->talkerAlias, sizeof(LinkHead->talkerAlias), !(nonVolatileSettings.splitContact == SPLIT_CONTACT_SINGLE_LINE_ONLY));
+						displayContactTextInfos(LinkHead->contact, sizeof(LinkHead->contact), !(nonVolatileSettings.splitContact == SPLIT_CONTACT_SINGLE_LINE_ONLY));
 					}
-				}
-				else
-				{
-					displayContactTextInfos(LinkHead->contact, sizeof(LinkHead->contact), !(nonVolatileSettings.splitContact == SPLIT_CONTACT_SINGLE_LINE_ONLY));
-				}
-				break;
+					break;
 
-			case CONTACT_DISPLAY_PRIO_TA_CC_DB:
-			case CONTACT_DISPLAY_PRIO_TA_DB_CC:
-				// Talker Alias have the priority here
-				if (LinkHead->talkerAlias[0] != 0x00)
-				{
-					if (LinkHead->locationLat <= 90)
+				case CONTACT_DISPLAY_PRIO_TA_CC_DB:
+				case CONTACT_DISPLAY_PRIO_TA_DB_CC:
+					// Talker Alias have the priority here
+					if (LinkHead->talkerAlias[0] != 0x00)
 					{
-						char tmpBufferTA[37]; // TA + ' [' + Maidenhead + ']' + NULL
+						if (LinkHead->locationLat <= 90)
+						{
+							char tmpBufferTA[37]; // TA + ' [' + Maidenhead + ']' + NULL
 
-						memset(tmpBufferTA, 0, sizeof(tmpBufferTA));
-						char maidenheadBuffer[8];
+							memset(tmpBufferTA, 0, sizeof(tmpBufferTA));
+							char maidenheadBuffer[8];
 
-						coordsToMaidenhead((uint8_t *)maidenheadBuffer, LinkHead->locationLat, LinkHead->locationLon);
-						snprintf(tmpBufferTA, 37, "%s [%s]", LinkHead->talkerAlias, maidenheadBuffer);
-						displayContactTextInfos(tmpBufferTA, sizeof(tmpBufferTA), true);
+							coordsToMaidenhead((uint8_t *)maidenheadBuffer, LinkHead->locationLat, LinkHead->locationLon);
+							snprintf(tmpBufferTA, 37, "%s [%s]", LinkHead->talkerAlias, maidenheadBuffer);
+							displayContactTextInfos(tmpBufferTA, sizeof(tmpBufferTA), true);
+						}
+						else
+						{
+							displayContactTextInfos(LinkHead->talkerAlias, sizeof(LinkHead->talkerAlias), !(nonVolatileSettings.splitContact == SPLIT_CONTACT_SINGLE_LINE_ONLY));
+						}
 					}
-					else
+					else // No TA, then use the one extracted from Codeplug or DMRIdDB
 					{
-						displayContactTextInfos(LinkHead->talkerAlias, sizeof(LinkHead->talkerAlias), !(nonVolatileSettings.splitContact == SPLIT_CONTACT_SINGLE_LINE_ONLY));
+						displayContactTextInfos(LinkHead->contact, sizeof(LinkHead->contact), !(nonVolatileSettings.splitContact == SPLIT_CONTACT_SINGLE_LINE_ONLY));
 					}
-				}
-				else // No TA, then use the one extracted from Codeplug or DMRIdDB
-				{
-					displayContactTextInfos(LinkHead->contact, sizeof(LinkHead->contact), !(nonVolatileSettings.splitContact == SPLIT_CONTACT_SINGLE_LINE_ONLY));
-				}
-				break;
+					break;
 			}
 		}
 	}
+
+	displayThemeResetToDefault();
 }
 
 void uiUtilityRenderHeader(bool isVFODualWatchScanning, bool isVFOSweepScanning)
@@ -1596,7 +1787,7 @@ void uiUtilityRenderHeader(bool isVFODualWatchScanning, bool isVFOSweepScanning)
 	int batteryPercentage = -1;
 	int16_t itemOffset = 0;
 
-	if (nonVolatileSettings.bitfieldOptions & BIT_BATTERY_VOLTAGE_IN_HEADER)
+	if (settingsIsOptionBitSet(BIT_BATTERY_VOLTAGE_IN_HEADER))
 	{
 		getBatteryVoltage(&volts, &mvolts);
 
@@ -1637,8 +1828,17 @@ void uiUtilityRenderHeader(bool isVFODualWatchScanning, bool isVFOSweepScanning)
 			{
 				uiUtilityDrawDMRMicLevelBarGraph();
 			}
+			else
+			{
+				uiUtilityDrawFMMicLevelBarGraph();
+			}
 		}
 	}
+
+	displayThemeApply(THEME_ITEM_FG_HEADER_TEXT, THEME_ITEM_BG_HEADER_TEXT);
+#if defined(HAS_COLOURS)
+	displayFillRect(0, 0, DISPLAY_SIZE_X, DISPLAY_Y_POS_BAR, true);
+#endif
 
 	if (scanIsActive || batteryIsLow)
 	{
@@ -1666,6 +1866,9 @@ void uiUtilityRenderHeader(bool isVFODualWatchScanning, bool isVFOSweepScanning)
 		case RADIO_MODE_ANALOG:
 			if (isVFOSweepScanning == false)
 			{
+				bool isInverted = (scanIsActive ? scanBlinkPhase : false);
+				int16_t modePixelLen;
+
 				if (isVFODualWatchScanning)
 				{
 					strcpy(buffer, "[DW]");
@@ -1675,8 +1878,33 @@ void uiUtilityRenderHeader(bool isVFODualWatchScanning, bool isVFOSweepScanning)
 					strcpy(buffer, (trxGetBandwidthIs25kHz() ? "FM" : "FMN"));
 				}
 
+				modePixelLen = (strlen(buffer) * 6);
+
+				if (uiDataGlobal.talkaround)
+				{
+					isInverted = true;
+					displayFillRect(1, 1, modePixelLen, 8 + 1, false);
+				}
+
 				displayPrintCore(MODE_TEXT_X_OFFSET, DISPLAY_Y_POS_HEADER, buffer,
-						(((nonVolatileSettings.hotspotType != HOTSPOT_TYPE_OFF) && (uiDataGlobal.dmrDisabled == false)) ? FONT_SIZE_1_BOLD : FONT_SIZE_1), TEXT_ALIGN_LEFT, (scanIsActive ? scanBlinkPhase : false));
+						(((nonVolatileSettings.hotspotType != HOTSPOT_TYPE_OFF) && (uiDataGlobal.dmrDisabled == false)) ? FONT_SIZE_1_BOLD : FONT_SIZE_1), TEXT_ALIGN_LEFT, isInverted);
+
+
+				if (currentChannelData->aprsConfigIndex != 0)
+				{
+					bool aprsSuspended = false;
+
+					strcpy(buffer, "APRS");
+
+#if ! defined(PLATFORM_GD77S)
+					if ((aprsBeaconingGetMode() == APRS_BEACONING_MODE_OFF) || aprsBeaconingIsSuspended())
+					{
+						aprsSuspended = true;
+					}
+#endif
+					displayPrintCore(MODE_TEXT_X_OFFSET + (modePixelLen + 6), DISPLAY_Y_POS_HEADER, buffer,
+							(aprsSuspended ? FONT_SIZE_1 : FONT_SIZE_1_BOLD), TEXT_ALIGN_LEFT, false);
+				}
 			}
 
 			if ((monitorModeData.isEnabled == false) && (isVFOSweepScanning == false) &&
@@ -1719,7 +1947,7 @@ void uiUtilityRenderHeader(bool isVFODualWatchScanning, bool isVFOSweepScanning)
 
 				if (nonVolatileSettings.extendedInfosOnScreen & (INFO_ON_SCREEN_TS & INFO_ON_SCREEN_BOTH))
 				{
-					contactTSActive = ((nonVolatileSettings.overrideTG == 0) && ((currentContactData.reserve1 & 0x01) == 0x00));
+					contactTSActive = ((nonVolatileSettings.overrideTG == 0) && ((currentContactData.reserve1 & CODEPLUG_CONTACT_FLAG_NO_TS_OVERRIDE) == 0x00));
 					tsManOverride = (contactTSActive ? tsIsContactHasBeenOverriddenFromCurrentChannel() : (tsGetManualOverrideFromCurrentChannel() != 0));
 				}
 
@@ -1736,6 +1964,13 @@ void uiUtilityRenderHeader(bool isVFODualWatchScanning, bool isVFOSweepScanning)
 					if (scanIsActive ? scanBlinkPhase == false : true)
 					{
 						bool isInverted = isVFODualWatchScanning ? false : ((scanIsActive ? scanBlinkPhase : false) ^ (nonVolatileSettings.dmrDestinationFilter > DMR_DESTINATION_FILTER_NONE));
+
+						if (uiDataGlobal.talkaround)
+						{
+							isInverted = true;
+							displayFillRect(1, 1, (3 * 6), 8 + 1, false);
+						}
+
 						displayPrintCore(MODE_TEXT_X_OFFSET, DISPLAY_Y_POS_HEADER, isVFODualWatchScanning ? "[DW]" : "DMR", ((nonVolatileSettings.hotspotType != HOTSPOT_TYPE_OFF) ? FONT_SIZE_1_BOLD : FONT_SIZE_1), TEXT_ALIGN_LEFT, isInverted);
 					}
 
@@ -1793,14 +2028,18 @@ void uiUtilityRenderHeader(bool isVFODualWatchScanning, bool isVFOSweepScanning)
 		displayPrintCore(ccXPos, DISPLAY_Y_POS_HEADER, buffer, FONT_SIZE_1, TEXT_ALIGN_LEFT, isNotFilteringCC);
 	}
 
+#if defined(HAS_GPS)
+#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
 	if (nonVolatileSettings.gps >= GPS_MODE_ON)
 	{
-		displayPrintCore(DISPLAY_SIZE_X - 50, DISPLAY_Y_POS_HEADER, currentLanguage->gps,(gpsData.HasFix ? FONT_SIZE_1_BOLD : FONT_SIZE_1), TEXT_ALIGN_LEFT, false);
+		displayPrintCore(DISPLAY_SIZE_X - 50, DISPLAY_Y_POS_HEADER, currentLanguage->gps, ((gpsData.Status & GPS_STATUS_HAS_FIX) ? FONT_SIZE_1_BOLD : FONT_SIZE_1), TEXT_ALIGN_LEFT, false);
 	}
+#endif
+#endif
 
 	// Display battery percentage/voltage
 	bool apoEnabled = (nonVolatileSettings.apo > 0);
-	if (nonVolatileSettings.bitfieldOptions & BIT_BATTERY_VOLTAGE_IN_HEADER)
+	if (settingsIsOptionBitSet(BIT_BATTERY_VOLTAGE_IN_HEADER))
 	{
 		int16_t xV = (DISPLAY_SIZE_X - ((4 * 6) + 3));
 
@@ -1817,6 +2056,8 @@ void uiUtilityRenderHeader(bool isVFODualWatchScanning, bool isVFOSweepScanning)
 		snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%d%%", batteryPercentage);
 		displayPrintCore(0, DISPLAY_Y_POS_HEADER, buffer, (apoEnabled ? FONT_SIZE_1_BOLD : FONT_SIZE_1), TEXT_ALIGN_RIGHT, ((batteryIsLow ? scanBlinkPhase : false)));// Display battery percentage at the right
 	}
+
+	displayThemeResetToDefault();
 }
 
 void uiUtilityRedrawHeaderOnly(bool isVFODualWatchScanning, bool isVFOSweepScanning)
@@ -1842,6 +2083,7 @@ static void drawHeaderBar(int *barWidth, int16_t barHeight)
 {
 	*barWidth = CLAMP(*barWidth, 0, DISPLAY_SIZE_X);
 
+	displayThemeApply(THEME_ITEM_FG_RSSI_BAR, THEME_ITEM_BG_HEADER_TEXT);
 	if (*barWidth)
 	{
 		displayFillRect(0, DISPLAY_Y_POS_BAR, *barWidth, barHeight, false);
@@ -1852,12 +2094,13 @@ static void drawHeaderBar(int *barWidth, int16_t barHeight)
 	{
 		displayFillRect(*barWidth, DISPLAY_Y_POS_BAR, (DISPLAY_SIZE_X - *barWidth), barHeight, true);
 	}
+
+	displayThemeResetToDefault();
 }
 
 void uiUtilityDrawRSSIBarGraph(void)
 {
 	int rssi = trxGetRSSIdBm();
-
 
 	if ((rssi > SMETER_S9) && (trxGetMode() == RADIO_MODE_ANALOG))
 	{
@@ -1879,8 +2122,23 @@ void uiUtilityDrawRSSIBarGraph(void)
 
 	drawHeaderBar(&barWidth, 4);
 
-#if 0 // Commented for now, maybe an option later.
+#if defined(HAS_COLOURS)
 	int xPos = 0;
+
+	if (rssi > SMETER_S9)
+	{
+		xPos = (rssiMeterHeaderBar[9] * 2);
+
+		if (barWidth > xPos)
+		{
+			displayThemeApply(THEME_ITEM_FG_RSSI_BAR_S9P, THEME_ITEM_BG_HEADER_TEXT);
+			displayFillRect(xPos, DISPLAY_Y_POS_BAR, (barWidth - xPos), 4, false);
+			displayThemeResetToDefault();
+		}
+	}
+#endif
+
+#if 0 // Commented for now, maybe an option later.
 	int currentMode = trxGetMode();
 	for (uint8_t i = 1; ((i < 10) && (xPos <= barWidth)); i += 2)
 	{
@@ -1902,21 +2160,32 @@ void uiUtilityDrawRSSIBarGraph(void)
 void uiUtilityDrawFMMicLevelBarGraph(void)
 {
 	trxReadVoxAndMicStrength();
-	uint16_t micdB = trxTxMic; // trxTxMic is in 0.2dB unit
-	micdB = micdB + ((nonVolatileSettings.micGainFM) * 15);   //  mic gain adjustment is 3dB per increment of micGainFM, so scale it to 0.2dB increments
-	// display from 30dB to 70dB, = 150 to  350 units and span over 128pix
-	int barWidth = ((uint16_t)(((float)DISPLAY_SIZE_X / 200.0) * ((float)micdB - 150.0)));
-	if (barWidth > DISPLAY_SIZE_X)
-	{
-		barWidth = DISPLAY_SIZE_X;
-	}
-	drawHeaderBar(&barWidth, 3);
+
+	uint16_t micdB =
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+			trxTxMic + // trxTxMic is in 0.2dB unit
+			((nonVolatileSettings.micGainFM) * 15)   //  mic gain adjustment is 3dB per increment of micGainFM, so scale it to 0.2dB increments
+
+#else
+			(trxTxMic >> 1) // trxTxMic is in 0.5dB unit, displaying 50dB .. 100dB
+#endif
+			;
+
+	int barWidth = SAFE_MIN(
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+			((uint16_t)(((float)DISPLAY_SIZE_X / 200.0) * ((float)micdB - 150.0))) // display from 30dB to 70dB, = 150 to  350 units and span over 160pix
+#else
+			((uint16_t)(((float)DISPLAY_SIZE_X / 50.0) * ((float)micdB - 50.0))) // display from 50dB to 100dB, span over 128pix
+#endif
+			, DISPLAY_SIZE_X);
+
+	drawHeaderBar(&barWidth, 4);
 }
 
 void uiUtilityDrawDMRMicLevelBarGraph(void)
 {
 	int barWidth = ((uint16_t)(sqrt(micAudioSamplesTotal) * 1.5));
-	drawHeaderBar(&barWidth, 3);
+	drawHeaderBar(&barWidth, 4);
 }
 
 void setOverrideTGorPC(uint32_t tgOrPc, bool privateCall)
@@ -1945,6 +2214,8 @@ void uiUtilityDisplayFrequency(uint8_t y, bool isTX, bool hasFocus, uint32_t fre
 	int val_before_dp = frequency / 100000;
 	int val_after_dp = frequency - val_before_dp * 100000;
 
+	displayThemeApply(isTX ? THEME_ITEM_FG_TX_FREQ : THEME_ITEM_FG_RX_FREQ, THEME_ITEM_BG);
+
 	// Focus + direction
 	snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%c%c", ((hasFocus && !isScanMode)? '>' : ' '), (isTX ? 'T' : 'R'));
 
@@ -1958,6 +2229,8 @@ void uiUtilityDisplayFrequency(uint8_t y, bool isTX, bool hasFocus, uint32_t fre
 	snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%d.%05d", val_before_dp, val_after_dp);
 	displayPrintAt(FREQUENCY_X_POS, y, buffer, FONT_SIZE_3);
 	displayPrintAt(DISPLAY_SIZE_X - (3 * 8), y, "MHz", FONT_SIZE_3);
+
+	displayThemeResetToDefault();
 }
 
 size_t dcsPrintf(char *dest, size_t maxLen, char *prefix, uint16_t tone)
@@ -2071,11 +2344,18 @@ bool decreasePowerLevel(void)
 
 ANNOUNCE_STATIC void announceRadioMode(bool voicePromptWasPlaying)
 {
+	int radioMode = trxGetMode();
+
 	if (!voicePromptWasPlaying)
 	{
-		voicePromptsAppendLanguageString(&currentLanguage->mode);
+		voicePromptsAppendLanguageString(currentLanguage->mode);
 	}
-	voicePromptsAppendPrompt( (trxGetMode() == RADIO_MODE_DIGITAL) ? PROMPT_DMR : PROMPT_FM);
+	voicePromptsAppendPrompt(((radioMode == RADIO_MODE_DIGITAL) ? PROMPT_DMR : PROMPT_FM));
+
+	if ((radioMode == RADIO_MODE_ANALOG) && (currentChannelData->aprsConfigIndex != 0))
+	{
+		voicePromptsAppendLanguageString(currentLanguage->APRS);
+	}
 }
 
 ANNOUNCE_STATIC void announceZoneName(bool voicePromptWasPlaying)
@@ -2084,14 +2364,14 @@ ANNOUNCE_STATIC void announceZoneName(bool voicePromptWasPlaying)
 
 	if (!voicePromptWasPlaying)
 	{
-		voicePromptsAppendLanguageString(&currentLanguage->zone);
+		voicePromptsAppendLanguageString(currentLanguage->zone);
 	}
 
 	codeplugUtilConvertBufToString(currentZone.name, nameBuf, 16);
 
 	if (strcmp(nameBuf, currentLanguage->all_channels) == 0)
 	{
-		voicePromptsAppendLanguageString(&currentLanguage->all_channels);
+		voicePromptsAppendLanguageString(currentLanguage->all_channels);
 	}
 	else
 	{
@@ -2099,27 +2379,60 @@ ANNOUNCE_STATIC void announceZoneName(bool voicePromptWasPlaying)
 	}
 }
 
+ANNOUNCE_STATIC void announceDistance(bool voicePromptWasPlaying)
+{
+	char distBuf[17];
+
+	if ((currentChannelData->NOT_IN_CODEPLUG_CALCULATED_DISTANCE_X10 != -1) &&
+		(settingsIsOptionBitSet(BIT_DISPLAY_CHANNEL_DISTANCE) || (settingsIsOptionBitSet(BIT_SORT_CHANNEL_DISTANCE) && (CODEPLUG_ZONE_IS_ALLCHANNELS(currentZone) == false))))
+	{
+		if (!voicePromptWasPlaying)
+		{
+			voicePromptsAppendPrompt(PROMPT_DISTANCE);
+		}
+
+		uint32_t intPart = (currentChannelData->NOT_IN_CODEPLUG_CALCULATED_DISTANCE_X10 / 10);
+		uint32_t decPart = (currentChannelData->NOT_IN_CODEPLUG_CALCULATED_DISTANCE_X10 - (intPart * 10));
+
+		if (decPart != 0)
+		{
+			snprintf(distBuf, SCREEN_LINE_BUFFER_SIZE, "%u.%u", intPart, decPart);
+		}
+		else
+		{
+			snprintf(distBuf, SCREEN_LINE_BUFFER_SIZE, "%u", intPart);
+		}
+
+		voicePromptsAppendString(distBuf);
+
+		voicePromptsAppendPrompt(PROMPT_KILOMETERS);
+	}
+}
+
+
 ANNOUNCE_STATIC void announceContactNameTgOrPc(bool voicePromptWasPlaying)
 {
 	if (nonVolatileSettings.overrideTG == 0)
 	{
 		if (!voicePromptWasPlaying)
 		{
-			voicePromptsAppendLanguageString(&currentLanguage->contact);
+			voicePromptsAppendLanguageString(currentLanguage->contact);
 		}
 		char nameBuf[17];
+
 		codeplugUtilConvertBufToString(currentContactData.name, nameBuf, 16);
 		voicePromptsAppendString(nameBuf);
 	}
 	else
 	{
 		char buf[17];
+
 		itoa(nonVolatileSettings.overrideTG & 0xFFFFFF, buf, 10);
 		if ((nonVolatileSettings.overrideTG >> 24) == PC_CALL_FLAG)
 		{
 			if (!voicePromptWasPlaying)
 			{
-				voicePromptsAppendLanguageString(&currentLanguage->private_call);
+				voicePromptsAppendLanguageString(currentLanguage->private_call);
 			}
 			voicePromptsAppendString("ID");
 		}
@@ -2145,23 +2458,25 @@ ANNOUNCE_STATIC void announcePowerLevel(bool voicePromptWasPlaying)
 		voicePromptsAppendString((char *)POWER_LEVELS[powerLevel]);
 		switch(powerLevel)
 		{
-		case 0://50mW
-		case 1://250mW
-		case 2://500mW
-		case 3://750mW
-			voicePromptsAppendPrompt(PROMPT_MILLIWATTS);
-			break;
-		case 4://1W
-			voicePromptsAppendPrompt(PROMPT_WATT);
-			break;
-		default:
-			voicePromptsAppendPrompt(PROMPT_WATTS);
-			break;
+			case 0://50mW
+			case 1://250mW
+			case 2://500mW
+			case 3://750mW
+				voicePromptsAppendPrompt(PROMPT_MILLIWATTS);
+				break;
+
+			case 4://1W
+				voicePromptsAppendPrompt(PROMPT_WATT);
+				break;
+
+			default:
+				voicePromptsAppendPrompt(PROMPT_WATTS);
+				break;
 		}
 	}
 	else
 	{
-		voicePromptsAppendLanguageString(&currentLanguage->user_power);
+		voicePromptsAppendLanguageString(currentLanguage->user_power);
 	}
 }
 
@@ -2171,7 +2486,7 @@ void announceEcoLevel(bool voicePromptWasPlaying)
 
 	if (!voicePromptWasPlaying)
 	{
-		voicePromptsAppendLanguageString(&currentLanguage->eco_level);
+		voicePromptsAppendLanguageString(currentLanguage->eco_level);
 	}
 
 	voicePromptsAppendInteger(nonVolatileSettings.ecoLevel);
@@ -2184,11 +2499,11 @@ ANNOUNCE_STATIC void announceTemperature(bool voicePromptWasPlaying)
 	int temperature = getTemperature();
 	if (!voicePromptWasPlaying)
 	{
-		voicePromptsAppendLanguageString(&currentLanguage->temperature);
+		voicePromptsAppendLanguageString(currentLanguage->temperature);
 	}
 	snprintf(buffer, 17, "%d.%1d", (temperature / 10), (temperature % 10));
 	voicePromptsAppendString(buffer);
-	voicePromptsAppendLanguageString(&currentLanguage->celcius);
+	voicePromptsAppendLanguageString(currentLanguage->celcius);
 }
 
 ANNOUNCE_STATIC void announceBatteryVoltage(void)
@@ -2196,7 +2511,7 @@ ANNOUNCE_STATIC void announceBatteryVoltage(void)
 	char buffer[17];
 	int volts, mvolts;
 
-	voicePromptsAppendLanguageString(&currentLanguage->battery);
+	voicePromptsAppendLanguageString(currentLanguage->battery);
 	getBatteryVoltage(&volts,  &mvolts);
 	snprintf(buffer, 17, " %1d.%1d", volts, mvolts);
 	voicePromptsAppendString(buffer);
@@ -2205,27 +2520,25 @@ ANNOUNCE_STATIC void announceBatteryVoltage(void)
 
 ANNOUNCE_STATIC void announceBatteryPercentage(void)
 {
-	voicePromptsAppendLanguageString(&currentLanguage->battery);
+	voicePromptsAppendLanguageString(currentLanguage->battery);
 	voicePromptsAppendInteger(getBatteryPercentage());
 	voicePromptsAppendPrompt(PROMPT_PERCENT);
 }
 
 ANNOUNCE_STATIC void announceTS(void)
 {
-	voicePromptsAppendLanguageString(&currentLanguage->timeSlot);
+	voicePromptsAppendLanguageString(currentLanguage->timeSlot);
 	voicePromptsAppendInteger(trxGetDMRTimeSlot() + 1);
 }
 
 ANNOUNCE_STATIC void announceCC(void)
 {
-	voicePromptsAppendLanguageString(&currentLanguage->colour_code);
+	voicePromptsAppendLanguageString(currentLanguage->colour_code);
 	voicePromptsAppendInteger(trxGetDMRColourCode());
 }
 
 ANNOUNCE_STATIC void announceChannelName(bool voicePromptWasPlaying)
 {
-	char voiceBuf[17];
-	codeplugUtilConvertBufToString(channelScreenChannelData.name, voiceBuf, 16);
 
 	if (!voicePromptWasPlaying)
 	{
@@ -2237,14 +2550,28 @@ ANNOUNCE_STATIC void announceChannelName(bool voicePromptWasPlaying)
 		voicePromptsAppendPrompt(PROMPT_REVERSE_REPEATER);
 	}
 
+	if(uiDataGlobal.talkaround)
+	{
+		voicePromptsAppendLanguageString(currentLanguage->talkaround);
+	}
 
-	voicePromptsAppendString(voiceBuf);
+	if (currentZone.NOT_IN_CODEPLUGDATA_numChannelsInZone > 0)
+	{
+		char voiceBuf[17];
+		codeplugUtilConvertBufToString(channelScreenChannelData.name, voiceBuf, 16);
+		voicePromptsAppendString(voiceBuf);
+	}
+	else
+	{
+		voicePromptsAppendLanguageString(currentLanguage->zone_empty);
+	}
 }
 
 static void removeUnnecessaryZerosFromVoicePrompts(char *str)
 {
 	const int NUM_DECIMAL_PLACES = 1;
 	int len = strlen(str);
+
 	for(int i = len; i > 2; i--)
 	{
 		if ((str[i - 1] != '0') || (str[i - (NUM_DECIMAL_PLACES + 1)] == '.'))
@@ -2312,7 +2639,7 @@ ANNOUNCE_STATIC void announceSquelchLevel(bool voicePromptWasPlaying)
 
 	if (!voicePromptWasPlaying)
 	{
-		voicePromptsAppendLanguageString(&currentLanguage->squelch);
+		voicePromptsAppendLanguageString(currentLanguage->squelch);
 	}
 
 	snprintf(buf, BUFFER_LEN, "%d%%", 5 * (((currentChannelData->sql == 0) ? nonVolatileSettings.squelchDefaults[trxCurrentBand[TRX_RX_FREQ_BAND]] : currentChannelData->sql)-1));
@@ -2321,12 +2648,12 @@ ANNOUNCE_STATIC void announceSquelchLevel(bool voicePromptWasPlaying)
 
 void announceChar(char ch)
 {
-	if (nonVolatileSettings.audioPromptMode < AUDIO_PROMPT_MODE_VOICE_LEVEL_1)
+	if (nonVolatileSettings.audioPromptMode < AUDIO_PROMPT_MODE_VOICE_THRESHOLD)
 	{
 		return;
 	}
 
-	char buf[2] = {ch, 0};
+	char buf[2] = { ch, 0 };
 
 	voicePromptsInit();
 	voicePromptsAppendString(buf);
@@ -2340,14 +2667,16 @@ void buildCSSCodeVoicePrompts(uint16_t tone, CodeplugCSSTypes_t cssType, Directi
 
 	switch(direction)
 	{
-	case DIRECTION_RECEIVE:
-		voicePromptsAppendString("RX");
-		break;
-	case DIRECTION_TRANSMIT:
-		voicePromptsAppendString("TX");
-		break;
-	default:
-		break;
+		case DIRECTION_RECEIVE:
+			voicePromptsAppendString("RX");
+			break;
+
+		case DIRECTION_TRANSMIT:
+			voicePromptsAppendString("TX");
+			break;
+
+		default:
+			break;
 	}
 
 	voicePromptsAppendPrompt(PROMPT_SILENCE);
@@ -2356,7 +2685,7 @@ void buildCSSCodeVoicePrompts(uint16_t tone, CodeplugCSSTypes_t cssType, Directi
 	{
 		voicePromptsAppendString("CSS");
 		voicePromptsAppendPrompt(PROMPT_SILENCE);
-		voicePromptsAppendLanguageString(&currentLanguage->none);
+		voicePromptsAppendLanguageString(currentLanguage->none);
 	}
 	else if (cssType == CSS_TYPE_CTCSS)
 	{
@@ -2385,7 +2714,7 @@ void buildCSSCodeVoicePrompts(uint16_t tone, CodeplugCSSTypes_t cssType, Directi
 
 void announceCSSCode(uint16_t tone, CodeplugCSSTypes_t cssType, Direction_t direction, bool announceType, audioPromptThreshold_t immediateAnnounceThreshold)
 {
-	if (nonVolatileSettings.audioPromptMode < AUDIO_PROMPT_MODE_VOICE_LEVEL_1)
+	if (nonVolatileSettings.audioPromptMode < AUDIO_PROMPT_MODE_VOICE_THRESHOLD)
 	{
 		return;
 	}
@@ -2405,18 +2734,6 @@ void announceCSSCode(uint16_t tone, CodeplugCSSTypes_t cssType, Direction_t dire
 	}
 }
 
-void playNextSettingSequence(void)
-{
-	voicePromptSequenceState++;
-
-	if (voicePromptSequenceState == NUM_PROMPT_SEQUENCES)
-	{
-		voicePromptSequenceState = 0;
-	}
-
-	announceItem(voicePromptSequenceState, PROMPT_THRESHOLD_3);
-}
-
 static void announceChannelNameOrVFOFrequency(bool voicePromptWasPlaying, bool announceVFOName)
 {
 	if (menuSystemGetCurrentMenuNumber() == UI_CHANNEL_MODE)
@@ -2431,115 +2748,133 @@ static void announceChannelNameOrVFOFrequency(bool voicePromptWasPlaying, bool a
 
 void announceItemWithInit(bool init, voicePromptItem_t item, audioPromptThreshold_t immediateAnnounceThreshold)
 {
-	if (nonVolatileSettings.audioPromptMode < AUDIO_PROMPT_MODE_VOICE_LEVEL_1)
+	if (nonVolatileSettings.audioPromptMode < AUDIO_PROMPT_MODE_VOICE_THRESHOLD)
 	{
 		return;
 	}
-	bool voicePromptWasPlaying = voicePromptsIsPlaying();
 
-	voicePromptSequenceState = item;
+	bool voicePromptWasPlaying = voicePromptsIsPlaying();
 
 	if (init)
 	{
 		voicePromptsInit();
 	}
 
-	switch(voicePromptSequenceState)
+	switch(item)
 	{
-	case PROMPT_SEQUENCE_CHANNEL_NAME_OR_VFO_FREQ:
-	case PROMPT_SEQUENCE_CHANNEL_NAME_OR_VFO_FREQ_AND_MODE:
-	case PROMPT_SEQUENCE_CHANNEL_NAME_AND_CONTACT_OR_VFO_FREQ_AND_MODE:
-	case PROMPT_SEQUENCE_ZONE_NAME_CHANNEL_NAME_AND_CONTACT_OR_VFO_FREQ_AND_MODE:
-	case PROMPT_SEQUENCE_ZONE_NAME_CHANNEL_NAME_AND_CONTACT_OR_VFO_FREQ_AND_MODE_AND_TS_AND_CC:
-	case PROMPT_SEQUENCE_CHANNEL_NAME_AND_CONTACT_OR_VFO_FREQ_AND_MODE_AND_TS_AND_CC:
-	case PROMPT_SEQUENCE_VFO_FREQ_UPDATE:
-	{
-		uint32_t lFreq, hFreq;
+		case PROMPT_SEQUENCE_CHANNEL_NAME_OR_VFO_FREQ:
+		case PROMPT_SEQUENCE_CHANNEL_NAME_OR_VFO_FREQ_AND_MODE:
+		case PROMPT_SEQUENCE_CHANNEL_NAME_AND_CONTACT_OR_VFO_FREQ_AND_MODE:
+		case PROMPT_SEQUENCE_ZONE_NAME_CHANNEL_NAME_AND_CONTACT_OR_VFO_FREQ_AND_MODE:
+		case PROMPT_SEQUENCE_ZONE_NAME_CHANNEL_NAME_AND_CONTACT_OR_VFO_FREQ_AND_MODE_AND_TS_AND_CC:
+		case PROMPT_SEQUENCE_CHANNEL_NAME_AND_CONTACT_OR_VFO_FREQ_AND_MODE_AND_TS_AND_CC:
+		case PROMPT_SEQUENCE_VFO_FREQ_UPDATE:
+		{
+			uint32_t lFreq, hFreq;
 
-		if (((nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_LEVEL_2) || (immediateAnnounceThreshold == PROMPT_THRESHOLD_NEVER_PLAY_IMMEDIATELY)) &&
-				((voicePromptSequenceState == PROMPT_SEQUENCE_ZONE_NAME_CHANNEL_NAME_AND_CONTACT_OR_VFO_FREQ_AND_MODE) ||
-						(voicePromptSequenceState == PROMPT_SEQUENCE_ZONE_NAME_CHANNEL_NAME_AND_CONTACT_OR_VFO_FREQ_AND_MODE_AND_TS_AND_CC)))
-		{
-			announceZoneName(voicePromptWasPlaying);
-		}
-
-		announceChannelNameOrVFOFrequency(voicePromptWasPlaying, (voicePromptSequenceState != PROMPT_SEQUENCE_VFO_FREQ_UPDATE));
-		if (uiVFOModeFrequencyScanningIsActiveAndEnabled(&lFreq, &hFreq))
-		{
-			voicePromptsAppendPrompt(PROMPT_SCAN_MODE);
-			voicePromptsAppendLanguageString(&currentLanguage->low);
-			announceQRG(lFreq, true);
-			voicePromptsAppendLanguageString(&currentLanguage->high);
-			announceQRG(hFreq, true);
-		}
-		if (voicePromptSequenceState == PROMPT_SEQUENCE_CHANNEL_NAME_OR_VFO_FREQ)
-		{
-			break;
-		}
-		if (voicePromptSequenceState == PROMPT_SEQUENCE_VFO_FREQ_UPDATE)
-		{
-			announceVFOChannelName();
-		}
-		announceRadioMode(voicePromptWasPlaying);
-		if (voicePromptSequenceState == PROMPT_SEQUENCE_CHANNEL_NAME_OR_VFO_FREQ_AND_MODE)
-		{
-			break;
-		}
-		if (trxGetMode() == RADIO_MODE_DIGITAL)
-		{
-			if ((voicePromptSequenceState == PROMPT_SEQUENCE_ZONE_NAME_CHANNEL_NAME_AND_CONTACT_OR_VFO_FREQ_AND_MODE_AND_TS_AND_CC) ||
-					(voicePromptSequenceState == PROMPT_SEQUENCE_CHANNEL_NAME_AND_CONTACT_OR_VFO_FREQ_AND_MODE_AND_TS_AND_CC))
+			if (((nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_LEVEL_2) || (immediateAnnounceThreshold == PROMPT_THRESHOLD_NEVER_PLAY_IMMEDIATELY)) &&
+					((item == PROMPT_SEQUENCE_ZONE_NAME_CHANNEL_NAME_AND_CONTACT_OR_VFO_FREQ_AND_MODE) ||
+							(item == PROMPT_SEQUENCE_ZONE_NAME_CHANNEL_NAME_AND_CONTACT_OR_VFO_FREQ_AND_MODE_AND_TS_AND_CC)))
 			{
-				announceTS();
-				announceCC();
+				announceZoneName(voicePromptWasPlaying);
+
+				announceDistance(voicePromptWasPlaying);
 			}
 
-			announceContactNameTgOrPc(false);// false = force the title "Contact" to be played to always separate the Channel name announcement from the Contact name
+			announceChannelNameOrVFOFrequency(voicePromptWasPlaying, (item != PROMPT_SEQUENCE_VFO_FREQ_UPDATE));
+
+			if (uiVFOModeFrequencyScanningIsActiveAndEnabled(&lFreq, &hFreq))
+			{
+				voicePromptsAppendPrompt(PROMPT_SCAN_MODE);
+				voicePromptsAppendLanguageString(currentLanguage->low);
+				announceQRG(lFreq, true);
+				voicePromptsAppendLanguageString(currentLanguage->high);
+				announceQRG(hFreq, true);
+			}
+
+			if (item == PROMPT_SEQUENCE_CHANNEL_NAME_OR_VFO_FREQ)
+			{
+				break;
+			}
+			else if (item == PROMPT_SEQUENCE_VFO_FREQ_UPDATE)
+			{
+				announceVFOChannelName();
+			}
+
+			announceRadioMode(voicePromptWasPlaying);
+
+			if (item == PROMPT_SEQUENCE_CHANNEL_NAME_OR_VFO_FREQ_AND_MODE)
+			{
+				break;
+			}
+
+			if (trxGetMode() == RADIO_MODE_DIGITAL)
+			{
+				if ((item == PROMPT_SEQUENCE_ZONE_NAME_CHANNEL_NAME_AND_CONTACT_OR_VFO_FREQ_AND_MODE_AND_TS_AND_CC) ||
+						(item == PROMPT_SEQUENCE_CHANNEL_NAME_AND_CONTACT_OR_VFO_FREQ_AND_MODE_AND_TS_AND_CC))
+				{
+					announceTS();
+					announceCC();
+				}
+
+				announceContactNameTgOrPc(false);// false = force the title "Contact" to be played to always separate the Channel name announcement from the Contact name
+			}
 		}
-	}
-	break;
-	case PROMPT_SEQUENCE_ZONE:
-		announceZoneName(voicePromptWasPlaying);
 		break;
-	case PROMPT_SEQUENCE_MODE:
-		announceRadioMode(voicePromptWasPlaying);
-		break;
-	case PROMPT_SEQUENCE_CONTACT_TG_OR_PC:
-		announceContactNameTgOrPc(voicePromptWasPlaying);
-		break;
-	case PROMPT_SEQUENCE_TS:
-		announceTS();
-		break;
-	case PROMPT_SEQUENCE_CC:
-		announceCC();
-		break;
-	case PROMPT_SEQUENCE_POWER:
-		announcePowerLevel(voicePromptWasPlaying);
-		break;
-	case PROMPT_SEQUENCE_BATTERY:
-		if (nonVolatileSettings.bitfieldOptions & BIT_BATTERY_VOLTAGE_IN_HEADER)
-		{
-			announceBatteryVoltage();
-		}
-		else
-		{
-			announceBatteryPercentage();
-		}
-		break;
-	case PROMPT_SQUENCE_SQUELCH:
-		announceSquelchLevel(voicePromptWasPlaying);
-		break;
-	case PROMPT_SEQUENCE_TEMPERATURE:
-		announceTemperature(voicePromptWasPlaying);
-		break;
-	case PROMPT_SEQUENCE_DIRECTION_TX:
-		voicePromptsAppendString("TX");
-		break;
-	case PROMPT_SEQUENCE_DIRECTION_RX:
-		voicePromptsAppendString("RX");
-		break;
-	default:
-		break;
+
+		case PROMPT_SEQUENCE_ZONE:
+			announceZoneName(voicePromptWasPlaying);
+			break;
+
+		case PROMPT_SEQUENCE_MODE:
+			announceRadioMode(voicePromptWasPlaying);
+			break;
+
+		case PROMPT_SEQUENCE_CONTACT_TG_OR_PC:
+			announceContactNameTgOrPc(voicePromptWasPlaying);
+			break;
+
+		case PROMPT_SEQUENCE_TS:
+			announceTS();
+			break;
+
+		case PROMPT_SEQUENCE_CC:
+			announceCC();
+			break;
+
+		case PROMPT_SEQUENCE_POWER:
+			announcePowerLevel(voicePromptWasPlaying);
+			break;
+
+		case PROMPT_SEQUENCE_BATTERY:
+			if (settingsIsOptionBitSet(BIT_BATTERY_VOLTAGE_IN_HEADER))
+			{
+				announceBatteryVoltage();
+			}
+			else
+			{
+				announceBatteryPercentage();
+			}
+			break;
+
+		case PROMPT_SQUENCE_SQUELCH:
+			announceSquelchLevel(voicePromptWasPlaying);
+			break;
+
+		case PROMPT_SEQUENCE_TEMPERATURE:
+			announceTemperature(voicePromptWasPlaying);
+			break;
+
+		case PROMPT_SEQUENCE_DIRECTION_TX:
+			voicePromptsAppendString("TX");
+			break;
+
+		case PROMPT_SEQUENCE_DIRECTION_RX:
+			voicePromptsAppendString("RX");
+			break;
+
+		default:
+			break;
 	}
 	// Follow-on when voicePromptWasPlaying is enabled on voice prompt level 2 and above
 	// Prompts are voiced immediately on voice prompt level 3
@@ -2557,7 +2892,7 @@ void announceItem(voicePromptItem_t item, audioPromptThreshold_t immediateAnnoun
 
 void promptsPlayNotAfterTx(void)
 {
-	if (menuSystemGetPreviouslyPushedMenuNumber() != UI_TX_SCREEN)
+	if (menuSystemGetPreviouslyPushedMenuNumber(false) != UI_TX_SCREEN)
 	{
 		voicePromptsPlay();
 	}
@@ -2597,15 +2932,15 @@ void uiUtilityBuildTgOrPCDisplayName(char *nameBuf, int bufferLen)
 			dmrIdDataStruct_t currentRec;
 			if (dmrIDLookup(id, &currentRec))
 			{
-				strncpy(nameBuf, currentRec.text, bufferLen);
+				snprintf(nameBuf, bufferLen, currentRec.text);
 			}
 			else
 			{
 				// check LastHeard for TA data.
-				LinkItem_t *item = lastheardFindInList(id);
+				LinkItem_t *item = lastHeardFindInList(id);
 				if ((item != NULL) && (strlen(item->talkerAlias) != 0))
 				{
-					strncpy(nameBuf, item->talkerAlias, bufferLen);
+					snprintf(nameBuf, bufferLen, item->talkerAlias);
 				}
 				else
 				{
@@ -2642,28 +2977,28 @@ void acceptPrivateCall(uint32_t id, int timeslot)
 		tsSetManualOverride(((menuSystemGetRootMenuNumber() == UI_CHANNEL_MODE) ? CHANNEL_CHANNEL : (CHANNEL_VFO_A + nonVolatileSettings.currentVFONumber)), (timeslot + 1));
 	}
 #else
-	(void)timeslot;
+	UNUSED_PARAMETER(timeslot);
 #endif
 
-	announceItem(PROMPT_SEQUENCE_CONTACT_TG_OR_PC,PROMPT_THRESHOLD_3);
+	announceItem(PROMPT_SEQUENCE_CONTACT_TG_OR_PC, PROMPT_THRESHOLD_3);
 }
 
 bool rebuildVoicePromptOnExtraLongSK1(uiEvent_t *ev)
 {
 	if (BUTTONCHECK_EXTRALONGDOWN(ev, BUTTON_SK1) && (BUTTONCHECK_DOWN(ev, BUTTON_SK2) == 0) && (BUTTONCHECK_SHORTUP(ev, BUTTON_SK2) == 0) && (ev->keys.key == 0))
 	{
-		// SK2 is still held down, but SK1 just get released.
-		if (uiDataGlobal.reverseRepeaterChannel || uiDataGlobal.reverseRepeaterVFO)
+		// SK2 is still held down, but SK1 just get released (reverseRepeater in VFO only, as now the one in Channel mode doesn't use the SK1+SK2 anymore).
+		if (uiDataGlobal.reverseRepeaterVFO)
 		{
 			return false;
 		}
 
-		if (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_LEVEL_1)
+		if (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_THRESHOLD)
 		{
 			int currentMenu = menuSystemGetCurrentMenuNumber();
 
-			if ((((currentMenu == UI_CHANNEL_MODE) && (uiDataGlobal.Scan.active && (uiDataGlobal.Scan.state != SCAN_PAUSED))) ||
-					((currentMenu == UI_VFO_MODE) && ((uiDataGlobal.Scan.active && (uiDataGlobal.Scan.state != SCAN_PAUSED)) || uiDataGlobal.Scan.toneActive))) == false)
+			if ((((currentMenu == UI_CHANNEL_MODE) && (uiDataGlobal.Scan.active && (uiDataGlobal.Scan.state != SCAN_STATE_PAUSED))) ||
+					((currentMenu == UI_VFO_MODE) && ((uiDataGlobal.Scan.active && (uiDataGlobal.Scan.state != SCAN_STATE_PAUSED)) || uiDataGlobal.Scan.toneActive))) == false)
 			{
 				if (voicePromptsIsPlaying())
 				{
@@ -2714,12 +3049,12 @@ bool repeatVoicePromptOnSK1(uiEvent_t *ev)
 {
 	if (BUTTONCHECK_SHORTUP(ev, BUTTON_SK1) && (BUTTONCHECK_DOWN(ev, BUTTON_SK2) == 0) && (ev->keys.key == 0))
 	{
-		if (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_LEVEL_1)
+		if (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_THRESHOLD)
 		{
 			int currentMenu = menuSystemGetCurrentMenuNumber();
 
-			if ((((currentMenu == UI_CHANNEL_MODE) && (uiDataGlobal.Scan.active && (uiDataGlobal.Scan.state != SCAN_PAUSED))) ||
-					((currentMenu == UI_VFO_MODE) && ((uiDataGlobal.Scan.active && (uiDataGlobal.Scan.state != SCAN_PAUSED)) || uiDataGlobal.Scan.toneActive))) == false)
+			if ((((currentMenu == UI_CHANNEL_MODE) && (uiDataGlobal.Scan.active && (uiDataGlobal.Scan.state != SCAN_STATE_PAUSED))) ||
+					((currentMenu == UI_VFO_MODE) && ((uiDataGlobal.Scan.active && (uiDataGlobal.Scan.state != SCAN_STATE_PAUSED)) || uiDataGlobal.Scan.toneActive))) == false)
 			{
 				if (!voicePromptsIsPlaying())
 				{
@@ -2752,20 +3087,16 @@ bool handleMonitorMode(uiEvent_t *ev)
 	if (monitorModeData.isEnabled)
 	{
 #if defined(PLATFORM_GD77S)
-		if ((BUTTONCHECK_DOWN(ev, BUTTON_SK1) == 0) || (BUTTONCHECK_DOWN(ev, BUTTON_SK2) == 0) || BUTTONCHECK_DOWN(ev, BUTTON_ORANGE) || (ev->events & ROTARY_EVENT))
+		if ((BUTTONCHECK_DOWN(ev, BUTTON_SK2) == 0) || (BUTTONCHECK_DOWN(ev, BUTTON_SK1) == 0) || BUTTONCHECK_DOWN(ev, BUTTON_ORANGE) || (ev->events & ROTARY_EVENT))
 #else
-		if ((BUTTONCHECK_DOWN(ev, BUTTON_SK2) == 0) || (ev->keys.key != 0) || BUTTONCHECK_DOWN(ev, BUTTON_SK1)
-#if !defined(PLATFORM_RD5R)
-				|| BUTTONCHECK_DOWN(ev, BUTTON_ORANGE)
-#endif
-			)
+		if ((BUTTONCHECK_UNIQUE_DOWN(ev, BUTTON_SK2) && (ev->keys.key == 0)) == false)
 #endif
 		{
 			monitorModeData.isEnabled = false;
 
 			// Blindly set mode and BW, as maybe only FM BW has changed (MonitorMode ends to FM 25kHz if no DMR is detected)
 			// Anyway, trxSetModeAndBandwidth() won't do anything if the current mode and BW are identical,
-			trxSetModeAndBandwidth(currentChannelData->chMode, codeplugChannelIsFlagSet(currentChannelData, CHANNEL_FLAG_BW_25K));
+			trxSetModeAndBandwidth(currentChannelData->chMode, (codeplugChannelGetFlag(currentChannelData, CHANNEL_FLAG_BW_25K) != 0));
 
 			currentChannelData->sql = monitorModeData.savedSquelch;
 			nonVolatileSettings.dmrCcTsFilter = monitorModeData.savedDMRCcTsFilter;
@@ -2806,11 +3137,11 @@ bool handleMonitorMode(uiEvent_t *ev)
 #if defined(PLATFORM_GD77S)
 		if (BUTTONCHECK_LONGDOWN(ev, BUTTON_SK1) && BUTTONCHECK_LONGDOWN(ev, BUTTON_SK2)
 #else
-		if (BUTTONCHECK_EXTRALONGDOWN(ev, BUTTON_SK2) && (BUTTONCHECK_DOWN(ev, BUTTON_SK1) == 0) && (BUTTONCHECK_SHORTUP(ev, BUTTON_SK1) == 0)
+		if ((ev->keys.key == 0) && (ev->buttons == (BUTTON_SK2_EXTRA_LONG_DOWN | BUTTON_SK2))
 #endif
 				&& (trxGetMode() != RADIO_MODE_NONE)
 				&& (((uiDataGlobal.Scan.toneActive == false) &&
-						((uiDataGlobal.Scan.active == false) || (uiDataGlobal.Scan.active && (uiDataGlobal.Scan.state == SCAN_PAUSED))))
+						((uiDataGlobal.Scan.active == false) || (uiDataGlobal.Scan.active && (uiDataGlobal.Scan.state == SCAN_STATE_PAUSED))))
 						|| uiVFOModeSweepScanning(false))
 		)
 		{
@@ -2845,6 +3176,16 @@ bool handleMonitorMode(uiEvent_t *ev)
 			if (monitorModeData.savedRadioMode != RADIO_MODE_DIGITAL)
 			{
 				trxSetModeAndBandwidth(RADIO_MODE_DIGITAL, false);
+
+				// current Channels|VFO mode has reverseRepeater set, handle this.
+				if ((uiDataGlobal.reverseRepeaterChannel && (menuSystemGetCurrentMenuNumber() == UI_CHANNEL_MODE)) ||
+						(uiDataGlobal.reverseRepeaterVFO && (menuSystemGetCurrentMenuNumber() == UI_VFO_MODE)))
+				{
+					uint32_t rxFreq = currentChannelData->txFreq;
+					uint32_t txFreq = (uiDataGlobal.talkaround ? rxFreq : currentChannelData->rxFreq);
+
+					trxSetFrequency(rxFreq, txFreq, DMR_MODE_DMO);
+				}
 			}
 
 			trxSetDMRColourCode(0);
@@ -2875,12 +3216,13 @@ static bool setQuickkeyFunctionID(char key, uint16_t functionId, bool silent)
 	{
 		if (silent == false)
 		{
-			nextKeyBeepMelody = (int *)MELODY_ACK_BEEP;
+			nextKeyBeepMelody = (int16_t *)MELODY_ACK_BEEP;
 		}
 		return true;
 	}
 
-	nextKeyBeepMelody = (int *)MELODY_ERROR_BEEP;
+	nextKeyBeepMelody = (int16_t *)MELODY_ERROR_BEEP;
+
 	return false;
 }
 
@@ -3084,7 +3426,7 @@ void cssDecrement(uint16_t *tone, uint8_t *index, uint8_t step, CodeplugCSSTypes
 	}
 }
 
-bool uiShowQuickKeysChoices(char *buf, const int bufferLen, const char *menuTitle)
+bool uiQuickKeysShowChoices(char *buf, const int bufferLen, const char *menuTitle)
 {
 	bool settingOption = (menuDataGlobal.menuOptionsSetQuickkey != 0) || (menuDataGlobal.menuOptionsTimeout > 0);
 
@@ -3094,10 +3436,10 @@ bool uiShowQuickKeysChoices(char *buf, const int bufferLen, const char *menuTitl
 		menuDisplayTitle(buf);
 		displayDrawChoice(CHOICES_OKARROWS, true);
 
-		if (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_LEVEL_1)
+		if (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_THRESHOLD)
 		{
 			voicePromptsInit();
-			voicePromptsAppendLanguageString(&currentLanguage->set_quickkey);
+			voicePromptsAppendLanguageString(currentLanguage->set_quickkey);
 			voicePromptsAppendPrompt(PROMPT_0 + (menuDataGlobal.menuOptionsSetQuickkey - '0'));
 		}
 	}
@@ -3109,6 +3451,35 @@ bool uiShowQuickKeysChoices(char *buf, const int bufferLen, const char *menuTitl
 	return settingOption;
 }
 
+bool uiQuickKeysIsStoring(uiEvent_t *ev)
+{
+	return ((ev->events & KEY_EVENT) && (menuDataGlobal.menuOptionsSetQuickkey != 0) && (menuDataGlobal.menuOptionsTimeout == 0));
+}
+
+void uiQuickKeysStore(uiEvent_t *ev, menuStatus_t *status)
+{
+	if (KEYCHECK_SHORTUP(ev->keys, KEY_RED))
+	{
+		menuDataGlobal.menuOptionsSetQuickkey = 0;
+		menuDataGlobal.menuOptionsTimeout = 0;
+		*status |= MENU_STATUS_ERROR;
+	}
+	else if (KEYCHECK_SHORTUP(ev->keys, KEY_GREEN))
+	{
+		saveQuickkeyMenuIndex(menuDataGlobal.menuOptionsSetQuickkey, menuSystemGetCurrentMenuNumber(), menuDataGlobal.currentItemIndex, 0);
+		menuDataGlobal.menuOptionsSetQuickkey = 0;
+	}
+	else if (KEYCHECK_SHORTUP(ev->keys, KEY_LEFT))
+	{
+		saveQuickkeyMenuIndex(menuDataGlobal.menuOptionsSetQuickkey, menuSystemGetCurrentMenuNumber(), menuDataGlobal.currentItemIndex, FUNC_LEFT);
+		menuDataGlobal.menuOptionsSetQuickkey = 0;
+	}
+	else if (KEYCHECK_SHORTUP(ev->keys, KEY_RIGHT))
+	{
+		saveQuickkeyMenuIndex(menuDataGlobal.menuOptionsSetQuickkey, menuSystemGetCurrentMenuNumber(), menuDataGlobal.currentItemIndex, FUNC_RIGHT);
+		menuDataGlobal.menuOptionsSetQuickkey = 0;
+	}
+}
 
 // --- DTMF contact list playback ---
 
@@ -3190,11 +3561,23 @@ static void dtmfProcess(void)
 			if (uiDataGlobal.DTMFContactList.inTone == false)
 			{
 				trxSetDTMF(uiDataGlobal.DTMFContactList.buffer[uiDataGlobal.DTMFContactList.poPtr]);
+#if defined(PLATFORM_GD77) || defined(PLATFORM_GD77S) || defined(PLATFORM_DM1801) || defined(PLATFORM_DM1801A) || defined(PLATFORM_RD5R)
+				trxSelectVoiceChannel(AT1846_VOICE_CHANNEL_DTMF);
+#else
 				soundSetMelody(MELODY_DTMF);
+#endif
 			}
 			else
 			{
+#if defined(PLATFORM_GD77) || defined(PLATFORM_GD77S) || defined(PLATFORM_DM1801) || defined(PLATFORM_DM1801A) || defined(PLATFORM_RD5R)
+				trxSelectVoiceChannel(AT1846_VOICE_CHANNEL_NONE);
+#else
 				trxDTMFoff(false);
+				if(soundMelodyIsPlaying())
+				{
+					soundStopMelody();
+				}
+#endif
 			}
 
 			uiDataGlobal.DTMFContactList.inTone = !uiDataGlobal.DTMFContactList.inTone;
@@ -3205,7 +3588,15 @@ static void dtmfProcess(void)
 			if (uiDataGlobal.DTMFContactList.inTone)
 			{
 				uiDataGlobal.DTMFContactList.inTone = false;
+#if defined(PLATFORM_GD77) || defined(PLATFORM_GD77S) || defined(PLATFORM_DM1801) || defined(PLATFORM_DM1801A) || defined(PLATFORM_RD5R)
+				trxSelectVoiceChannel(AT1846_VOICE_CHANNEL_NONE);
+#else
 				trxDTMFoff(true);
+				if(soundMelodyIsPlaying())
+				{
+					soundStopMelody();
+				}
+#endif
 				ticksTimerStart(&uiDataGlobal.DTMFContactList.nextPeriodTimer, (duration + (uiDataGlobal.DTMFContactList.durations.libreDMR_Tail * 100)));
 				return;
 			}
@@ -3301,7 +3692,7 @@ void dtmfSequenceTick(bool popPreviousMenuOnEnding)
 			if (xmitErrorTimer > 0)
 			{
 				// Wait the voice ends, then count-down 200ms;
-				if (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_LEVEL_1)
+				if (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_THRESHOLD)
 				{
 					if (voicePromptsIsPlaying())
 					{
@@ -3323,13 +3714,13 @@ void dtmfSequenceTick(bool popPreviousMenuOnEnding)
 
 			rxPowerSavingSetState(ECOPHASE_POWERSAVE_INACTIVE);
 
-			if ((codeplugChannelIsFlagSet(currentChannelData, CHANNEL_FLAG_RX_ONLY) == false) && ((nonVolatileSettings.txFreqLimited == BAND_LIMITS_NONE) || trxCheckFrequencyInAmateurBand(currentChannelData->txFreq)))
+			if ((codeplugChannelGetFlag(currentChannelData, CHANNEL_FLAG_RX_ONLY) == 0) && ((nonVolatileSettings.txFreqLimited == BAND_LIMITS_NONE) || trxCheckFrequencyInAmateurBand(currentChannelData->txFreq)))
 			{
 
 				// Start TX DTMF, prepare for ANALOG
 				if (trxGetMode() != RADIO_MODE_ANALOG)
 				{
-					trxSetModeAndBandwidth(RADIO_MODE_ANALOG, codeplugChannelIsFlagSet(currentChannelData, CHANNEL_FLAG_BW_25K));
+					trxSetModeAndBandwidth(RADIO_MODE_ANALOG, (codeplugChannelGetFlag(currentChannelData, CHANNEL_FLAG_BW_25K) != 0));
 				}
 
 				// Make sure Tx freq is updated before transmission is enabled
@@ -3341,6 +3732,12 @@ void dtmfSequenceTick(bool popPreviousMenuOnEnding)
 
 				trxEnableTransmission();
 
+#if defined(PLATFORM_GD77) || defined(PLATFORM_GD77S) || defined(PLATFORM_DM1801) || defined(PLATFORM_DM1801A) || defined(PLATFORM_RD5R)
+				trxSelectVoiceChannel(AT1846_VOICE_CHANNEL_NONE);
+				enableAudioAmp(AUDIO_AMP_MODE_RF);
+				GPIO_PinWrite(GPIO_RX_audio_mux, Pin_RX_audio_mux, 1);
+#endif
+
 				uiDataGlobal.DTMFContactList.inTone = false;
 				ticksTimerStart(&uiDataGlobal.DTMFContactList.nextPeriodTimer, (uiDataGlobal.DTMFContactList.durations.fstDigitDly * 100)); // Sequence preamble
 			}
@@ -3348,7 +3745,7 @@ void dtmfSequenceTick(bool popPreviousMenuOnEnding)
 			{
 				uiEvent_t ev = { .buttons = 0, .keys = NO_KEYCODE, .rotary = 0, .function = 0, .events = NO_EVENT, .hasEvent = false, .time = 0 };
 
-				menuTxScreenHandleTxTermination(&ev, (codeplugChannelIsFlagSet(currentChannelData, CHANNEL_FLAG_RX_ONLY) ? TXSTOP_RX_ONLY : TXSTOP_OUT_OF_BAND));
+				menuTxScreenHandleTxTermination(&ev, ((codeplugChannelGetFlag(currentChannelData, CHANNEL_FLAG_RX_ONLY) != 0) ? TXSTOP_RX_ONLY : TXSTOP_OUT_OF_BAND));
 			}
 		}
 
@@ -3364,9 +3761,14 @@ void dtmfSequenceTick(bool popPreviousMenuOnEnding)
 				trxSetRX();
 				LedWrite(LED_GREEN, 0);
 
+#if defined(PLATFORM_GD77) || defined(PLATFORM_GD77S) || defined(PLATFORM_DM1801) || defined(PLATFORM_DM1801A) || defined(PLATFORM_RD5R)
+				trxSelectVoiceChannel(AT1846_VOICE_CHANNEL_MIC);
+				disableAudioAmp(AUDIO_AMP_MODE_RF);
+#endif
+
 				if (currentChannelData->chMode == RADIO_MODE_ANALOG)
 				{
-					trxSetModeAndBandwidth(currentChannelData->chMode, codeplugChannelIsFlagSet(currentChannelData, CHANNEL_FLAG_BW_25K));
+					trxSetModeAndBandwidth(currentChannelData->chMode, (codeplugChannelGetFlag(currentChannelData, CHANNEL_FLAG_BW_25K) != 0));
 					trxSetTxCSS(currentChannelData->txTone);
 				}
 				else
@@ -3395,14 +3797,29 @@ void dtmfSequenceTick(bool popPreviousMenuOnEnding)
 
 void resetOriginalSettingsData(void)
 {
-	originalNonVolatileSettings.magicNumber = 0xDEADBEEF;
+	static const uint32_t unsetValue = 0xDEADBEEF;
+
+	originalNonVolatileSettings.magicNumber = unsetValue;
+#if !defined(PLATFORM_GD77S)
+	memcpy(((uint32_t *)&aprsSettingsCopy.smart.slowRate), &unsetValue, sizeof(uint32_t));
+#endif
 }
 
 void showErrorMessage(const char *message)
 {
 	displayClearBuf();
+	displayThemeApply(THEME_ITEM_FG_ERROR_NOTIFICATION, THEME_ITEM_BG);
 	displayPrintCentered(((DISPLAY_SIZE_Y - FONT_SIZE_3_HEIGHT) >> 1), message, FONT_SIZE_3);
+	displayThemeResetToDefault();
 	displayRender();
+}
+
+void uiSetUTCDateTimeInSecs(time_t_custom UTCdateTimeInSecs)
+{
+	uiDataGlobal.dateTimeSecs = UTCdateTimeInSecs;
+#if ! defined(PLATFORM_GD77S)
+	daytimeThemeChangeUpdate(true);
+#endif
 }
 
 #ifdef USE_RTC
@@ -3499,60 +3916,59 @@ time_t getEpochTime(RTC_TimeTypeDef *rtcTime, RTC_DateTypeDef *rtcDate)
 
 struct tm *gmtime_r_Custom(const time_t_custom *__restrict tim_p, struct tm *__restrict res)
 {
-  long days, rem;
-  const time_t_custom lcltime = *tim_p;
-  int era, weekday, year;
-  unsigned erayear, yearday, month, day;
-  unsigned long eraday;
+	long days, rem;
+	const time_t_custom lcltime = *tim_p;
+	int era, weekday, year;
+	unsigned erayear, yearday, month, day;
+	unsigned long eraday;
 
-  days = lcltime / SECSPERDAY + EPOCH_ADJUSTMENT_DAYS;
-  rem = lcltime % SECSPERDAY;
-  if (rem < 0)
-    {
-      rem += SECSPERDAY;
-      --days;
-    }
+	days = lcltime / SECSPERDAY + EPOCH_ADJUSTMENT_DAYS;
+	rem = lcltime % SECSPERDAY;
+	if (rem < 0)
+	{
+		rem += SECSPERDAY;
+		--days;
+	}
 
-  /* compute hour, min, and sec */
-  res->tm_hour = (int) (rem / SECSPERHOUR);
-  rem %= SECSPERHOUR;
-  res->tm_min = (int) (rem / SECSPERMIN);
-  res->tm_sec = (int) (rem % SECSPERMIN);
+	/* compute hour, min, and sec */
+	res->tm_hour = (int) (rem / SECSPERHOUR);
+	rem %= SECSPERHOUR;
+	res->tm_min = (int) (rem / SECSPERMIN);
+	res->tm_sec = (int) (rem % SECSPERMIN);
 
-  /* compute day of week */
-  if ((weekday = ((ADJUSTED_EPOCH_WDAY + days) % DAYSPERWEEK)) < 0)
-    weekday += DAYSPERWEEK;
-  res->tm_wday = weekday;
+	/* compute day of week */
+	if ((weekday = ((ADJUSTED_EPOCH_WDAY + days) % DAYSPERWEEK)) < 0)
+		weekday += DAYSPERWEEK;
+	res->tm_wday = weekday;
 
-  /* compute year, month, day & day of year */
-  /* for description of this algorithm see
-   * http://howardhinnant.github.io/date_algorithms.html#civil_from_days */
-  era = (days >= 0 ? days : days - (DAYS_PER_ERA - 1)) / DAYS_PER_ERA;
-  eraday = days - era * DAYS_PER_ERA;	/* [0, 146096] */
-  erayear = (eraday - eraday / (DAYS_PER_4_YEARS - 1) + eraday / DAYS_PER_CENTURY -
-      eraday / (DAYS_PER_ERA - 1)) / 365;	/* [0, 399] */
-  yearday = eraday - (DAYS_PER_YEAR * erayear + erayear / 4 - erayear / 100);	/* [0, 365] */
-  month = (5 * yearday + 2) / 153;	/* [0, 11] */
-  day = yearday - (153 * month + 2) / 5 + 1;	/* [1, 31] */
-  month += month < 10 ? 2 : -10;
-  year = ADJUSTED_EPOCH_YEAR + erayear + era * YEARS_PER_ERA + (month <= 1);
+	/* compute year, month, day & day of year */
+	/* for description of this algorithm see
+	 * http://howardhinnant.github.io/date_algorithms.html#civil_from_days */
+	era = (days >= 0 ? days : days - (DAYS_PER_ERA - 1)) / DAYS_PER_ERA;
+	eraday = days - era * DAYS_PER_ERA;	/* [0, 146096] */
+	erayear = (eraday - eraday / (DAYS_PER_4_YEARS - 1) + eraday / DAYS_PER_CENTURY -
+			eraday / (DAYS_PER_ERA - 1)) / 365;	/* [0, 399] */
+	yearday = eraday - (DAYS_PER_YEAR * erayear + erayear / 4 - erayear / 100);	/* [0, 365] */
+	month = (5 * yearday + 2) / 153;	/* [0, 11] */
+	day = yearday - (153 * month + 2) / 5 + 1;	/* [1, 31] */
+	month += month < 10 ? 2 : -10;
+	year = ADJUSTED_EPOCH_YEAR + erayear + era * YEARS_PER_ERA + (month <= 1);
 
-  res->tm_yday = yearday >= DAYS_PER_YEAR - DAYS_IN_JANUARY - DAYS_IN_FEBRUARY ?
-      yearday - (DAYS_PER_YEAR - DAYS_IN_JANUARY - DAYS_IN_FEBRUARY) :
-      yearday + DAYS_IN_JANUARY + DAYS_IN_FEBRUARY + isleap(erayear);
-  res->tm_year = year - YEAR_BASE;
-  res->tm_mon = month;
-  res->tm_mday = day;
+	res->tm_yday = yearday >= DAYS_PER_YEAR - DAYS_IN_JANUARY - DAYS_IN_FEBRUARY ?
+			yearday - (DAYS_PER_YEAR - DAYS_IN_JANUARY - DAYS_IN_FEBRUARY) :
+			yearday + DAYS_IN_JANUARY + DAYS_IN_FEBRUARY + isleap(erayear);
+	res->tm_year = year - YEAR_BASE;
+	res->tm_mon = month;
+	res->tm_mday = day;
 
-  res->tm_isdst = 0;
+	res->tm_isdst = 0;
 
-  return (res);
+	return (res);
 }
 
 time_t_custom mktime_custom(const struct tm * tb)
 {
-	const int totalDays[] = { -1, 30, 58, 89, 119, 150, 180, 211, 242, 272, 303, 333, 364};
-
+	const int totalDays[] = { -1, 30, 58, 89, 119, 150, 180, 211, 242, 272, 303, 333, 364 };
 	time_t_custom t1;
 	int days;
 
@@ -3570,11 +3986,11 @@ time_t_custom mktime_custom(const struct tm * tb)
     return (time_t_custom) t1;
 }
 
-
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
 time_t_custom getRtcTime_custom(void)
 {
-	RTC_TimeTypeDef rtcTime = {0};
-	RTC_DateTypeDef rtcDate = {0};
+	RTC_TimeTypeDef rtcTime = { 0 };
+	RTC_DateTypeDef rtcDate = { 0 };
 	struct tm RTCDateTime;
 
 	HAL_RTC_GetTime(&hrtc, &rtcTime, RTC_FORMAT_BIN);
@@ -3590,13 +4006,12 @@ time_t_custom getRtcTime_custom(void)
 	RTCDateTime.tm_sec = rtcTime.Seconds;
 
 	return mktime_custom(&RTCDateTime);
-
 }
 
 void setRtc_custom(time_t_custom tc)
 {
-	RTC_TimeTypeDef rtcTime = {0};
-	RTC_DateTypeDef rtcDate = {0};
+	RTC_TimeTypeDef rtcTime = { 0 };
+	RTC_DateTypeDef rtcDate = { 0 };
 	struct tm RTCDateTime;
 
 	gmtime_r_Custom(&tc, &RTCDateTime);
@@ -3613,5 +4028,372 @@ void setRtc_custom(time_t_custom tc)
 
 	HAL_RTC_SetDate(&hrtc, &rtcDate, RTC_FORMAT_BIN);
 	HAL_RTC_SetTime(&hrtc, &rtcTime, RTC_FORMAT_BIN);
-
 }
+#endif
+
+
+#if ! defined(PLATFORM_GD77S)
+ticksTimer_t daytimeThemeTimer;
+/*
+
+SUNRISET.C - computes Sun rise/set times, start/end of twilight, and
+             the length of the day at any date and latitude
+
+Written as DAYLEN.C, 1989-08-16
+
+Modified to SUNRISET.C, 1992-12-01
+
+(c) Paul Schlyter, 1989, 1992
+
+Released to the public domain by Paul Schlyter, December 1992
+
+*/
+/* +++Date last modified: 05-Jul-1997 */
+
+/******************************************************************/
+/* This function reduces any angle to within the first revolution */
+/* by subtracting or adding even multiples of 360.0 until the     */
+/* result is >= 0.0 and < 360.0                                   */
+/******************************************************************/
+#define INV360    (1.0 / 360.0)
+
+/*****************************************/
+/* Reduce angle to within 0..360 degrees */
+/*****************************************/
+static double revolution(double x)
+{
+	return(x - 360.0 * floor(x * INV360));
+}  /* revolution */
+
+/*********************************************/
+/* Reduce angle to within -180..+180 degrees */
+/*********************************************/
+static double rev180(double x)
+{
+	return(x - 360.0 * floor(x * INV360 + 0.5));
+}  /* revolution */
+
+/*******************************************************************/
+/* This function computes GMST0, the Greenwhich Mean Sidereal Time */
+/* at 0h UT (i.e. the sidereal time at the Greenwhich meridian at  */
+/* 0h UT).  GMST is then the sidereal time at Greenwich at any     */
+/* time of the day.  I've generelized GMST0 as well, and define it */
+/* as:  GMST0 = GMST - UT  --  this allows GMST0 to be computed at */
+/* other times than 0h UT as well.  While this sounds somewhat     */
+/* contradictory, it is very practical:  instead of computing      */
+/* GMST like:                                                      */
+/*                                                                 */
+/*  GMST = (GMST0) + UT * (366.2422/365.2422)                      */
+/*                                                                 */
+/* where (GMST0) is the GMST last time UT was 0 hours, one simply  */
+/* computes:                                                       */
+/*                                                                 */
+/*  GMST = GMST0 + UT                                              */
+/*                                                                 */
+/* where GMST0 is the GMST "at 0h UT" but at the current moment!   */
+/* Defined in this way, GMST0 will increase with about 4 min a     */
+/* day.  It also happens that GMST0 (in degrees, 1 hr = 15 degr)   */
+/* is equal to the Sun's mean longitude plus/minus 180 degrees!    */
+/* (if we neglect aberration, which amounts to 20 seconds of arc   */
+/* or 1.33 seconds of time)                                        */
+/*                                                                 */
+/*******************************************************************/
+static double greenwhich_mean_sideral_time_at_0_UT(double d)
+{
+    double sidtim0;
+
+    /* Sidtime at 0h UT = L (Sun's mean longitude) + 180.0 degr  */
+    /* L = M + w, as defined in sunpos().  Since I'm too lazy to */
+    /* add these numbers, I'll let the C compiler do it for me.  */
+    /* Any decent C compiler will add the constants at compile   */
+    /* time, imposing no runtime or code overhead.               */
+    sidtim0 = revolution((180.0 + 356.0470 + 282.9404) + (0.9856002585 + 4.70935E-5) * d);
+    return sidtim0;
+}
+
+/******************************************************/
+/* Computes the Sun's ecliptic longitude and distance */
+/* at an instant given in d, number of days since     */
+/* 2000 Jan 0.0.  The Sun's ecliptic latitude is not  */
+/* computed, since it's always very near 0.           */
+/******************************************************/
+static void sunpos(double d, double *lon, double *r)
+{
+    double M,         /* Mean anomaly of the Sun */
+           w,         /* Mean longitude of perihelion */
+           /* Note: Sun's mean longitude = M + w */
+           e,         /* Eccentricity of Earth's orbit */
+           E,         /* Eccentric anomaly */
+           x, y,      /* x, y coordinates in orbit */
+           v;         /* True anomaly */
+
+    /* Compute mean elements */
+    M = revolution(356.0470 + 0.9856002585 * d);
+    w = 282.9404 + 4.70935E-5 * d;
+    e = 0.016709 - 1.151E-9 * d;
+
+    /* Compute true longitude and radius vector */
+    E = M + e * RADEG * SIND(M) * (1.0 + e * COSD(M));
+    x = COSD(E) - e;
+    y = sqrt(1.0 - e*e) * SIND(E);
+    *r = sqrt(x*x + y*y);              /* Solar distance */
+    v = ATAN2D(y, x);                  /* True anomaly */
+    *lon = v + w;                        /* True solar longitude */
+    if (*lon >= 360.0)
+    {
+        *lon -= 360.0;                   /* Make it 0..360 degrees */
+    }
+}
+
+/******************************************************/
+/* Computes the Sun's equatorial coordinates RA, Decl */
+/* and also its distance, at an instant given in d,   */
+/* the number of days since 2000 Jan 0.0.             */
+/******************************************************/
+static void sun_RA_dec(double d, double *RA, double *dec, double *r)
+{
+	double lon, obl_ecl, x, y, z;
+
+	/* Compute Sun's ecliptical coordinates */
+	sunpos(d, &lon, r);
+
+	/* Compute ecliptic rectangular coordinates (z=0) */
+	x = *r * COSD(lon);
+	y = *r * SIND(lon);
+
+	/* Compute obliquity of ecliptic (inclination of Earth's axis) */
+	obl_ecl = 23.4393 - 3.563E-7 * d;
+
+	/* Convert to equatorial rectangular coordinates - x is unchanged */
+	z = y * SIND(obl_ecl);
+	y = y * COSD(obl_ecl);
+
+	/* Convert to spherical coordinates */
+	*RA = ATAN2D(y, x);
+	*dec = ATAN2D(z, sqrt(x*x + y*y));
+}
+
+/***************************************************************************/
+/* Note: year,month,date = calendar date, 1801-2099 only.             */
+/*       Eastern longitude positive, Western longitude negative       */
+/*       Northern latitude positive, Southern latitude negative       */
+/*       The longitude value IS critical in this function!            */
+/*       altit = the altitude which the Sun should cross              */
+/*               Set to -35/60 degrees for rise/set, -6 degrees       */
+/*               for civil, -12 degrees for nautical and -18          */
+/*               degrees for astronomical twilight.                   */
+/*         upper_limb: non-zero -> upper limb, zero -> center         */
+/*               Set to non-zero (e.g. 1) when computing rise/set     */
+/*               times, and to zero when computing start/end of       */
+/*               twilight.                                            */
+/*        *rise = where to store the rise time                        */
+/*        *set  = where to store the set  time                        */
+/*                Both times are relative to the specified altitude,  */
+/*                and thus this function can be used to comupte       */
+/*                various twilight times, as well as rise/set times   */
+/* Return value:  0 = sun rises/sets this day, times stored at        */
+/*                    *trise and *tset.                               */
+/*               +1 = sun above the specified "horizon" 24 hours.     */
+/*                    *trise set to time when the sun is at south,    */
+/*                    minus 12 hours while *tset is set to the south  */
+/*                    time plus 12 hours. "Day" length = 24 hours     */
+/*               -1 = sun is below the specified "horizon" 24 hours   */
+/*                    "Day" length = 0 hours, *trise and *tset are    */
+/*                    both set to the time when the sun is at south.  */
+/*                                                                    */
+/**********************************************************************/
+int sunriset(int year, int month, int day, double lon, double lat, double altit, int upper_limb, double *trise, double *tset)
+{
+	double  d,  /* Days since 2000 Jan 0.0 (negative before) */
+	sr,         /* Solar distance, astronomical units */
+	sRA,        /* Sun's Right Ascension */
+	sdec,       /* Sun's declination */
+	sradius,    /* Sun's apparent radius */
+	t,          /* Diurnal arc */
+	tsouth,     /* Time when Sun is at south */
+	sidtime;    /* Local sidereal time */
+
+	int rc = 0; /* Return cde from function - usually 0 */
+
+	/* Compute d of 12h local mean solar time */
+	d = DAYS_SINCE_2000_JAN_0(year, month, day) + 0.5 - lon / 360.0;
+
+	/* Compute local sideral time of this moment */
+	//Greenwhich Mean Sidereal Time at 0h UT
+	sidtime = revolution(greenwhich_mean_sideral_time_at_0_UT(d) + 180.0 + lon);
+
+	/* Compute Sun's RA + Decl at this moment */
+	sun_RA_dec(d, &sRA, &sdec, &sr);
+
+	/* Compute time when Sun is at south - in hours UT */
+	tsouth = 12.0 - rev180(sidtime - sRA)/15.0;
+
+	/* Compute the Sun's apparent radius, degrees */
+	sradius = 0.2666 / sr;
+
+	/* Do correction to upper limb, if necessary */
+	if (upper_limb)
+	{
+		altit -= sradius;
+	}
+
+	/* Compute the diurnal arc that the Sun traverses to reach */
+	/* the specified altitide altit: */
+	{
+		double cost;
+		cost = (SIND(altit) - SIND(lat) * SIND(sdec)) / (COSD(lat) * COSD(sdec));
+		if (cost >= 1.0)
+		{
+			rc = -1; t = 0.0;       /* Sun always below altit */
+		}
+		else if (cost <= -1.0)
+		{
+			rc = +1; t = 12.0;      /* Sun always above altit */
+		}
+		else
+		{
+			t = ACOSD(cost)/15.0;   /* The diurnal arc, hours */
+		}
+	}
+
+	/* Store rise and set times - in hours UT */
+	*trise = tsouth - t;
+	*tset  = tsouth + t;
+
+	return rc;
+}  /* __sunriset__ */
+
+void daytimeThemeChangeUpdate(bool startup)
+{
+	if ((nonVolatileSettings.locationLat != SETTINGS_UNITIALISED_LOCATION_LAT) && settingsIsOptionBitSet(BIT_AUTO_NIGHT))
+	{
+		ticksTimerStart(&daytimeThemeTimer, (startup ? 2000 : DAYTIME_THEME_TIMER_INTERVAL));
+		return;
+	}
+
+	ticksTimerReset(&daytimeThemeTimer);
+}
+
+void daytimeThemeApply(DayTime_t daytime)
+{
+	uiEvent_t e = { .buttons = 0, .keys = NO_KEYCODE, .rotary = 0, .function = FUNC_REDRAW, .events = FUNCTION_EVENT, .hasEvent = true, .time = ticksGetMillis() };
+
+	if (uiDataGlobal.daytimeOverridden == UNDEFINED)
+	{
+		uiDataGlobal.daytime = daytime;
+	}
+
+#if defined(HAS_COLOURS)
+	displayThemeResetToDefault(); // Apply new theme.
+#else
+	// Need to perform a full reset on the display to change back to non-inverted
+	displayInit(((daytime == NIGHT) ^ settingsIsOptionBitSet(BIT_INVERSE_VIDEO)));
+#endif
+	uiNotificationShow(NOTIFICATION_TYPE_MESSAGE, NOTIFICATION_ID_MESSAGE, 1000, ((daytime == DAY) ? currentLanguage->daytime_theme_day : currentLanguage->daytime_theme_night), true);
+	menuSystemCallCurrentMenuTick(&e); // redraw the current screen.
+
+	displayLightTrigger(true);
+
+	// Don't interrupt VP or melody for this.
+	if ((voicePromptsIsPlaying() == false) && (soundMelodyIsPlaying() == false))
+	{
+		voicePromptsInit();
+		voicePromptsAppendLanguageString(((daytime == DAY) ? currentLanguage->daytime_theme_day : currentLanguage->daytime_theme_night));
+		voicePromptsPlay();
+	}
+}
+
+void daytimeThemeTick(void)
+{
+	struct tm gmt;
+	time_t_custom now = uiDataGlobal.dateTimeSecs;
+
+	if (gmtime_r_Custom(&now, &gmt))
+	{
+		double trise, tset; // offsets (+/-, in hours) from midnight UTC
+		bool afterSunrise = false;
+		bool afterSunset = false;
+
+		if (sunriset((gmt.tm_year + 1900), (gmt.tm_mon + 1), gmt.tm_mday,
+				latLongFixed32ToDouble(nonVolatileSettings.locationLon), latLongFixed32ToDouble(nonVolatileSettings.locationLat), (-35.0 / 60.0), 1, &trise, &tset) == 0)
+		{
+			struct tm gmtOfMidnightToday = { .tm_year = gmt.tm_year, .tm_mon = gmt.tm_mon, .tm_mday = gmt.tm_mday, .tm_hour = 0, .tm_min = 0, .tm_sec = 0 };
+			time_t_custom timeMidnightToday = mktime_custom(&gmtOfMidnightToday);
+			time_t_custom timeRise = timeMidnightToday + (3600.0 * trise);
+			time_t_custom timeSet = timeMidnightToday + (3600.0 * tset);
+
+			// We past the current computed sunset time, then add 24 hours
+			// to get the next day Sunrise and Sunset times (approx).
+			if (now > timeSet)
+			{
+				timeRise += 86400;
+				timeSet += 86400;
+			}
+
+			if ((now >= timeRise) || (now < timeSet))
+			{
+				afterSunrise = true;
+			}
+
+			if ((now >= timeSet) || (now < timeRise))
+			{
+				afterSunset = true;
+			}
+
+			if (afterSunrise && (afterSunset == false) && (uiDataGlobal.daytime == NIGHT) && (uiDataGlobal.daytimeOverridden == UNDEFINED))
+			{
+				daytimeThemeApply(DAY);
+			}
+			else if (afterSunset && (uiDataGlobal.daytime == DAY) && (uiDataGlobal.daytimeOverridden == UNDEFINED))
+			{
+				daytimeThemeApply(NIGHT);
+			}
+		}
+	}
+}
+
+void uiChannelModeOrVFOModeThemeDaytimeChange(bool toggle, bool isChannelMode)
+{
+	if (toggle)
+	{
+		if (uiDataGlobal.daytimeOverridden == UNDEFINED)
+		{
+			uiDataGlobal.daytimeOverridden = ((uiDataGlobal.daytime == DAY) ? NIGHT : DAY);
+		}
+		else
+		{
+			uiDataGlobal.daytimeOverridden = ((uiDataGlobal.daytimeOverridden == DAY) ? NIGHT : DAY);
+		}
+
+		if (settingsIsOptionBitSet(BIT_AUTO_NIGHT) == false)
+		{
+			settingsSetOptionBit(BIT_AUTO_NIGHT_OVERRIDE, true);
+			settingsSetOptionBit(BIT_AUTO_NIGHT_DAYTIME, (bool)uiDataGlobal.daytimeOverridden);
+		}
+	}
+	else
+	{
+		uiDataGlobal.daytimeOverridden = UNDEFINED;
+
+		if (settingsIsOptionBitSet(BIT_AUTO_NIGHT) == false)
+		{
+			settingsSetOptionBit(BIT_AUTO_NIGHT_OVERRIDE, false);
+		}
+	}
+
+	daytimeThemeApply(toggle ? uiDataGlobal.daytimeOverridden : uiDataGlobal.daytime);
+	uiDataGlobal.displayChannelSettings = false;
+	uiDataGlobal.displayQSOStatePrev = QSO_DISPLAY_DEFAULT_SCREEN;
+	uiDataGlobal.displayQSOState = QSO_DISPLAY_DEFAULT_SCREEN;
+
+	if (isChannelMode)
+	{
+		uiChannelModeUpdateScreen(0);
+	}
+	else
+	{
+		uiVFOModeUpdateScreen(0);
+	}
+}
+
+#endif

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -33,9 +33,9 @@
 #define CHAR_CONSTANTS_ONLY // Needed to get FONT_CHAR_* glyph offsets
 #if defined(PLATFORM_MD9600)
 	#if defined(LANGUAGE_BUILD_JAPANESE)
-		#include <hardware/HX8353E_charset_JA.h>
+		#include "hardware/ST7567_charset_JA.h"
 	#else
-		#include <hardware/HX8353E_charset.h>
+		#include "hardware/ST7567_charset.h"
 	#endif
 #elif (defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017))
 	#if defined(LANGUAGE_BUILD_JAPANESE)
@@ -50,6 +50,7 @@
 		#include "hardware/UC1701_charset.h"
 	#endif
 #endif
+
 static void updateScreen(bool isFirstRun);
 static void handleEvent(uiEvent_t *ev);
 static menuStatus_t menuLanguageExitCode = MENU_STATUS_SUCCESS;
@@ -205,12 +206,12 @@ menuStatus_t menuLanguage(uiEvent_t *ev, bool isFirstRun)
 {
 	if (isFirstRun)
 	{
-		menuDataGlobal.numItems = NUM_LANGUAGES;
+		menuDataGlobal.numItems = languagesGetCount();
 
 		voicePromptsInit();
 		voicePromptsAppendPrompt(PROMPT_SILENCE);
-		voicePromptsAppendLanguageString(&currentLanguage->language);
-		voicePromptsAppendLanguageString(&currentLanguage->menu);
+		voicePromptsAppendLanguageString(currentLanguage->language);
+		voicePromptsAppendLanguageString(currentLanguage->menu);
 		voicePromptsAppendPrompt(PROMPT_SILENCE);
 
 		updateScreen(true);
@@ -237,7 +238,7 @@ static void updateScreen(bool isFirstRun)
 
 	for(int i = 1 - ((MENU_MAX_DISPLAYED_ENTRIES - 1) / 2) - 1; i <= (MENU_MAX_DISPLAYED_ENTRIES - ((MENU_MAX_DISPLAYED_ENTRIES - 1) / 2) - 1); i++)
 	{
-		mNum = menuGetMenuOffset(NUM_LANGUAGES, i);
+		mNum = menuGetMenuOffset(languagesGetCount(), i);
 		if (mNum == MENU_OFFSET_BEFORE_FIRST_ENTRY)
 		{
 			continue;
@@ -247,17 +248,17 @@ static void updateScreen(bool isFirstRun)
 			break;
 		}
 
-		if (mNum < NUM_LANGUAGES)
+		if (mNum < languagesGetCount())
 		{
-			menuDisplayEntry(i, mNum, (char *)languages[LANGUAGE_DISPLAY_ORDER[mNum]].LANGUAGE_NAME);
+			menuDisplayEntry(i, mNum, (char *)languages[mNum].LANGUAGE_NAME, -1, THEME_ITEM_FG_MENU_ITEM, THEME_ITEM_FG_OPTIONS_VALUE, THEME_ITEM_BG);
 
 			if (i == 0)
 			{
-				if (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_LEVEL_1)
+				if (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_THRESHOLD)
 				{
 					char buffer[17];
 
-					snprintf(buffer, 17, "%s", (char *)languages[LANGUAGE_DISPLAY_ORDER[mNum]].LANGUAGE_NAME);
+					snprintf(buffer, 17, "%s", (char *)languages[mNum].LANGUAGE_NAME);
 
 					clearNonLatinChar((uint8_t *)&buffer[0]);
 
@@ -285,13 +286,18 @@ static void handleEvent(uiEvent_t *ev)
 			return;
 		}
 	}
+
 	if (ev->events & FUNCTION_EVENT)
 	{
-		if ((QUICKKEY_TYPE(ev->function) == QUICKKEY_MENU) && (QUICKKEY_ENTRYID(ev->function) < NUM_LANGUAGES))
+		if (ev->function == FUNC_REDRAW)
+		{
+			updateScreen(false);
+		}
+		else if ((QUICKKEY_TYPE(ev->function) == QUICKKEY_MENU) && (QUICKKEY_ENTRYID(ev->function) < languagesGetCount()))
 		{
 			menuDataGlobal.currentItemIndex = QUICKKEY_ENTRYID(ev->function);
-			settingsSet(nonVolatileSettings.languageIndex, menuDataGlobal.currentItemIndex);
-			currentLanguage = &languages[menuDataGlobal.currentItemIndex];
+			settingsSetOptionBit(BIT_SECONDARY_LANGUAGE, ((menuDataGlobal.currentItemIndex > 0) ? true : false));
+			currentLanguage = &languages[(settingsIsOptionBitSet(BIT_SECONDARY_LANGUAGE) ? 1 : 0)];
 			settingsSaveIfNeeded(true);
 			menuSystemLanguageHasChanged();
 			menuSystemPopAllAndDisplayRootMenu();
@@ -301,20 +307,20 @@ static void handleEvent(uiEvent_t *ev)
 
 	if (KEYCHECK_PRESS(ev->keys, KEY_DOWN) && (menuDataGlobal.numItems != 0))
 	{
-		menuSystemMenuIncrement(&menuDataGlobal.currentItemIndex, NUM_LANGUAGES);
+		menuSystemMenuIncrement(&menuDataGlobal.currentItemIndex, languagesGetCount());
 		updateScreen(false);
 		menuLanguageExitCode |= MENU_STATUS_LIST_TYPE;
 	}
 	else if (KEYCHECK_PRESS(ev->keys, KEY_UP))
 	{
-		menuSystemMenuDecrement(&menuDataGlobal.currentItemIndex, NUM_LANGUAGES);
+		menuSystemMenuDecrement(&menuDataGlobal.currentItemIndex, languagesGetCount());
 		updateScreen(false);
 		menuLanguageExitCode |= MENU_STATUS_LIST_TYPE;
 	}
 	else if (KEYCHECK_SHORTUP(ev->keys, KEY_GREEN))
 	{
-		settingsSet(nonVolatileSettings.languageIndex, (uint8_t) LANGUAGE_DISPLAY_ORDER[menuDataGlobal.currentItemIndex]);
-		currentLanguage = &languages[LANGUAGE_DISPLAY_ORDER[menuDataGlobal.currentItemIndex]];
+		settingsSetOptionBit(BIT_SECONDARY_LANGUAGE, ((menuDataGlobal.currentItemIndex > 0) ? true : false));
+		currentLanguage = &languages[(settingsIsOptionBitSet(BIT_SECONDARY_LANGUAGE) ? 1 : 0)];
 		settingsSaveIfNeeded(true);
 		menuSystemLanguageHasChanged();
 		menuSystemPopAllAndDisplayRootMenu();

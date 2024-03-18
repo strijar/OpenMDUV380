@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -36,7 +36,7 @@
 #define DT_TERMINATOR_WITH_LC 	0x02U
 #define DMR_SYNC_DATA           0x40U
 
-#define HOTSPOT_VERSION_STRING "OpenGD77_HS v0.1.15"
+#define HOTSPOT_VERSION_STRING "OpenGD77_HS v0.1.17"
 
 typedef struct
 {

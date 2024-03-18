@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -32,7 +32,7 @@
 #include "user_interface/uiLocalisation.h"
 #include "functions/ticks.h"
 
-static void updateScreen(void);
+static void updateScreen(bool isFirstRun);
 static void handleEvent(uiEvent_t *ev);
 static void exitSplashScreen(void);
 
@@ -88,17 +88,18 @@ menuStatus_t uiSplashScreen(uiEvent_t *ev, bool isFirstRun)
 		{
 			if (codeplugGetOpenGD77CustomData(CODEPLUG_CUSTOM_DATA_TYPE_BEEP, melodyBuf))
 			{
-				if ((melodyBuf[0] == 0) && (melodyBuf[1] == 0))
+				if ((melodyBuf[0] == 0) && (melodyBuf[1] == 0)) // Zero length boot melody
 				{
 					char line1[(SCREEN_LINE_BUFFER_SIZE * 2) + 1];
 					char line2[SCREEN_LINE_BUFFER_SIZE];
 					uint8_t bootScreenType;
 
-					exitSplashScreen();
-
 					// Load TA text even if Splash screen is not shown
 					codeplugGetBootScreenData(line1, line2, &bootScreenType);
+					strcat(line1, line2);
 					HRC6000SetTalkerAlias(line1);
+
+					exitSplashScreen();
 
 					return MENU_STATUS_SUCCESS;
 				}
@@ -114,7 +115,7 @@ menuStatus_t uiSplashScreen(uiEvent_t *ev, bool isFirstRun)
 			}
 		}
 
-		updateScreen();
+		updateScreen(isFirstRun);
 	}
 	else
 	{
@@ -124,7 +125,7 @@ menuStatus_t uiSplashScreen(uiEvent_t *ev, bool isFirstRun)
 	return MENU_STATUS_SUCCESS;
 }
 
-static void updateScreen(void)
+static void updateScreen(bool isFirstRun)
 {
 	char line1[(SCREEN_LINE_BUFFER_SIZE * 2) + 1];
 	char line2[SCREEN_LINE_BUFFER_SIZE];
@@ -133,12 +134,15 @@ static void updateScreen(void)
 
 	codeplugGetBootScreenData(line1, line2, &bootScreenType);
 
+	displayThemeApply(THEME_ITEM_FG_SPLASHSCREEN, THEME_ITEM_BG_SPLASHSCREEN);
+
 	if (bootScreenType == 0)
 	{
 #if defined (PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
 		uint8_t *dataBuf = (uint8_t *)displayGetScreenBuffer();
 
 		displayClearBuf();
+
 		customDataHasImage = codeplugGetOpenGD77CustomData(CODEPLUG_CUSTOM_DATA_TYPE_IMAGE, dataBuf);
 		if (customDataHasImage)
 		{
@@ -147,47 +151,52 @@ static void updateScreen(void)
 #else
 		customDataHasImage = codeplugGetOpenGD77CustomData(CODEPLUG_CUSTOM_DATA_TYPE_IMAGE, (uint8_t *)displayGetScreenBuffer());
 #endif
-
 	}
 
 	if (!customDataHasImage)
 	{
 		displayClearBuf();
 
-#if defined(PLATFORM_RD5R)
-		displayPrintCentered(0, "OpenRD5R", FONT_SIZE_3);
-#elif defined(PLATFORM_GD77)
 		displayPrintCentered(8, "OpenGD77", FONT_SIZE_3);
-#elif defined(PLATFORM_DM1801)
-		displayPrintCentered(8, "OpenDM1801", FONT_SIZE_3);
-#elif defined(PLATFORM_DM1801A)
-		displayPrintCentered(8, "OpenDM1801A", FONT_SIZE_3);
-#elif defined(PLATFORM_MD9600)
-		displayPrintCentered(8, "OpenMD9600", FONT_SIZE_3);
-#elif defined(PLATFORM_MDUV380)
-		displayPrintCentered(8, "OpenMDUV380", FONT_SIZE_3);
-#elif defined(PLATFORM_MD380)
-		displayPrintCentered(8, "OpenMD380", FONT_SIZE_3);
-#elif defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)		
-	displayPrintCentered(8, "OpenDM1701", FONT_SIZE_3);
-#endif
-
 		displayPrintCentered((DISPLAY_SIZE_Y / 4) * 2, line1, FONT_SIZE_3);
 		displayPrintCentered((DISPLAY_SIZE_Y / 4) * 3, line2, FONT_SIZE_3);
 	}
 
-	strcat(line1, line2);
-	HRC6000SetTalkerAlias(line1);
+	displayThemeResetToDefault();
+
+	if (isFirstRun)
+	{
+		// Set Talker alias now, concatenate the two lines.
+		strcat(line1, line2);
+		HRC6000SetTalkerAlias(line1);
+	}
 
 	displayRender();
 }
 
 static void handleEvent(uiEvent_t *ev)
 {
+	if ((ev->events & FUNCTION_EVENT) && (ev->function == FUNC_REDRAW))
+	{
+		updateScreen(false);
+		return;
+	}
+
 	if (nonVolatileSettings.audioPromptMode != AUDIO_PROMPT_MODE_SILENT)
 	{
 		if ((melody_play == NULL) || (ev->events != NO_EVENT))
 		{
+#if ! defined(PLATFORM_MD9600)
+			uint8_t filteredSK1Button = (ev->buttons & ~(BUTTON_SK1_SHORT_UP | BUTTON_SK1_LONG_DOWN | BUTTON_SK1_EXTRA_LONG_DOWN));
+
+			// If Safe Pwr-On is enabled, ignore SK1 button events
+			if ((melody_play != NULL) &&
+					((ev->events == BUTTON_EVENT) && settingsIsOptionBitSet(BIT_SAFE_POWER_ON) &&
+							(filteredSK1Button == BUTTON_SK1 || filteredSK1Button == 0)))
+			{
+				return;
+			}
+#endif
 			// Any button or key event, stop the melody then leave
 			if (melody_play != NULL)
 			{
@@ -232,10 +241,10 @@ static bool validatePinCodeCallback(void)
 
 static void pincodeAudioAlert(void)
 {
-	if (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_LEVEL_1)
+	if (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_THRESHOLD)
 	{
 		voicePromptsInit();
-		voicePromptsAppendLanguageString(&currentLanguage->pin_code);
+		voicePromptsAppendLanguageString(currentLanguage->pin_code);
 		voicePromptsPlay();
 	}
 	else

@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2019      Kai Ludwig, DG4KLU
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions
@@ -36,6 +36,14 @@ const int TEMPERATURE_DECIMAL_RESOLUTION = 1000000;
 const int CUTOFF_VOLTAGE_UPPER_HYST = 64;
 const int CUTOFF_VOLTAGE_LOWER_HYST = 62;
 const int BATTERY_MAX_VOLTAGE = 82;
+const int POWEROFF_VOLTAGE_THRESHOLD = 55;
+
+#if defined(PLATFORM_MDUV380)
+#define BATTERY_ADC_COEFF 40.3f
+#else
+#define BATTERY_ADC_COEFF 37.5f
+#endif
+
 
 //lookup table to convert linear Voltage values between 1 and 255 to dBs relative to 1 with a resolution of 0.2dB.  Values in tabble are dbs * 5 to use all of the available byte range.
 //calculated using dBs= (20 * Log10(index)) * 5
@@ -61,7 +69,7 @@ const uint8_t PointTwodBs[] =
 
 volatile uint16_t adcVal[NUM_ADC_CHANNELS];
 static const int AVERAGE_BATTERY_VOLTAGE_SAMPLE_WINDOW = 1000.0f;
-static const int BATTERY_VOLTAGE_STABILISATION_TIME = 1500;// time in PIT ticks for the battery voltage from the ADC to stabilise
+static int16_t averagedVolume = 0; // value is (* 16) the real value.
 
 void adcStartDMA(void)
 {
@@ -73,21 +81,24 @@ void adcStartDMA(void)
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 {
-#if defined(PLATFORM_MDUV380)
-#define BATTERY_ADC_COEFF 41.4
-#else
-#define BATTERY_ADC_COEFF 37.5
-#endif
-
+	potLevel = adcVal[0];
 	batteryVoltage = ((int)adcVal[1] / BATTERY_ADC_COEFF) + ((nonVolatileSettings.batteryCalibration & 0x0F) - 5);
+	micLevel = adcVal[2];
+	temperatureLevel = adcVal[3];
 
-	if (ticksGetMillis() < BATTERY_VOLTAGE_STABILISATION_TIME)
+	// Handle switching the power off, using the rotary control.
+	if (batteryVoltage > POWEROFF_VOLTAGE_THRESHOLD)
 	{
-	  averageBatteryVoltage = batteryVoltage;
+		lastValidBatteryVoltage = batteryVoltage;
+	}
+
+	if (ticksGetMillis() < (BATTERY_VOLTAGE_STABILISATION_TIME + resumeTicks))
+	{
+		averageBatteryVoltage = batteryVoltage;
 	}
 	else
 	{
-	  averageBatteryVoltage = (averageBatteryVoltage * (AVERAGE_BATTERY_VOLTAGE_SAMPLE_WINDOW - 1) + batteryVoltage) / AVERAGE_BATTERY_VOLTAGE_SAMPLE_WINDOW;
+		averageBatteryVoltage = (averageBatteryVoltage * (AVERAGE_BATTERY_VOLTAGE_SAMPLE_WINDOW - 1) + batteryVoltage) / AVERAGE_BATTERY_VOLTAGE_SAMPLE_WINDOW;
 	}
 }
 
@@ -98,14 +109,7 @@ int adcGetBatteryVoltage(void)
 
 int adcGetVOX(void)
 {
-	if(adcVal[2] > 255)
-	{
-		return 255;
-	}
-	else
-	{
-		return PointTwodBs[adcVal[2]];
-	}
+	return ((micLevel > 255) ? 255 : PointTwodBs[micLevel]);
 }
 
 int getTemperature(void)
@@ -113,36 +117,58 @@ int getTemperature(void)
 	const int tV25 = 943;					// ADC Value at 25 degrees from data sheet (0.76V with 12 Bit ADC ref=3V3)
     const int tslope = 31;	                //Slope from datasheet ADC Counts *10
 
-    return (((adcVal[3] - tV25) * 100) / tslope) + 250 + (nonVolatileSettings.temperatureCalibration * 5);
+    return (((temperatureLevel - tV25) * 100) / tslope) + 250 + (nonVolatileSettings.temperatureCalibration * 5);
 }
 
-int getVolumeControl(void)
+#if defined(PLATFORM_DM1701)
+#define MIN_VOL_ADC_HIGH 37
+#define MIN_VOL_ADC_LOW 32 // 29
+#else
+#define MIN_VOL_ADC_HIGH 30
+#define MIN_VOL_ADC_LOW 25 // 22
+#endif
+static int8_t getVolumeControlRaw(void)
 {
-	// volume control is adc[0]. Max value seems to be 2070 min value seems to be 22
-    // Pot is Log law which needs converting back to linear law
+	// volume control is adc[0]. Max value seems to be:
+	//   - MD-UV380:  2070 min value seems to be 22
+	//   - DM-1701:  2071 min value seems to be 29
+	// Pot is Log law which needs converting back to linear law
 	// Log Law is approximated by two straight lines with breakpoint at 300
 
-	int vol = adcVal[0];
+	int vol = potLevel;
 	int pos;
 	static bool minvol;
 
-	if(vol<310)
+	if (vol < 310)
 	{
-		pos= (vol - 30) / 9;			//convert to 0-31
+		pos = (vol - 30) / 9;			//convert to 0-31
 	}
 	else
 	{
-		pos = 31 + ((vol - 310)/56);   //convert to 31-62
+		pos = 31 + ((vol - 310) / 56);   //convert to 31-62
 	}
 
-	if(minvol ? (vol < 30):(vol < 25))
+	if (minvol ? (vol < MIN_VOL_ADC_HIGH) : (vol < MIN_VOL_ADC_LOW))
 	{
 		minvol = true;
 		return -99;   			//-99 = volume min
 	}
-	else
+
+	minvol = false;
+	return (int8_t)CLAMP(pos - 31, -31, 31);
+}
+
+int8_t getVolumeControl(void)
+{
+	int8_t v = getVolumeControlRaw();
+
+	if ((v == -99) || ((v != -99) && (averagedVolume == (-99 << 4))))
 	{
-		minvol = false;
-		return CLAMP(pos-31,-31,31);
+		averagedVolume = (v << 4);
+		return v;
 	}
+
+	averagedVolume = (v + averagedVolume - ((averagedVolume - 8) >> 4));
+
+	return (int8_t)CLAMP((averagedVolume >> 4), -31, 31);
 }

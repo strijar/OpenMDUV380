@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2019      Kai Ludwig, DG4KLU
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -44,11 +44,21 @@ enum ALLOW_PRIVATE_CALLS_MODE { ALLOW_PRIVATE_CALLS_OFF = 0, ALLOW_PRIVATE_CALLS
 enum BAND_LIMITS_ENUM { BAND_LIMITS_NONE = 0 , BAND_LIMITS_ON_LEGACY_DEFAULT, BAND_LIMITS_FROM_CPS };
 enum INFO_ON_SCREEN { INFO_ON_SCREEN_OFF = 0x00, INFO_ON_SCREEN_TS = 0x01, INFO_ON_SCREEN_PWR = 0x02, INFO_ON_SCREEN_BOTH = 0x03 };
 
-enum GPS_MODE { GPS_NOT_DETECTED, GPS_MODE_OFF, GPS_MODE_ON, GPS_MODE_ON_NMEA, NUM_GPS_MODES};
+#if defined(HAS_GPS)
+typedef enum
+{
+	GPS_NOT_DETECTED,
+	GPS_MODE_OFF,
+	GPS_MODE_ON,
+	GPS_MODE_ON_NMEA,
+#if defined(LOG_GPS_DATA)
+	GPS_MODE_ON_LOG,
+#endif
+	NUM_GPS_MODES,
+} gpsMode_t;
+#endif
 
 #define ECO_LEVEL_MAX          5
-
-
 
 #define SETTINGS_TIMEZONE_UTC 64
 extern const uint32_t SETTINGS_UNITIALISED_LOCATION_LAT;
@@ -61,14 +71,22 @@ extern const uint32_t SETTINGS_UNITIALISED_LOCATION_LAT;
 #define BEEP_RX_TALKER           0x08
 #define BEEP_RX_TALKER_BEGIN     0x10
 
-#define SETTINGS_DMR_MIC_ZERO	5U
-#define SETTINGS_FM_MIC_ZERO	4U
+#if defined(PLATFORM_GD77) || defined(PLATFORM_GD77S) || defined(PLATFORM_DM1801) || defined(PLATFORM_DM1801A) || defined(PLATFORM_RD5R)
+#define SETTINGS_DMR_MIC_ZERO	11U
+#define SETTINGS_FM_MIC_ZERO	16U
+#elif defined(PLATFORM_MD9600)
+#define SETTINGS_DMR_MIC_ZERO	 8U
+#define SETTINGS_FM_MIC_ZERO	 6U
+#else
+#define SETTINGS_DMR_MIC_ZERO	 5U
+#define SETTINGS_FM_MIC_ZERO	 4U
+#endif
 
-// Lat / Long to 5 decimal places
-#define LOCATION_DECIMAL_PART_MULIPLIER 100000
+#define LOCATION_DECIMAL_PART_MULIPLIER_FIXED_32 100000
+#define LOCATION_DECIMAL_PART_MULIPLIER_FIXED_24 10000
 
 extern int settingsCurrentChannelNumber;
-extern int *nextKeyBeepMelody;
+extern int16_t *nextKeyBeepMelody;
 extern struct_codeplugChannel_t settingsVFOChannel[2];
 extern struct_codeplugGeneralSettings_t settingsCodeplugGeneralSettings;
 
@@ -82,7 +100,9 @@ typedef enum
 	BIT_TX_RX_FREQ_LOCK             = (1 << 5),
 	BIT_ALL_LEDS_DISABLED           = (1 << 6),
 	BIT_SCAN_ON_BOOT_ENABLED        = (1 << 7),
+#if !defined(STM32F405xx)
 	BIT_POWEROFF_SUSPEND            = (1 << 8),
+#endif
 	BIT_SATELLITE_MANUAL_AUTO       = (1 << 9),
 	BIT_UNUSED_1			       	= (1 << 10),
 #if defined(PLATFORM_MD9600)
@@ -90,15 +110,27 @@ typedef enum
 #endif
 	BIT_DMR_CRC_IGNORED             = (1 << 12),
 	BIT_APO_WITH_RF                 = (1 << 13),
-	BIT_SAFE_POWER_ON               = (1 << 14)
+	BIT_SAFE_POWER_ON               = (1 << 14),
+	BIT_AUTO_NIGHT                  = (1 << 15),
+	BIT_AUTO_NIGHT_OVERRIDE         = (1 << 16),
+	BIT_AUTO_NIGHT_DAYTIME          = (1 << 17),
+#if defined(HAS_SOFT_VOLUME)
+	BIT_VISUAL_VOLUME               = (1 << 18),
+#endif
+	BIT_SECONDARY_LANGUAGE          = (1 << 19),
+	BIT_SORT_CHANNEL_DISTANCE       = (1 << 20),
+	BIT_DISPLAY_CHANNEL_DISTANCE    = (1 << 21),
 } bitfieldOptions_t;
 
-#define RADIO_BANDS_TOTAL_NUM_MDUV380 3
-
+#if defined(PLATFORM_MD9600)
+#define RADIO_BANDS_TOTAL_NUM_SQUELCH 2
+#else
+#define RADIO_BANDS_TOTAL_NUM_SQUELCH 3
+#endif
 
 typedef struct
 {
-	int32_t 		magicNumber;
+	uint32_t 		magicNumber;
 	// The following settings won't be reset default from magicNumber 0x4761
 	uint32_t		locationLat;// fixed point encoded as 1 sign bit, 8 bits integer, 23 bits as decimal
 	uint32_t		locationLon;// fixed point encoded as 1 sign bit, 8 bits integer, 23 bits as decimal
@@ -110,13 +142,22 @@ typedef struct
 	uint32_t		vfoScanLow[2]; // low frequency for VFO Scanning
 	uint32_t		vfoScanHigh[2]; // High frequency for VFO Scanning
 	uint32_t		bitfieldOptions; // see bitfieldOptions_t
-	int16_t			currentChannelIndexInZone;
-	int16_t			currentChannelIndexInAllZone;
+	uint32_t		aprsBeaconingSettingsPart1[2];
+#if defined(LOG_GPS_DATA)
+	uint32_t		gpsLogMemOffset; // Current offset from the NMEA logging flash memory address start.
+#endif
 	int16_t			currentIndexInTRxGroupList[3]; // Current Channel, VFO A and VFO B
 	int16_t			currentZone;
-	uint16_t		keypadTimerLong;
-	uint16_t		keypadTimerRepeat;
 	uint16_t		userPower;
+	uint16_t		tsManualOverride;
+#if defined(PLATFORM_RD5R)
+	int16_t			currentChannelIndexInZone;
+	int16_t			currentChannelIndexInAllZone;
+#else // These two has to be used on any platform but RD5R
+	int16_t			UNUSED_1;
+	int16_t			UNUSED_2;
+#endif
+	uint16_t		aprsBeaconingSettingsPart2;
 	uint8_t			txPowerLevel;
 	uint8_t			txTimeoutBeepX5Secs;
 	uint8_t			beepVolumeDivider;
@@ -125,23 +166,21 @@ typedef struct
 	uint8_t			backlightMode; // see BACKLIGHT_MODE enum
 	uint8_t			backLightTimeout; // 0 = never timeout. 1 - 255 time in seconds
 	int8_t			displayContrast;
-	int8_t			displayBacklightPercentage;
+	int8_t			displayBacklightPercentage[NIGHT + 1];
 	int8_t			displayBacklightPercentageOff; // backlight level when "off"
 	uint8_t			initialMenuNumber;
 	uint8_t			extendedInfosOnScreen;
 	uint8_t			txFreqLimited;
 	uint8_t			scanModePause;
 	uint8_t			scanDelay;
-	uint8_t			squelchDefaults[RADIO_BANDS_TOTAL_NUM_MDUV380]; // VHF, 200 and UHF
+	uint8_t			DMR_RxAGC;
+	uint8_t			hotspotType;
 	uint8_t			scanStepTime;
 	uint8_t			currentVFONumber;
-	uint8_t			languageIndex;
-	uint16_t		tsManualOverride;
 	uint8_t			dmrDestinationFilter;
 	uint8_t			dmrCaptureTimeout;
 	uint8_t			dmrCcTsFilter;
 	uint8_t			analogFilterLevel;
-	uint8_t			hotspotType;
 	uint8_t    		privateCalls;
 	uint8_t			contactDisplayPriority;
 	uint8_t			splitContact;
@@ -150,12 +189,16 @@ typedef struct
 	uint8_t			audioPromptMode;
 	int8_t			temperatureCalibration;// Units of 0.5 deg C
 	uint8_t			batteryCalibration; // Units of 0.01V (NOTE: only the 4 lower bits are used)
+	uint8_t			squelchDefaults[RADIO_BANDS_TOTAL_NUM_SQUELCH]; // VHF, 200 and UHF
 	uint8_t			ecoLevel;// Power saving / economy level
-	uint8_t			DMR_RxAGC;
 	uint8_t			apo; // unit: 30 minutes (5 is skipped, as we want 0, 30, 60, 90, 120 and 180)
+	uint8_t			keypadTimerLong;
+	uint8_t			keypadTimerRepeat;
+	uint8_t			autolockTimer; // in minutes
+#if defined(HAS_GPS)
 	uint8_t			gps; // Off / wait for fix / On
+#endif
 } settingsStruct_t;
-
 
 typedef enum DMR_DESTINATION_FILTER_TYPE
 {
@@ -191,10 +234,12 @@ typedef enum AUDIO_PROMPT_MODE
 {
 	AUDIO_PROMPT_MODE_SILENT = 0,
 	AUDIO_PROMPT_MODE_BEEP,
+	AUDIO_PROMPT_MODE_NO_KEY_BEEP,
 	AUDIO_PROMPT_MODE_VOICE_LEVEL_1,
 	AUDIO_PROMPT_MODE_VOICE_LEVEL_2,
 	AUDIO_PROMPT_MODE_VOICE_LEVEL_3 ,
-	NUM_AUDIO_PROMPT_MODES
+	NUM_AUDIO_PROMPT_MODES,
+	AUDIO_PROMPT_MODE_VOICE_THRESHOLD = AUDIO_PROMPT_MODE_VOICE_LEVEL_1
 } audioPromptMode_t;
 
 typedef enum PROMPT_AUTOPLAY_THRESHOLD
@@ -296,17 +341,17 @@ void settingsDecUINT32(uint32_t *s, uint32_t v);
 #endif
 
 void settingsSetOptionBit(bitfieldOptions_t bit, bool set);
+bool settingsIsOptionBitSetFromSettings(settingsStruct_t *sets, bitfieldOptions_t bit);
 bool settingsIsOptionBitSet(bitfieldOptions_t bit);
 
 void settingsSetDirty(void);
 void settingsSetVFODirty(void);
 void settingsSaveIfNeeded(bool immediately);
-void settingsSaveForPowerOff(void);
 bool settingsSaveSettings(bool includeVFOs);
-bool settingsLoadSettings(void);
+bool settingsLoadSettings(bool reset);
 bool settingsRestoreDefaultSettings(void);
 void settingsEraseCustomContent(void);
-void settingsInitVFOChannel(int vfoNumber);
+//void settingsInitVFOChannel(int vfoNumber);
 void enableVoicePromptsIfLoaded(bool enableFullPrompts);
 int settingsGetScanStepTimeMilliseconds(void);
 

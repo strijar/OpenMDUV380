@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2019      Kai Ludwig, DG4KLU
- * Copyright (C) 2020-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2020-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -55,5 +55,6 @@ void AT1846SSetTxCSS_DCS(uint16_t tone);
 void AT1846sInit(void);
 void AT1846sPostInit(void);
 
+bool AT1846SWriteTone1Reg(uint16_t toneFreqVal);
 
 #endif /* _OPENGD77_AT1846S_H_ */

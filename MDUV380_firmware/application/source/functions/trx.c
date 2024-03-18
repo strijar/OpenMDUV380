@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2019      Kai Ludwig, DG4KLU
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Colin, G4EML
  *                         Daniel Caujolle-Bert, F1RMB
  *
@@ -35,6 +35,7 @@
 #include "functions/settings.h"
 #include "functions/trx.h"
 #include "functions/rxPowerSaving.h"
+#include "functions/aprs.h"
 #include "user_interface/menuSystem.h"
 #include "user_interface/uiUtilities.h"
 #include <FreeRTOS.h>
@@ -138,7 +139,7 @@ const frequencyBand_t DEFAULT_USER_FREQUENCY_BANDS[RADIO_BANDS_TOTAL_NUM] =  {
 													}// UHF
 };
 
-const uint32_t RSSI_NOISE_SAMPLE_PERIOD_PIT = 25;// 25 milliseconds
+//const uint32_t RSSI_NOISE_SAMPLE_PERIOD_PIT = 25U;// 25 milliseconds
 
 static int txPowerLevel = -1;
 static bool analogSignalReceived = false;
@@ -217,12 +218,6 @@ static void trxUpdateRadioCalibration(void);
 // =================================================================
 //
 
-inline void setTxDMRID(uint32_t id)
-{
-	trxDMRID = id;
-}
-
-
 uint8_t trxGetAnalogFilterLevel()
 {
 	return trxAnalogFilterLevel;
@@ -283,16 +278,15 @@ void trxSetModeAndBandwidth(int mode, bool bandwidthIs25kHz)
 				HRC6000TerminateDigital();
 				radioSetMode(RADIO_MODE_ANALOG);
 				trxUpdateC6000Calibration();
-				radioSetIF(trxCurrentBand[TRX_RX_FREQ_BAND],currentBandWidthIs25kHz);
+				radioSetIF(trxCurrentBand[TRX_RX_FREQ_BAND], currentBandWidthIs25kHz);
 				trxUpdateRadioCalibration();
 				break;
 			case RADIO_MODE_DIGITAL:
 				currentBandWidthIs25kHz = BANDWIDTH_12P5KHZ;// DMR bandwidth is 12.5kHz
 				radioSetMode(RADIO_MODE_DIGITAL);
-				radioSetIF(trxCurrentBand[TRX_RX_FREQ_BAND],currentBandWidthIs25kHz);
 				trxUpdateC6000Calibration();
+				radioSetIF(trxCurrentBand[TRX_RX_FREQ_BAND], currentBandWidthIs25kHz);
 				trxUpdateRadioCalibration();
-				soundInit();
 				HRC6000InitDigital();
 				break;
 		}
@@ -431,7 +425,7 @@ bool trxCarrierDetected(void)
 			}
 			else
 			{
-				squelch = TRX_SQUELCH_MAX - ((nonVolatileSettings.squelchDefaults[trxCurrentBand[TRX_RX_FREQ_BAND]] -1) * TRX_SQUELCH_INC);
+				squelch = TRX_SQUELCH_MAX - ((nonVolatileSettings.squelchDefaults[trxCurrentBand[TRX_RX_FREQ_BAND]] - 1) * TRX_SQUELCH_INC);
 			}
 			break;
 
@@ -450,7 +444,7 @@ bool trxCheckDigitalSquelch(void)
 		{
 			uint8_t squelch;
 
-			squelch = TRX_SQUELCH_MAX - ((nonVolatileSettings.squelchDefaults[trxCurrentBand[TRX_RX_FREQ_BAND]] -1) * TRX_SQUELCH_INC);
+			squelch = TRX_SQUELCH_MAX - ((nonVolatileSettings.squelchDefaults[trxCurrentBand[TRX_RX_FREQ_BAND]] - 1) * TRX_SQUELCH_INC);
 
 			if (trxRxNoise < squelch)
 			{
@@ -497,7 +491,10 @@ bool trxCheckAnalogSquelch(void)
 {
 	if (trxIsTransmitting)
 	{
-		disableAudioAmp(AUDIO_AMP_MODE_RF);
+		if (aprsTxProgress != APRS_TX_IN_PROGRESS)
+		{
+			disableAudioAmp(AUDIO_AMP_MODE_RF);
+		}
 		analogSignalReceived = false;
 		analogTriggeredAudio = false;
 		return false;
@@ -521,7 +518,7 @@ bool trxCheckAnalogSquelch(void)
 		}
 		else
 		{
-			squelch = TRX_SQUELCH_MAX - ((nonVolatileSettings.squelchDefaults[trxCurrentBand[TRX_RX_FREQ_BAND]] -1) * TRX_SQUELCH_INC);
+			squelch = TRX_SQUELCH_MAX - ((nonVolatileSettings.squelchDefaults[trxCurrentBand[TRX_RX_FREQ_BAND]] - 1) * TRX_SQUELCH_INC);
 		}
 
 		if (trxRxNoise < squelch) //noise less than squelch level = signal present.
@@ -706,9 +703,9 @@ void trxSetFrequency(int fRx, int fTx, int dmrMode)
 		trxUpdateC6000Calibration();
 		trxUpdateRadioCalibration();
 
-		radioSetFrequency(currentRxFrequency,0);
+		radioSetFrequency(currentRxFrequency, 0);
 		trxSetRX();
-		radioSetIF(trxCurrentBand[TRX_RX_FREQ_BAND],currentBandWidthIs25kHz);
+		radioSetIF(trxCurrentBand[TRX_RX_FREQ_BAND], currentBandWidthIs25kHz);
 
 		if (currentMode == RADIO_MODE_DIGITAL)
 		{
@@ -741,12 +738,12 @@ void trxSetRX(void)
 
 void trxConfigurePA_DAC_ForFrequencyBand(void)
 {
-		trxCurrentBand[TRX_TX_FREQ_BAND] = trxGetBandFromFrequency(currentTxFrequency);
-		calibrationGetPowerForFrequency(currentTxFrequency, &trxPowerSettings);
-		lastSetTxFrequency = currentTxFrequency;
-		lastSetTxPowerLevel = txPowerLevel;
+	trxCurrentBand[TRX_TX_FREQ_BAND] = trxGetBandFromFrequency(currentTxFrequency);
+	calibrationGetPowerForFrequency(currentTxFrequency, &trxPowerSettings);
+	lastSetTxFrequency = currentTxFrequency;
+	lastSetTxPowerLevel = txPowerLevel;
 
-		trxUpdate_PA_DAC_Drive();
+	trxUpdate_PA_DAC_Drive();
 }
 
 void trxSetTX(void)
@@ -766,7 +763,7 @@ void trxActivateRx(bool critical)
 	trxIsTransmittingDMR = false;
     radioSetRx(trxCurrentBand[TRX_RX_FREQ_BAND]);
     radioSetFrequency(currentRxFrequency, 0);
-    radioSetIF(trxCurrentBand[TRX_RX_FREQ_BAND],currentBandWidthIs25kHz);
+    radioSetIF(trxCurrentBand[TRX_RX_FREQ_BAND], currentBandWidthIs25kHz);
 
     trxUpdateC6000Calibration();// This seems to be needed, otherwise after transmission has ended the Rx appears to have a considerable freq offset
 
@@ -785,7 +782,7 @@ void trxActivateTx(bool critical)
 	trxRxSignal = 0;
 	trxRxNoise = 255;
 
-    radioSetFrequency(currentTxFrequency,1);
+    radioSetFrequency(currentTxFrequency, 1);
 
 	radioSetTx(trxCurrentBand[TRX_TX_FREQ_BAND]);
 }
@@ -897,9 +894,9 @@ void trxCalcBandAndFrequencyOffset(CalibrationBand_t *calibrationBand, uint32_t 
 
 static void trxUpdateC6000Calibration(void)
 {
-	int8_t cal = calibrationGetMod2Offset(trxCurrentBand[trxTransmissionEnabled?TRX_TX_FREQ_BAND:TRX_RX_FREQ_BAND]);
+	int8_t cal = calibrationGetMod2Offset(trxCurrentBand[trxTransmissionEnabled ? TRX_TX_FREQ_BAND : TRX_RX_FREQ_BAND]);
 	SPI0WritePageRegByte(0x04, 0x47, cal);			// Set the reference tuning offset
-	SPI0WritePageRegByte(0x04, 0x48, cal<0?0x03:0x00) ;
+	SPI0WritePageRegByte(0x04, 0x48, ((cal < 0) ? 0x03 : 0x00));
 	SPI0WritePageRegByte(0x04, 0x04, cal);									//Set MOD 2 Offset (Cal Value)
 }
 
@@ -909,7 +906,7 @@ static void trxUpdateRadioCalibration(void)
 	analogQGain = calibrationGetAnalogQGainForFrequency(currentTxFrequency);
 	digitalIGain = calibrationGetDigitalIGainForFrequency(currentTxFrequency);
 	digitalQGain = calibrationGetDigitalQGainForFrequency(currentTxFrequency);
-	Mod2Offset = calibrationGetMod2Offset(trxCurrentBand[trxTransmissionEnabled?TRX_TX_FREQ_BAND:TRX_RX_FREQ_BAND]);
+	Mod2Offset = calibrationGetMod2Offset(trxCurrentBand[trxTransmissionEnabled ? TRX_TX_FREQ_BAND : TRX_RX_FREQ_BAND]);
 }
 
 void trxSetDMRColourCode(uint8_t colourCode)
@@ -951,7 +948,7 @@ void trxSetDMRTimeSlot(int timeslot, bool resync)
 void trxUpdateTsForCurrentChannelWithSpecifiedContact(struct_codeplugContact_t *contactData)
 {
 	// Contact TS override ?
-	if ((nonVolatileSettings.overrideTG == 0) && (contactData->reserve1 & 0x01) == 0x00)
+	if ((nonVolatileSettings.overrideTG == 0) && (contactData->reserve1 & CODEPLUG_CONTACT_FLAG_NO_TS_OVERRIDE) == 0x00)
 	{
 		if (tsIsContactHasBeenOverriddenFromCurrentChannel())
 		{
@@ -959,14 +956,7 @@ void trxUpdateTsForCurrentChannelWithSpecifiedContact(struct_codeplugContact_t *
 		}
 		else
 		{
-			if ((contactData->reserve1 & 0x02) != 0)
-			{
-				trxCurrentDMRTimeSlot = 1;
-			}
-			else
-			{
-				trxCurrentDMRTimeSlot = 0;
-			}
+			trxCurrentDMRTimeSlot = ((contactData->reserve1 & CODEPLUG_CONTACT_FLAG_TS_OVERRIDE_TIMESLOT_MASK) != 0) ? 1 : 0;
 		}
 	}
 	else
@@ -977,7 +967,7 @@ void trxUpdateTsForCurrentChannelWithSpecifiedContact(struct_codeplugContact_t *
 		if (overriddenTS == 0)
 		{
 			// Apply channnel TS
-			trxCurrentDMRTimeSlot = codeplugChannelIsFlagSet(currentChannelData, CHANNEL_FLAG_TIMESLOT_TWO) ? 1 : 0;
+			trxCurrentDMRTimeSlot = (codeplugChannelGetFlag(currentChannelData, CHANNEL_FLAG_TIMESLOT_TWO) != 0) ? 1 : 0;
 		}
 		else
 		{
@@ -991,13 +981,10 @@ void trxUpdateTsForCurrentChannelWithSpecifiedContact(struct_codeplugContact_t *
 
 void trxSetTxCSS(uint16_t tone)
 {
-
 	CodeplugCSSTypes_t type = codeplugGetCSSType(tone);
-
 
 	if (type == CSS_TYPE_NONE)
 	{
-
 		radioTxCSSOff();
 	}
 	else if (type == CSS_TYPE_CTCSS)
@@ -1014,6 +1001,7 @@ void trxSetRxCSS(uint16_t tone)
 {
 	taskENTER_CRITICAL();
 	CodeplugCSSTypes_t type = codeplugGetCSSType(tone);
+
 	if (type == CSS_TYPE_NONE)
 	{
 		radioRxCSSOff();
@@ -1067,7 +1055,6 @@ void trxSetTone1(int toneFreq)
     radioSetTone1(toneFreq);
 }
 
-
 void trxSetDTMF(int code)
 {
 	if (code < 16)
@@ -1111,7 +1098,7 @@ void trxEnableTransmission(void)
 
 void trxDisableTransmission(void)
 {
-    LedWrite(LED_RED, 0);
+	LedWrite(LED_RED, 0);
 	trxActivateRx(true);
 }
 
@@ -1253,8 +1240,11 @@ void trxSelectVoiceChannel(uint8_t channel) {
 
 			radioReadReg2byte( 0x59, &valh, &vall);
 			trxSaveDeviation = (vall + (valh << 8)) >> 6;
+			trxSaveDeviation = 0x40;
 
-			//trxUpdateDeviation(channel);
+			I2C_AT1846_set_register_with_mask(0x59, 0x003f, trxSaveDeviation, 6);
+//			radioSetClearReg2byteWithMask(0x41, 0xFF,0x80, 0x00, 0);// 0x0E is Tone deviation value from the normal GD77 calibration data
+
 			break;
 		default:
 			radioSetClearReg2byteWithMask(0x57, 0xff, 0xfe, 0x00, 0x00); // Audio feedback off
@@ -1330,3 +1320,6 @@ int trxGetSNRMargindBm(void)
 {
 	return (trxGetRSSIdBm() - trxGetNoisedBm());
 }
+
+
+

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions
@@ -36,34 +36,45 @@
 #include "functions/satellite.h"
 #include "functions/codeplug.h"
 #include "functions/ticks.h"
+#if defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#include "interfaces/batteryAndPowerManagement.h"
+#endif
 #if defined(USING_EXTERNAL_DEBUGGER)
 #include "SeggerRTT/RTT/SEGGER_RTT.h"
 #endif
 
 #if defined(PLATFORM_RD5R)
-	#define NUM_PASSES_TO_DISPLAY_ON_LIST_SCREEN 2
+#define NUM_PASSES_TO_DISPLAY_ON_LIST_SCREEN 2
 #elif defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
-	#define NUM_PASSES_TO_DISPLAY_ON_LIST_SCREEN 6
+#define NUM_PASSES_TO_DISPLAY_ON_LIST_SCREEN 6
 #else
-	#define NUM_PASSES_TO_DISPLAY_ON_LIST_SCREEN 3
+#define NUM_PASSES_TO_DISPLAY_ON_LIST_SCREEN 3
 #endif
 
 
 static const uint32_t ALARM_OFFSET_SECS = 60;
 
-enum { SATELLITE_SCREEN_ALL_PREDICTIONS_LIST, SATELLITE_SCREEN_SELECTED_SATELLITE, SATELLITE_SCREEN_SELECTED_SATELLITE_POLAR, SATELLITE_SCREEN_SELECTED_SATELLITE_PREDICTION,  NUM_SATELLITE_SCREEN_ITEMS };//
+enum
+{
+	SATELLITE_SCREEN_ALL_PREDICTIONS_LIST,
+	SATELLITE_SCREEN_SELECTED_SATELLITE,
+	SATELLITE_SCREEN_SELECTED_SATELLITE_POLAR,
+	SATELLITE_SCREEN_SELECTED_SATELLITE_PREDICTION,
+	NUM_SATELLITE_SCREEN_ITEMS
+};
 
 static void handleEvent(uiEvent_t *ev);
 static void updateScreen(uiEvent_t *ev, bool firstRun, bool announceVP);
 static bool calculatePredictionsForSatelliteIndex(int satelliteIndex);
 static void loadKeps(void);
 static int menuSatelliteFindNextSatellite(void);
+static void exitCallback(void *data);
 static void selectSatellite(uint32_t selectedSatellite);
 static void calculateActiveSatelliteData(bool forceFrequencyUpdate);
 
 static bool hasSatelliteKeps = false;
 static bool satelliteVisible = false;
-static struct_codeplugChannel_t satelliteChannelData = { .rxFreq = 0 };
+static struct_codeplugChannel_t satelliteChannelData = { .rxFreq = 0, .sql = 10U };
 static struct tm timeAndDate;
 static int displayMode = SATELLITE_SCREEN_ALL_PREDICTIONS_LIST;
 static uint32_t nextCalculationTime = 0;
@@ -85,12 +96,14 @@ static satelliteData_t *predictingSat;
 static uint32_t nextAlarmBeepTime = 0;
 static bool hasRecalculated;
 static bool hasSelectedSatellite = false;
+satelliteFreq_t currentSatelliteFreqIndex = SATELLITE_VOICE_FREQ;
 
 menuStatus_t menuSatelliteScreen(uiEvent_t *ev, bool isFirstRun)
 {
 	if (isFirstRun)
 	{
 		struct tm buildDateTime;
+
 		predictionsListSelectedSatellite = 0;
 		currentlyPredictingSatellite = 0;
 
@@ -111,7 +124,7 @@ menuStatus_t menuSatelliteScreen(uiEvent_t *ev, bool isFirstRun)
 				return MENU_STATUS_SUCCESS;
 			}
 
-			memset(&buildDateTime,0x00,sizeof(struct tm));// clear entire struct
+			memset(&buildDateTime, 0x00, sizeof(struct tm));// clear entire struct
 			buildDateTime.tm_mday = BUILD_DAY;  /* day of the month, 1 to 31 */
 			buildDateTime.tm_mon = BUILD_MONTH - 1;   /* months since January, 0 to 11 */
 			buildDateTime.tm_year = BUILD_YEAR - 1900;  /* years since 1900 */
@@ -139,8 +152,8 @@ menuStatus_t menuSatelliteScreen(uiEvent_t *ev, bool isFirstRun)
 			{
 				// user may have changed the location
 				satelliteSetObserverLocation(
-						latLongFixedToDouble(nonVolatileSettings.locationLat),
-						latLongFixedToDouble(nonVolatileSettings.locationLon),
+						latLongFixed32ToDouble(nonVolatileSettings.locationLat),
+						latLongFixed32ToDouble(nonVolatileSettings.locationLon),
 						0);// Use zero for height, as this seems to make virtually no difference to the calculations. We may however need to change this to some more average height for the ham radio population
 			}
 
@@ -148,21 +161,23 @@ menuStatus_t menuSatelliteScreen(uiEvent_t *ev, bool isFirstRun)
 			satelliteChannelData.txFreq = 0;
 			satelliteChannelData.rxTone = CODEPLUG_CSS_TONE_NONE;
 			satelliteChannelData.chMode = RADIO_MODE_NONE;
-			codeplugChannelSetFlag(&satelliteChannelData, CHANNEL_FLAG_BW_25K, true);
+			codeplugChannelSetFlag(&satelliteChannelData, CHANNEL_FLAG_BW_25K, 1);
 		}
 
 		currentChannelData = &satelliteChannelData;// Now make it available to the rest of the firmware e.g the Tx screen
 		trxSetModeAndBandwidth(satelliteChannelData.chMode, true);
 		trxSetRxCSS(satelliteChannelData.rxTone);// Never any Rx CTCSS
 
-
 		currentActiveSatellite = &satelliteDataNative[uiDataGlobal.SatelliteAndAlarmData.currentSatellite];
-		menuSatelliteScreenNextUpdateTime = ev->time  - 1;
+		menuSatelliteScreenNextUpdateTime = (ev->time - 1U);
+
+		menuSystemRegisterExitCallback(exitCallback, NULL);
 
 		calculateActiveSatelliteData(true);
-		nextCalculationTime = ev->time + 1000; // 1000 milliseconds
+		nextCalculationTime = (ev->time + 1000U); // 1000 milliseconds
 
 		updateScreen(ev, true, true);
+
 	}
 	else
 	{
@@ -170,10 +185,10 @@ menuStatus_t menuSatelliteScreen(uiEvent_t *ev, bool isFirstRun)
 		{
 			if (numTotalSatellitesPredicted == 0)
 			{
-				clockManagerSetRunMode(kAPP_PowerModeHsrun,CLOCK_MANAGER_SPEED_HS_RUN);
+				clockManagerSetRunMode(kAPP_PowerModeHsrun, CLOCK_MANAGER_SPEED_HS_RUN);
 			}
 
-			while(!calculatePredictionsForSatelliteIndex(currentlyPredictingSatellite))
+			while (!calculatePredictionsForSatelliteIndex(currentlyPredictingSatellite))
 			{
 				vTaskDelay((0 / portTICK_PERIOD_MS));
 			}
@@ -206,8 +221,7 @@ menuStatus_t menuSatelliteScreen(uiEvent_t *ev, bool isFirstRun)
 			else
 			{
 				// keep sweeping in case any of the satellites goes LOS and the predictions need to be re-run.
-				currentlyPredictingSatellite++;
-				currentlyPredictingSatellite %= numSatellitesLoaded;
+				currentlyPredictingSatellite = ((currentlyPredictingSatellite + 1) % numSatellitesLoaded);
 			}
 
 			if (ev->time > nextCalculationTime)
@@ -231,7 +245,9 @@ menuStatus_t menuSatelliteScreen(uiEvent_t *ev, bool isFirstRun)
 						// alarm has been beeping for ALARM_OFFSET_SECS and has not been cancelled.
 						// So presume the radio is unattended, turn the alarm off, and put it back into suspend.
 						uiDataGlobal.SatelliteAndAlarmData.alarmType = ALARM_TYPE_CANCELLED;
-						//powerOffFinalStage(true);
+#if ! defined(PLATFORM_MD9600)
+						powerOffFinalStage(true, false);
+#endif
 					}
 					else
 					{
@@ -260,11 +276,11 @@ static void updateScreen(uiEvent_t *ev, bool firstRun, bool announceVP)
 			displayClearBuf();
 
 			menuDisplayTitle(currentLanguage->satellite);
-			displayPrintCentered((DISPLAY_SIZE_Y / 2) - 6, currentLanguage->empty_list, FONT_SIZE_2);
+			displayPrintCentered((DISPLAY_SIZE_Y / 2) - 6, currentLanguage->list_empty, FONT_SIZE_2);
 
 			voicePromptsInit();
-			voicePromptsAppendLanguageString(&currentLanguage->satellite);
-			voicePromptsAppendLanguageString(&currentLanguage->empty_list);
+			voicePromptsAppendLanguageString(currentLanguage->satellite);
+			voicePromptsAppendLanguageString(currentLanguage->list_empty);
 			voicePromptsPlay();
 
 			displayRender();
@@ -277,7 +293,7 @@ static void updateScreen(uiEvent_t *ev, bool firstRun, bool announceVP)
 		char buffer[SCREEN_LINE_BUFFER_SIZE];
 
 		// prevent all annoucements when returning from the Tx screen
-		if (menuSystemGetPreviouslyPushedMenuNumber() == UI_TX_SCREEN)
+		if (menuSystemGetPreviouslyPushedMenuNumber(false) == UI_TX_SCREEN)
 		{
 			announceVP = false;
 		}
@@ -326,19 +342,26 @@ static void updateScreen(uiEvent_t *ev, bool firstRun, bool announceVP)
 				voicePromptsInit();
 				if (!wasPlaying)
 				{
-					voicePromptsAppendLanguageString(&currentLanguage->satellite);
+					voicePromptsAppendLanguageString(currentLanguage->satellite);
 				}
-				voicePromptsAppendLanguageString(&currentLanguage->predicting);
+				voicePromptsAppendLanguageString(currentLanguage->predicting);
 				voicePromptsPlay();
 			}
 			return;
 		}
 
+		// Don't stop/cut the current VP
+		if (announceVP && voicePromptsIsPlaying())
+		{
+			announceVP = false;
+		}
+
 		switch(displayMode)
 		{
-
 			case SATELLITE_SCREEN_SELECTED_SATELLITE:
 			{
+				const char *freqNames[] = { currentLanguage->voice_prompt_level_1, currentLanguage->APRS, "CW Rx" };// Temporary hard coded names, will eventually need new language strings
+
 				if(hasRecalculated || announceVP)
 				{
 					displayClearBuf();
@@ -349,14 +372,11 @@ static void updateScreen(uiEvent_t *ev, bool firstRun, bool announceVP)
 				if (hasRecalculated || announceVP)
 				{
 					// calculate these now for display later...
-					rxIntPart = currentSatelliteResults.rxFreq / 1E6;
-					rxDecPart = (currentSatelliteResults.rxFreq - (rxIntPart * 1E6)) / 10;
-					txIntPart = currentSatelliteResults.txFreq / 1E6;
-					txDecPart = (currentSatelliteResults.txFreq - (txIntPart * 1E6)) / 10;
-
 					snprintf(azelBuffer, SCREEN_LINE_BUFFER_SIZE, "%s:%3d%c %s:%3d%c", currentLanguage->azimuth, currentSatelliteResults.azimuthAsInteger, 176, currentLanguage->elevation, currentSatelliteResults.elevationAsInteger, 176);
+					displayPrintCore(0, (DISPLAY_SIZE_Y / 4), currentActiveSatellite->name, FONT_SIZE_2, TEXT_ALIGN_LEFT, false);
 
-					displayPrintCentered((DISPLAY_SIZE_Y / 4), currentActiveSatellite->name, FONT_SIZE_2);
+					displayPrintCore(0, (DISPLAY_SIZE_Y / 4), freqNames[currentSatelliteFreqIndex], FONT_SIZE_2, TEXT_ALIGN_RIGHT, false);
+
 					displayPrintCentered((DISPLAY_SIZE_Y / 2)
 #if defined(PLATFORM_RD5R)
 							- 4
@@ -365,11 +385,22 @@ static void updateScreen(uiEvent_t *ev, bool firstRun, bool announceVP)
 #endif
 							, azelBuffer, FONT_SIZE_2);
 
-					snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "R:%3d.%05u",rxIntPart,rxDecPart);
-					displayPrintCentered((DISPLAY_SIZE_Y / 2) + 6, buffer, FONT_SIZE_2);
+					if (currentSatelliteResults.freqs[currentSatelliteFreqIndex].rxFreq != 0)
+					{
+						rxIntPart = currentSatelliteResults.freqs[currentSatelliteFreqIndex].rxFreq / 1E6;
+						rxDecPart = (currentSatelliteResults.freqs[currentSatelliteFreqIndex].rxFreq - (rxIntPart * 1E6)) / 10;
+						snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "R:%3d.%05u",rxIntPart,rxDecPart);
+						displayPrintCentered((DISPLAY_SIZE_Y / 2) + 6, buffer, FONT_SIZE_2);
 
-					snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "T:%3d.%05u",txIntPart,txDecPart);
-					displayPrintCentered((DISPLAY_SIZE_Y / 2) + 16, buffer, FONT_SIZE_2);
+						if (currentSatelliteResults.freqs[currentSatelliteFreqIndex].txFreq != 0)
+						{
+							txIntPart = currentSatelliteResults.freqs[currentSatelliteFreqIndex].txFreq / 1E6;
+							txDecPart = (currentSatelliteResults.freqs[currentSatelliteFreqIndex].txFreq - (txIntPart * 1E6)) / 10;
+
+							snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "T:%3d.%05u",txIntPart,txDecPart);
+							displayPrintCentered((DISPLAY_SIZE_Y / 2) + 16, buffer, FONT_SIZE_2);
+						}
+					}
 
 					displayRender();// render the whole screen;
 				}
@@ -381,29 +412,36 @@ static void updateScreen(uiEvent_t *ev, bool firstRun, bool announceVP)
 				if (announceVP || hasRecalculated)
 				{
 					char vpBuffer[SCREEN_LINE_BUFFER_SIZE];
-					if (menuSystemGetPreviouslyPushedMenuNumber() != UI_TX_SCREEN)
+
+					if (menuSystemGetPreviouslyPushedMenuNumber(false) != UI_TX_SCREEN)
 					{
 						if (announceVP)
 						{
 							voicePromptsInit();
 							voicePromptsAppendString(currentActiveSatellite->name);
 
-							voicePromptsAppendLanguageString(&currentLanguage->azimuth);
+							if (currentSatelliteFreqIndex == SATELLITE_OTHER_FREQ)
+							{
+								voicePromptsAppendString(freqNames[currentSatelliteFreqIndex]);
+							}
+							else
+							{
+								voicePromptsAppendLanguageString(freqNames[currentSatelliteFreqIndex]);
+							}
+
+							voicePromptsAppendLanguageString(currentLanguage->azimuth);
 							snprintf(vpBuffer, SCREEN_LINE_BUFFER_SIZE, "%3d%c", currentSatelliteResults.azimuthAsInteger, 176);
 							voicePromptsAppendString(vpBuffer);
-							voicePromptsAppendLanguageString(&currentLanguage->elevation);
+							voicePromptsAppendLanguageString(currentLanguage->elevation);
 							snprintf(vpBuffer, SCREEN_LINE_BUFFER_SIZE, "%3d%c", currentSatelliteResults.elevationAsInteger, 176);
 							voicePromptsAppendString(vpBuffer);
 
-							if (announceVP)
-							{
-								voicePromptsPlay();
-							}
+							voicePromptsPlay();
 						}
 					}
 				}
 
-				menuSatelliteScreenNextUpdateTime = ev->time + 250;
+				menuSatelliteScreenNextUpdateTime = (ev->time + 250U);
 			}
 			break;
 
@@ -416,9 +454,9 @@ static void updateScreen(uiEvent_t *ev, bool firstRun, bool announceVP)
 #else
 				const int MAX_RADIUS = ((DISPLAY_SIZE_Y / 2) - 4);
 #endif
-				float az, elFactor, s,c, lastX = 0, lastY = 0,x,y;
+				float az, elFactor, s, c, lastX = 0, lastY = 0, x, y;
 				satelliteResults_t results;
-
+				int16_t satX = INT16_MIN, satY = INT16_MIN;
 				time_t_custom displayedPassTimeDiff = displayedPredictionPass->satelliteAOS - uiDataGlobal.dateTimeSecs;
 
 				if (displayedPredictionPass->valid == PREDICTION_RESULT_OK)
@@ -428,9 +466,18 @@ static void updateScreen(uiEvent_t *ev, bool firstRun, bool announceVP)
 
 					if(hasRecalculated || announceVP)
 					{
+						struct tm dispTimeAndDate;
+
+						 // below 1 minute displayedPassTimeDiff is used.
+						if (displayedPassTimeDiff >= 60)
+						{
+							gmtime_r_Custom(&displayedPassTimeDiff, &dispTimeAndDate);
+						}
+
 						displayClearBuf();
 
 						snprintf(buffer, 8,"%s", currentActiveSatellite->name);
+						displayThemeApply(THEME_ITEM_FG_CHANNEL_NAME, THEME_ITEM_BG);
 						displayPrintAt(4, (DISPLAY_SIZE_Y / 2) - 4, buffer, FONT_SIZE_2);
 
 						if (announceVP)
@@ -438,6 +485,7 @@ static void updateScreen(uiEvent_t *ev, bool firstRun, bool announceVP)
 							voicePromptsAppendString(currentActiveSatellite->name);
 						}
 
+						displayThemeApply(THEME_ITEM_FG_POLAR_DRAWING, THEME_ITEM_BG);
 						displayDrawCircle(POLAR_GRAPHICS_X_OFFSET + (DISPLAY_SIZE_X / 2), DISPLAY_SIZE_Y / 2, MAX_RADIUS, true);
 						displayDrawCircle(POLAR_GRAPHICS_X_OFFSET + (DISPLAY_SIZE_X / 2), DISPLAY_SIZE_Y / 2, (MAX_RADIUS / 3 ) * 2, true);
 						displayDrawCircle(POLAR_GRAPHICS_X_OFFSET + (DISPLAY_SIZE_X / 2), DISPLAY_SIZE_Y / 2, (MAX_RADIUS / 3 ), true);
@@ -446,85 +494,80 @@ static void updateScreen(uiEvent_t *ev, bool firstRun, bool announceVP)
 								(DISPLAY_SIZE_Y / 2) - (MAX_RADIUS + 4), (MAX_RADIUS + 4) * 2, true);
 						displayDrawFastHLine((POLAR_GRAPHICS_X_OFFSET + (DISPLAY_SIZE_X / 2)) - (MAX_RADIUS + 4),
 								(DISPLAY_SIZE_Y / 2), (MAX_RADIUS + 4) * 2, true);
+						displayThemeResetToDefault();
 
 						if ((uiDataGlobal.dateTimeSecs < displayedPredictionPass->satelliteAOS) || (uiDataGlobal.dateTimeSecs > displayedPredictionPass->satelliteLOS))
 						{
 							startTime = displayedPredictionPass->satelliteAOS;
 
-							snprintf(buffer, SCREEN_LINE_BUFFER_SIZE,"%s:%02u%c", currentLanguage->maximum, satelliteGetMaximumElevation(currentActiveSatellite, currentActiveSatellite->predictions.selectedPassNumber), 176);
+							snprintf(buffer, SCREEN_LINE_BUFFER_SIZE,"%s:%02d%c", currentLanguage->maximum, satelliteGetMaximumElevation(currentActiveSatellite, currentActiveSatellite->predictions.selectedPassNumber), 176);
 							displayPrintAt(4, (DISPLAY_SIZE_Y - FONT_SIZE_3_HEIGHT) - 4 , buffer, FONT_SIZE_3);
 
 							if (displayedPassTimeDiff >= 60)
 							{
-								gmtime_r_Custom(&displayedPassTimeDiff, &timeAndDate);
 								if (displayedPassTimeDiff >= 3600)
 								{
-									snprintf(buffer, SCREEN_LINE_BUFFER_SIZE,"%u:%02u:%02u", timeAndDate.tm_hour, timeAndDate.tm_min, timeAndDate.tm_sec);
-									displayPrintAt(((timeAndDate.tm_hour > 9)? 2: 4), 4, buffer, FONT_SIZE_2);
+									snprintf(buffer, SCREEN_LINE_BUFFER_SIZE,"-%u:%02u:%02u", dispTimeAndDate.tm_hour, dispTimeAndDate.tm_min, dispTimeAndDate.tm_sec);
+									displayPrintAt(((dispTimeAndDate.tm_hour > 9) ? 2 : 4), 4, buffer, FONT_SIZE_2);
 								}
 								else
 								{
 									// between 60 and 3599 seconds
-									snprintf(buffer, SCREEN_LINE_BUFFER_SIZE,"%u:%02u", timeAndDate.tm_min, timeAndDate.tm_sec);
+									snprintf(buffer, SCREEN_LINE_BUFFER_SIZE,"-%u:%02u", dispTimeAndDate.tm_min, dispTimeAndDate.tm_sec);
 									displayPrintAt(8, 4, buffer, FONT_SIZE_2);
 								}
 							}
 							else
 							{
-								snprintf(buffer, SCREEN_LINE_BUFFER_SIZE,"%02us", displayedPassTimeDiff);
+								snprintf(buffer, SCREEN_LINE_BUFFER_SIZE,"-%02us", displayedPassTimeDiff);
 								displayPrintAt(12, 4, buffer, FONT_SIZE_3);
 							}
 
 							if (announceVP)
 							{
-								voicePromptsAppendLanguageString(&currentLanguage->inHHMMSS);
+								voicePromptsAppendLanguageString(currentLanguage->inHHMMSS);
 
 								if (displayedPassTimeDiff >= 60)
 								{
 									if (displayedPassTimeDiff >= 3600)
 									{
-										snprintf(buffer, SCREEN_LINE_BUFFER_SIZE,"%u", timeAndDate.tm_hour);
-										voicePromptsAppendString(buffer);
-										voicePromptsAppendLanguageString(&currentLanguage->hours);
+										voicePromptsAppendInteger(dispTimeAndDate.tm_hour);
+										voicePromptsAppendLanguageString(currentLanguage->hours);
 
-										snprintf(buffer, SCREEN_LINE_BUFFER_SIZE,"%u", timeAndDate.tm_min);
-										voicePromptsAppendString(buffer);
+										voicePromptsAppendInteger(dispTimeAndDate.tm_min);
 										voicePromptsAppendPrompt(PROMPT_MINUTES);
 									}
 									else
 									{
 										// between 60 and 3599 seconds
-										snprintf(buffer, SCREEN_LINE_BUFFER_SIZE,"%u", timeAndDate.tm_min);
-										voicePromptsAppendString(buffer);
+										voicePromptsAppendInteger(dispTimeAndDate.tm_min);
 										voicePromptsAppendPrompt(PROMPT_MINUTES);
 
-										snprintf(buffer, SCREEN_LINE_BUFFER_SIZE,"%u",timeAndDate.tm_sec);
-										voicePromptsAppendString(buffer);
+										voicePromptsAppendInteger(dispTimeAndDate.tm_sec);
 										voicePromptsAppendPrompt(PROMPT_SECONDS);
 									}
 								}
 								else
 								{
-									snprintf(buffer, SCREEN_LINE_BUFFER_SIZE,"%02u", displayedPassTimeDiff);
-									voicePromptsAppendString(buffer);
+									voicePromptsAppendInteger(displayedPassTimeDiff);
 									voicePromptsAppendPrompt(PROMPT_SECONDS);
 								}
 
-								voicePromptsAppendLanguageString(&currentLanguage->maximum);
-								snprintf(buffer, SCREEN_LINE_BUFFER_SIZE,"%02u%c", satelliteGetMaximumElevation(currentActiveSatellite, currentActiveSatellite->predictions.selectedPassNumber), 176);
+								voicePromptsAppendLanguageString(currentLanguage->maximum);
+								snprintf(buffer, SCREEN_LINE_BUFFER_SIZE,"%d%c", satelliteGetMaximumElevation(currentActiveSatellite, currentActiveSatellite->predictions.selectedPassNumber), 176);
 								voicePromptsAppendString(buffer);
 							}
 						}
 						else
 						{
 							startTime = uiDataGlobal.dateTimeSecs;
-							snprintf(buffer, SCREEN_LINE_BUFFER_SIZE,"%s:%03u%c", currentLanguage->azimuth, currentSatelliteResults.azimuthAsInteger, 176);
+							snprintf(buffer, SCREEN_LINE_BUFFER_SIZE,"%s:%03d%c", currentLanguage->azimuth, currentSatelliteResults.azimuthAsInteger, 176);
 							displayPrintAt(4, 6, buffer, FONT_SIZE_3);
 
 							if (announceVP)
 							{
-								voicePromptsAppendLanguageString(&currentLanguage->azimuth);
-								snprintf(buffer, SCREEN_LINE_BUFFER_SIZE,"%03u%c", currentSatelliteResults.azimuthAsInteger, 176);
+								voicePromptsAppendLanguageString(currentLanguage->azimuth);
+								snprintf(buffer, SCREEN_LINE_BUFFER_SIZE,"%3d%c", currentSatelliteResults.azimuthAsInteger, 176);
 								voicePromptsAppendString(buffer);
 							}
 
@@ -533,8 +576,8 @@ static void updateScreen(uiEvent_t *ev, bool firstRun, bool announceVP)
 
 							if (announceVP)
 							{
-								voicePromptsAppendLanguageString(&currentLanguage->elevation);
-								snprintf(buffer, SCREEN_LINE_BUFFER_SIZE,"%02u%c", currentSatelliteResults.elevationAsInteger, 176);
+								voicePromptsAppendLanguageString(currentLanguage->elevation);
+								snprintf(buffer, SCREEN_LINE_BUFFER_SIZE,"%2d%c", currentSatelliteResults.elevationAsInteger, 176);
 								voicePromptsAppendString(buffer);
 							}
 						}
@@ -551,26 +594,39 @@ static void updateScreen(uiEvent_t *ev, bool firstRun, bool announceVP)
 
 							if (t == startTime)
 							{
-								displayFillCircle(x, y , (DOT_RADIUS+1), true);
+								// Postpone satellite spot drawing, to avoid the path drawn on top of it
+								satX = (int16_t)x;
+								satY = (int16_t)y;
 							}
 							else
 							{
-								displayDrawLine(lastX    ,lastY     ,x    ,y	   ,true);
+								displayDrawLine((int16_t)lastX, (int16_t)lastY, (int16_t)x, (int16_t)y, true);
 							}
 
-							lastX=x;
-							lastY=y;
+							lastX = x;
+							lastY = y;
+						}
+
+						if ((satX != INT16_MIN) && (satY != INT16_MIN))
+						{
+							displayThemeApply(THEME_ITEM_FG_SATELLITE_COLOUR, THEME_ITEM_BG);
+							displayFillCircle(satX, satY, (DOT_RADIUS + 1), true);
+							displayThemeResetToDefault();
 						}
 					}
 
 					const uint32_t S_METER_BAR_WIDTH = 8;
 					// draw S meter with range S0 to S9.
 					int rssi = MIN(MAX(0, trxGetRSSIdBm() - SMETER_S0), (SMETER_S9 - SMETER_S0));
-					rssi = (rssi * DISPLAY_SIZE_Y ) / (SMETER_S9 - SMETER_S0);
-					displayFillRect(DISPLAY_SIZE_X - S_METER_BAR_WIDTH, 0						, S_METER_BAR_WIDTH, DISPLAY_SIZE_Y - rssi	, true);
-					displayFillRect(DISPLAY_SIZE_X - S_METER_BAR_WIDTH, DISPLAY_SIZE_Y - rssi	, S_METER_BAR_WIDTH, rssi					, false);
 
-					menuSatelliteScreenNextUpdateTime = ev->time + 250;
+					rssi = (rssi * DISPLAY_SIZE_Y) / (SMETER_S9 - SMETER_S0);
+
+					displayThemeApply(THEME_ITEM_FG_RSSI_BAR, THEME_ITEM_BG);
+					displayFillRect(DISPLAY_SIZE_X - S_METER_BAR_WIDTH, 0                     , S_METER_BAR_WIDTH, DISPLAY_SIZE_Y - rssi  , true);
+					displayFillRect(DISPLAY_SIZE_X - S_METER_BAR_WIDTH, DISPLAY_SIZE_Y - rssi , S_METER_BAR_WIDTH, rssi                   , false);
+					displayThemeResetToDefault();
+
+					menuSatelliteScreenNextUpdateTime = (ev->time + 250U);
 				}
 				else
 				{
@@ -585,8 +641,8 @@ static void updateScreen(uiEvent_t *ev, bool firstRun, bool announceVP)
 					{
 						voicePromptsAppendString(currentActiveSatellite->name);
 						voicePromptsAppendPrompt(PROMPT_SILENCE);
-						voicePromptsAppendLanguageString(&currentLanguage->pass);
-						voicePromptsAppendLanguageString(&currentLanguage->none);
+						voicePromptsAppendLanguageString(currentLanguage->pass);
+						voicePromptsAppendLanguageString(currentLanguage->none);
 					}
 
 					menuSatelliteScreenNextUpdateTime = 0;// don't update again
@@ -614,16 +670,16 @@ static void updateScreen(uiEvent_t *ev, bool firstRun, bool announceVP)
 					snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%s %u / %u", currentLanguage->pass, (currentActiveSatellite->predictions.selectedPassNumber + 1), currentActiveSatellite->predictions.numPasses);
 					displayPrintCentered((DISPLAY_SIZE_Y / 4) + 4,buffer, FONT_SIZE_2);
 
-					if (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_LEVEL_1)
+					if (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_THRESHOLD)
 					{
 						voicePromptsAppendString(currentActiveSatellite->name);
-						voicePromptsAppendLanguageString(&currentLanguage->pass);
+						voicePromptsAppendLanguageString(currentLanguage->pass);
 						snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%u", (currentActiveSatellite->predictions.selectedPassNumber + 1));
 						voicePromptsAppendString(buffer);
 					}
 				}
 
-				if ( displayedPredictionPass->valid == PREDICTION_RESULT_OK)
+				if (displayedPredictionPass->valid == PREDICTION_RESULT_OK)
 				{
 					time_t_custom AOS =  displayedPredictionPass->satelliteAOS + ((nonVolatileSettings.timezone & 0x80) ? ((nonVolatileSettings.timezone & 0x7F) - 64) * (15 * 60) : 0);
 
@@ -634,42 +690,42 @@ static void updateScreen(uiEvent_t *ev, bool firstRun, bool announceVP)
 					snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%02u:%02u:%02u %s", passDateTime.tm_hour, passDateTime.tm_min, passDateTime.tm_sec, ((nonVolatileSettings.timezone & 0x80) ? "" : "UTC"));
 					displayPrintCentered((DISPLAY_SIZE_Y / 2) + 4, buffer, FONT_SIZE_2);
 
-					if (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_LEVEL_1)
+					if (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_THRESHOLD)
 					{
-						voicePromptsAppendLanguageString(&currentLanguage->time);
+						voicePromptsAppendLanguageString(currentLanguage->time);
 						voicePromptsAppendString(buffer);
 					}
 
-					snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%s:%2u%c %3u:%02us", currentLanguage->elevation, satelliteGetMaximumElevation(currentActiveSatellite, currentActiveSatellite->predictions.selectedPassNumber), 176,
+					snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%s:%2d%c %3u:%02us", currentLanguage->elevation, satelliteGetMaximumElevation(currentActiveSatellite, currentActiveSatellite->predictions.selectedPassNumber), 176,
 							( displayedPredictionPass->satellitePassDuration / 60), (displayedPredictionPass->satellitePassDuration % 60)) ;
 					displayPrintCentered(((DISPLAY_SIZE_Y * 3) / 4), buffer, FONT_SIZE_2);
 
-					if (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_LEVEL_1)
+					if (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_THRESHOLD)
 					{
-						voicePromptsAppendLanguageString(&currentLanguage->maximum);
+						voicePromptsAppendLanguageString(currentLanguage->maximum);
 
-						snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%2u%c",  satelliteGetMaximumElevation(currentActiveSatellite, currentActiveSatellite->predictions.selectedPassNumber), 176);
+						snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%2d%c",  satelliteGetMaximumElevation(currentActiveSatellite, currentActiveSatellite->predictions.selectedPassNumber), 176);
 						voicePromptsAppendString(buffer);
 
 						voicePromptsAppendPrompt(PROMPT_DURATION);
 						snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%u", ( displayedPredictionPass->satellitePassDuration / 60)) ;
 						voicePromptsAppendString(buffer);
-						voicePromptsAppendLanguageString(&currentLanguage->minutes);
+						voicePromptsAppendLanguageString(currentLanguage->minutes);
 
 						snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%u", (displayedPredictionPass->satellitePassDuration % 60)) ;
 						voicePromptsAppendString(buffer);
-						voicePromptsAppendLanguageString(&currentLanguage->seconds);
+						voicePromptsAppendLanguageString(currentLanguage->seconds);
 
 					}
 				}
 
 				if ((displayedPredictionPass->valid == PREDICTION_RESULT_LIMIT) && (currentActiveSatellite->predictions.numPasses == 0))
 				{
-					displayPrintCentered((DISPLAY_SIZE_Y / 2) + 4, currentLanguage->empty_list, FONT_SIZE_3);
+					displayPrintCentered((DISPLAY_SIZE_Y / 2) + 4, currentLanguage->list_empty, FONT_SIZE_3);
 
 					voicePromptsAppendString(currentActiveSatellite->name);
 					voicePromptsAppendPrompt(PROMPT_SILENCE);
-					voicePromptsAppendLanguageString(&currentLanguage->empty_list);
+					voicePromptsAppendLanguageString(currentLanguage->list_empty);
 				}
 
 				if (announceVP)
@@ -684,7 +740,6 @@ static void updateScreen(uiEvent_t *ev, bool firstRun, bool announceVP)
 
 			case SATELLITE_SCREEN_ALL_PREDICTIONS_LIST:
 				{
-					displayClearBuf();
 					time_t_custom passTime;
 					satelliteData_t *foundSat = NULL;
 					int foundPassNumber;
@@ -692,12 +747,15 @@ static void updateScreen(uiEvent_t *ev, bool firstRun, bool announceVP)
 					time_t_custom AOS;
 					uint32_t pass;
 					int numSatellitesFound = 0;
-					predictionsListNumSatellitePassesDisplayed = 0;
 					int totalPredictions = 0;
 					int foundSatelliteIndex = -1;
+
+					predictionsListNumSatellitePassesDisplayed = 0;
 					predictionsListSelectedSatellite = 0;
 
-					for(int i = 0;i< numSatellitesLoaded; i++)
+					displayClearBuf();
+
+					for(int i = 0; i< numSatellitesLoaded; i++)
 					{
 						satelliteDataNative[i].predictions.listDisplayPassSearchStartIndex = 0;
 						totalPredictions += satelliteDataNative[i].predictions.numPasses;
@@ -707,7 +765,7 @@ static void updateScreen(uiEvent_t *ev, bool firstRun, bool announceVP)
 					{
 						foundPassNumber = -1;
 						passTime = 0xFFFFFFFF;// highest possible number
-						for(int sat=0; sat < numSatellitesLoaded; sat++)
+						for(int sat = 0; sat < numSatellitesLoaded; sat++)
 						{
 							seatchingSat = &satelliteDataNative[sat];
 
@@ -727,7 +785,6 @@ static void updateScreen(uiEvent_t *ev, bool firstRun, bool announceVP)
 						}
 						if ((foundPassNumber >= 0) && (foundSat != NULL))
 						{
-
 							foundSat->predictions.listDisplayPassSearchStartIndex = (foundPassNumber + 1);// last foundPass must be for the foundSatellite
 
 							if (numSatellitesFound >= currentlyDisplayedListPosition)
@@ -741,27 +798,29 @@ static void updateScreen(uiEvent_t *ev, bool firstRun, bool announceVP)
 								displayPrintCentered(6 + (20 * predictionsListNumSatellitePassesDisplayed), foundSat->name, FONT_SIZE_2);
 
 								snprintf(passTimeBuffer, SCREEN_LINE_BUFFER_SIZE, "%02u:%02u:%02u%s", passDateTime.tm_hour, passDateTime.tm_min, passDateTime.tm_sec, ((nonVolatileSettings.timezone & 0x80) ? "" : "UTC"));
-								snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%s %02u%c", passTimeBuffer, satelliteGetMaximumElevation(foundSat, foundPassNumber), 176);
+								snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%s %02d%c", passTimeBuffer, satelliteGetMaximumElevation(foundSat, foundPassNumber), 176);
 								displayPrintCentered(6 + (20 * predictionsListNumSatellitePassesDisplayed) + 8, buffer, FONT_SIZE_2);
 
 								if ((foundPassNumber == 0) && foundSat->predictions.isVisible)
 								{
 									uint32_t yPos = 6 + (20 * predictionsListNumSatellitePassesDisplayed);
-									displayFillRect(DISPLAY_SIZE_X -4 , yPos, 4, 16, false);
+									displayThemeApply(THEME_ITEM_FG_SATELLITE_COLOUR, THEME_ITEM_BG);
+									displayFillRect((DISPLAY_SIZE_X - (DISPLAY_X_POS_MENU_OFFSET * 2) - 6), yPos, 4, 16, false);
+									displayThemeResetToDefault();
 								}
 
 								if (predictionsListNumSatellitePassesDisplayed == 0)
 								{
-									displayDrawRect(2, 4, DISPLAY_SIZE_X - 2, 20, true);
+									displayDrawRect(2 + DISPLAY_X_POS_MENU_OFFSET, 4, (DISPLAY_SIZE_X - (DISPLAY_X_POS_MENU_OFFSET * 2) - 4), 20, true);
 
-									if (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_LEVEL_1)
+									if (nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_THRESHOLD)
 									{
 										voicePromptsInit();
 										voicePromptsAppendString(foundSat->name);
-										voicePromptsAppendLanguageString(&currentLanguage->time);
+										voicePromptsAppendLanguageString(currentLanguage->time);
 										voicePromptsAppendString(passTimeBuffer);
-										voicePromptsAppendLanguageString(&currentLanguage->maximum);
-										snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%02u%c", satelliteGetMaximumElevation(foundSat, foundPassNumber), 176);
+										voicePromptsAppendLanguageString(currentLanguage->maximum);
+										snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%2d%c", satelliteGetMaximumElevation(foundSat, foundPassNumber), 176);
 										voicePromptsAppendString(buffer);
 										if (announceVP)
 										{
@@ -794,11 +853,45 @@ static void updateScreen(uiEvent_t *ev, bool firstRun, bool announceVP)
 
 static void handleEvent(uiEvent_t *ev)
 {
+	if ((ev->events & FUNCTION_EVENT) && (ev->function == FUNC_REDRAW))
+	{
+		hasRecalculated = true; // Force full redraw
+		updateScreen(ev, false, false);
+		return;
+	}
+
+	if (displayMode == SATELLITE_SCREEN_SELECTED_SATELLITE)
+	{
+		bool needsUpdate = false;
+
+		if (KEYCHECK_SHORTUP(ev->keys, KEY_1))
+		{
+			currentSatelliteFreqIndex = SATELLITE_VOICE_FREQ;
+			needsUpdate = true;
+		}
+		else if (KEYCHECK_SHORTUP(ev->keys, KEY_2))
+		{
+			currentSatelliteFreqIndex = SATELLITE_APRS_FREQ;
+			needsUpdate = true;
+		}
+		else if (KEYCHECK_SHORTUP(ev->keys, KEY_3))
+		{
+			currentSatelliteFreqIndex = SATELLITE_OTHER_FREQ;
+			needsUpdate = true;
+		}
+
+		if (needsUpdate)
+		{
+			hasRecalculated = true; // Need to set this otherwise the SATELLITE_SCREEN_SELECTED_SATELLITE does not immediately redraw
+			updateScreen(ev, false, true);
+			return;
+		}
+	}
+
 	if (KEYCHECK_SHORTUP(ev->keys, KEY_RED))
 	{
 		if (displayMode == SATELLITE_SCREEN_ALL_PREDICTIONS_LIST)
 		{
-			clockManagerSetRunMode(kAPP_PowerModeRun, CLOCK_MANAGER_SPEED_RUN);
 			menuSystemPopPreviousMenu();
 		}
 		else
@@ -816,8 +909,9 @@ static void handleEvent(uiEvent_t *ev)
 
 	if (ev->keys.event & KEY_MOD_PRESS)
 	{
+		// Cancels currently beeping alarm
 		if ((uiDataGlobal.SatelliteAndAlarmData.alarmType == ALARM_TYPE_SATELLITE) &&
-			(uiDataGlobal.dateTimeSecs >= uiDataGlobal.SatelliteAndAlarmData.alarmTime))
+				(uiDataGlobal.dateTimeSecs >= uiDataGlobal.SatelliteAndAlarmData.alarmTime))
 		{
 			uiDataGlobal.SatelliteAndAlarmData.alarmType = ALARM_TYPE_NONE;
 		}
@@ -830,6 +924,16 @@ static void handleEvent(uiEvent_t *ev)
 			case KEY_GREEN:
 			{
 				uint32_t alarmTime;
+
+				// Cancels ongoing alarm
+				if ((uiDataGlobal.SatelliteAndAlarmData.alarmType == ALARM_TYPE_SATELLITE) &&
+						(uiDataGlobal.dateTimeSecs < uiDataGlobal.SatelliteAndAlarmData.alarmTime))
+				{
+					uiDataGlobal.SatelliteAndAlarmData.alarmType = ALARM_TYPE_NONE;
+					nextKeyBeepMelody = (int16_t *)MELODY_QUICKKEYS_CLEAR_ACK_BEEP;
+					return;
+				}
+
 				if (displayMode == SATELLITE_SCREEN_ALL_PREDICTIONS_LIST)
 				{
 					selectSatellite(predictionsListSelectedSatellite);
@@ -845,28 +949,30 @@ static void handleEvent(uiEvent_t *ev)
 
 				if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
 				{
-					//if (displayMode != SATELLITE_SCREEN_SELECTED_SATELLITE_PREDICTION)
-					{
-						alarmTime = currentActiveSatellite->predictions.passes[currentActiveSatellite->predictions.selectedPassNumber].satelliteAOS - ALARM_OFFSET_SECS;
+					alarmTime = currentActiveSatellite->predictions.passes[currentActiveSatellite->predictions.selectedPassNumber].satelliteAOS - ALARM_OFFSET_SECS;
 
-						if (!(currentActiveSatellite->predictions.isVisible || uiDataGlobal.dateTimeSecs >= alarmTime))
-						{
-							uiDataGlobal.SatelliteAndAlarmData.alarmTime = currentActiveSatellite->predictions.passes[currentActiveSatellite->predictions.selectedPassNumber].satelliteAOS - ALARM_OFFSET_SECS;
-							uiDataGlobal.SatelliteAndAlarmData.alarmType = ALARM_TYPE_SATELLITE;
-							nextKeyBeepMelody = (int *)MELODY_ACK_BEEP;
-							//powerOffFinalStage(true);
-						}
-						else
-						{
-							nextKeyBeepMelody = (int *)MELODY_ERROR_BEEP;
-						}
+					if (!(currentActiveSatellite->predictions.isVisible || uiDataGlobal.dateTimeSecs >= alarmTime))
+					{
+						uiDataGlobal.SatelliteAndAlarmData.alarmTime = currentActiveSatellite->predictions.passes[currentActiveSatellite->predictions.selectedPassNumber].satelliteAOS - ALARM_OFFSET_SECS;
+						uiDataGlobal.SatelliteAndAlarmData.alarmType = ALARM_TYPE_SATELLITE;
+#if defined(PLATFORM_MD9600)
+						nextKeyBeepMelody = (int16_t *)MELODY_ACK_BEEP;
+#else
+						powerOffFinalStage(true, false);
+#endif
+					}
+					else
+					{
+						nextKeyBeepMelody = (int16_t *)MELODY_ERROR_BEEP;
 					}
 				}
 				break;
 			}
 
-
 			case KEY_RIGHT:
+#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+			case KEY_ROTARY_INCREMENT:
+#endif
 				if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
 				{
 					if (increasePowerLevel(false))
@@ -899,7 +1005,7 @@ static void handleEvent(uiEvent_t *ev)
 								currentChannelData->sql++;
 							}
 
-							announceItem(PROMPT_SQUENCE_SQUELCH,PROMPT_THRESHOLD_3);
+							announceItem(PROMPT_SQUENCE_SQUELCH, PROMPT_THRESHOLD_3);
 
 							uiNotificationShow(NOTIFICATION_TYPE_SQUELCH, NOTIFICATION_ID_SQUELCH, 1000, NULL, true);
 						break;
@@ -908,6 +1014,9 @@ static void handleEvent(uiEvent_t *ev)
 				break;
 
 			case KEY_LEFT:
+#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+			case KEY_ROTARY_DECREMENT:
+#endif
 				if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
 				{
 					if (decreasePowerLevel())
@@ -1041,17 +1150,18 @@ static void handleEvent(uiEvent_t *ev)
 				*/
 		}
 	}
-	else if (KEYCHECK_LONGDOWN(ev->keys, KEY_RIGHT) && BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+#if ! (defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380))
+	// set as KEY_RIGHT on some platforms (but longdown is not possible on MD380/MD-UV380)
+	else if (KEYCHECK_LONGDOWN(ev->keys, KEY_INCREASE)
+			&& BUTTONCHECK_DOWN(ev, BUTTON_SK2))
 	{
 		// Long press allows the 5W+ power setting to be selected immediately
-		if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
+		if (increasePowerLevel(true))
 		{
-			if (increasePowerLevel(true))
-			{
-				headerRowIsDirty = true;
-			}
+			headerRowIsDirty = true;
 		}
 	}
+#endif
 
 	if (ev->events & FUNCTION_EVENT)
 	{
@@ -1061,6 +1171,10 @@ static void handleEvent(uiEvent_t *ev)
 
 			updateScreen(ev, true, true);
 			return;
+		}
+		else if (ev->function == FUNC_REDRAW)
+		{
+			updateScreen(ev, false, false);
 		}
 	}
 
@@ -1074,7 +1188,7 @@ static void handleEvent(uiEvent_t *ev)
 			}
 			else
 			{
-				if ((displayMode == SATELLITE_SCREEN_SELECTED_SATELLITE) || (displayMode ==  SATELLITE_SCREEN_SELECTED_SATELLITE_POLAR) )
+				if ((displayMode == SATELLITE_SCREEN_SELECTED_SATELLITE) || (displayMode ==  SATELLITE_SCREEN_SELECTED_SATELLITE_POLAR))
 				{
 					voicePromptsInit();
 					updateScreen(ev, true, true);
@@ -1088,17 +1202,15 @@ static void handleEvent(uiEvent_t *ev)
 		}
 	}
 
-
 	if (KEYCHECK_SHORTUP_NUMBER(ev->keys) && (BUTTONCHECK_DOWN(ev, BUTTON_SK2)))
 	{
 		saveQuickkeyMenuIndex(ev->keys.key, menuSystemGetCurrentMenuNumber(), displayMode, 0);
-		return;
 	}
 }
 
-bool findSelectedPass = false;
-uint32_t selectedPassAOS = 0;
-bool calculatePredictionsForSatelliteIndex(int satelliteIndex)
+static bool findSelectedPass = false;
+static uint32_t selectedPassAOS = 0;
+static bool calculatePredictionsForSatelliteIndex(int satelliteIndex)
 {
 	satelliteResults_t results;
 	satelliteData_t * satellite = &satelliteDataNative[satelliteIndex];
@@ -1107,7 +1219,7 @@ bool calculatePredictionsForSatelliteIndex(int satelliteIndex)
 	{
 		if ((displayMode == SATELLITE_SCREEN_ALL_PREDICTIONS_LIST) && (satellite->predictions.isVisible == false))
 		{
-			menuSatelliteScreenNextUpdateTime = 1;
+			menuSatelliteScreenNextUpdateTime = 1U;
 		}
 		satellite->predictions.isVisible = true;
 	}
@@ -1115,7 +1227,7 @@ bool calculatePredictionsForSatelliteIndex(int satelliteIndex)
 	{
 		if ((displayMode == SATELLITE_SCREEN_ALL_PREDICTIONS_LIST) && (satellite->predictions.isVisible == true))
 		{
-			menuSatelliteScreenNextUpdateTime = 1;
+			menuSatelliteScreenNextUpdateTime = 1U;
 		}
 		satellite->predictions.isVisible = false;
 	}
@@ -1249,26 +1361,39 @@ bool calculatePredictionsForSatelliteIndex(int satelliteIndex)
 
 static void loadKeps(void)
 {
-	codeplugSatelliteData_t codeplugKepsData[NUM_SATELLITES];
+	codeplugSatelliteCuctsomDataUnion_t codeplugKepsData;
 
-	hasSatelliteKeps = codeplugGetOpenGD77CustomData(CODEPLUG_CUSTOM_DATA_SATELLITE_TLE, (uint8_t *)&codeplugKepsData);
+	//volatile int s = sizeof(codeplugSatelliteData_t);
+
+	hasSatelliteKeps = codeplugGetOpenGD77CustomData(CODEPLUG_CUSTOM_DATA_TYPE_SATELLITE_TLE, (uint8_t *)&codeplugKepsData.data);
 	if (hasSatelliteKeps)
 	{
 		for(numSatellitesLoaded = 0; numSatellitesLoaded < NUM_SATELLITES; numSatellitesLoaded++)
 		{
-			if (codeplugKepsData[numSatellitesLoaded].TLE_Name[0] != 0)
+			if (codeplugKepsData.data[numSatellitesLoaded].TLE_Name[0] != 0)
 			{
 				satelliteTLE2Native(
-						codeplugKepsData[numSatellitesLoaded].TLE_Name,
-						codeplugKepsData[numSatellitesLoaded].TLE_Line1,
-						codeplugKepsData[numSatellitesLoaded].TLE_Line2,&satelliteDataNative[numSatellitesLoaded]) ;
+						codeplugKepsData.data[numSatellitesLoaded].TLE_Name,
+						codeplugKepsData.data[numSatellitesLoaded].TLE_Line1,
+						codeplugKepsData.data[numSatellitesLoaded].TLE_Line2, &satelliteDataNative[numSatellitesLoaded]) ;
 
-				satelliteDataNative[numSatellitesLoaded].rxFreq = codeplugKepsData[numSatellitesLoaded].rxFreq;
-				satelliteDataNative[numSatellitesLoaded].txFreq = codeplugKepsData[numSatellitesLoaded].txFreq;
-				satelliteDataNative[numSatellitesLoaded].txCTCSS = codeplugKepsData[numSatellitesLoaded].txCTCSS;
-				satelliteDataNative[numSatellitesLoaded].armCTCSS = codeplugKepsData[numSatellitesLoaded].armCTCSS;
+						satelliteDataNative[numSatellitesLoaded].freqs[SATELLITE_VOICE_FREQ].rxFreq = codeplugKepsData.data[numSatellitesLoaded].rxFreq1;
+						satelliteDataNative[numSatellitesLoaded].freqs[SATELLITE_VOICE_FREQ].txFreq = codeplugKepsData.data[numSatellitesLoaded].txFreq1;
+						satelliteDataNative[numSatellitesLoaded].freqs[SATELLITE_VOICE_FREQ].txCTCSS = codeplugKepsData.data[numSatellitesLoaded].txCTCSS1;
+						satelliteDataNative[numSatellitesLoaded].freqs[SATELLITE_VOICE_FREQ].armCTCSS = codeplugKepsData.data[numSatellitesLoaded].armCTCSS1;
 
-				memset(&satelliteDataNative[numSatellitesLoaded].predictions, 0x00, sizeof(satellitePredictions_t));
+						satelliteDataNative[numSatellitesLoaded].freqs[SATELLITE_APRS_FREQ].rxFreq = codeplugKepsData.data[numSatellitesLoaded].rxFreq2;
+						satelliteDataNative[numSatellitesLoaded].freqs[SATELLITE_APRS_FREQ].txFreq = codeplugKepsData.data[numSatellitesLoaded].rxFreq2;
+						satelliteDataNative[numSatellitesLoaded].freqs[SATELLITE_APRS_FREQ].txCTCSS = 0;//codeplugKepsData.data[numSatellitesLoaded].txCTCSS1;
+						satelliteDataNative[numSatellitesLoaded].freqs[SATELLITE_APRS_FREQ].armCTCSS = 0;//codeplugKepsData.data[numSatellitesLoaded].armCTCSS1;
+
+						satelliteDataNative[numSatellitesLoaded].freqs[SATELLITE_OTHER_FREQ].rxFreq = codeplugKepsData.data[numSatellitesLoaded].rxFreq3;
+						satelliteDataNative[numSatellitesLoaded].freqs[SATELLITE_OTHER_FREQ].txFreq = codeplugKepsData.data[numSatellitesLoaded].txFreq3;
+						satelliteDataNative[numSatellitesLoaded].freqs[SATELLITE_OTHER_FREQ].txCTCSS = 0;//codeplugKepsData.data[numSatellitesLoaded].txCTCSS1;
+						satelliteDataNative[numSatellitesLoaded].freqs[SATELLITE_OTHER_FREQ].armCTCSS = 0;//codeplugKepsData.data[numSatellitesLoaded].armCTCSS1;
+						memcpy(satelliteDataNative[numSatellitesLoaded].AdditionalData, codeplugKepsData.data[numSatellitesLoaded].AdditionalData, ADDITION_DATA_SIZE);
+
+						memset(&satelliteDataNative[numSatellitesLoaded].predictions, 0x00, sizeof(satellitePredictions_t));
 			}
 			else
 			{
@@ -1283,7 +1408,7 @@ void menuSatelliteScreenClearPredictions(bool reloadKeps)
 	numTotalSatellitesPredicted = 0;
 	currentlyDisplayedListPosition = 0; //reset the list display position if the predictions have been cleared.
 
-	for(int s=0; s<NUM_SATELLITES; s++)
+	for(int s = 0; s < NUM_SATELLITES; s++)
 	{
 		memset(&satelliteDataNative[s].predictions, 0x00, sizeof(satellitePredictions_t));
 	}
@@ -1292,7 +1417,8 @@ void menuSatelliteScreenClearPredictions(bool reloadKeps)
 	{
 		loadKeps();
 	}
-	currentActiveSatellite =  &satelliteDataNative[0];
+
+	currentActiveSatellite = &satelliteDataNative[0];
 
 	uiDataGlobal.SatelliteAndAlarmData.alarmType = ALARM_TYPE_NONE;
 }
@@ -1304,7 +1430,7 @@ static int menuSatelliteFindNextSatellite(void)
 	uint32_t passTime = 0xFFFFFFFF;// highest possible number
 	satelliteData_t *seatchingSat;
 
-	for(int sat=0; sat < numSatellitesLoaded; sat++)
+	for(int sat = 0; sat < numSatellitesLoaded; sat++)
 	{
 		seatchingSat = &satelliteDataNative[sat];
 
@@ -1329,7 +1455,7 @@ static void selectSatellite(uint32_t selectedSatellite)
 
 		calculateActiveSatelliteData(true);
 
-		currentChannelData->txTone = currentActiveSatellite->txCTCSS;
+		currentChannelData->txTone = currentActiveSatellite->freqs[currentSatelliteFreqIndex].txCTCSS;
 
 		if (currentChannelData->chMode == RADIO_MODE_NONE)
 		{
@@ -1337,6 +1463,9 @@ static void selectSatellite(uint32_t selectedSatellite)
 			trxSetModeAndBandwidth(currentChannelData->chMode, true);
 		}
 		hasSelectedSatellite = true;
+
+		aprsBeaconingPrepareSatelliteConfig();
+
 		voicePromptsInit();
 }
 
@@ -1348,10 +1477,13 @@ bool menuSatelliteIsDisplayingHeader(void)
 void menuSatelliteTxScreen(uint32_t txTimeSecs)
 {
 	char buffer[SCREEN_LINE_BUFFER_SIZE];
+
 	displayClearBuf();
 	uiUtilityRenderHeader(false, false);
+
 	snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, " %d ", txTimeSecs);
 	uiUtilityDisplayInformation(buffer, DISPLAY_INFO_TX_TIMER, -1);
+
 	satelliteCalculateForDateTimeSecs(currentActiveSatellite, uiDataGlobal.dateTimeSecs, &currentSatelliteResults, SATELLITE_PREDICTION_LEVEL_FULL);
 
 	snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%s:%3d%c %s:%3d%c", currentLanguage->azimuth, currentSatelliteResults.azimuthAsInteger, 176, currentLanguage->elevation, currentSatelliteResults.elevationAsInteger, 176);
@@ -1365,6 +1497,33 @@ void menuSatelliteTxScreen(uint32_t txTimeSecs)
 	displayRender();
 }
 
+void menuSatelliteSetFullReload(void)
+{
+	displayMode = SATELLITE_SCREEN_ALL_PREDICTIONS_LIST;
+	hasSelectedSatellite = false;
+	hasSatelliteKeps = false;
+}
+
+static void exitCallback(void *data)
+{
+	if (displayMode == SATELLITE_SCREEN_ALL_PREDICTIONS_LIST)
+	{
+		clockManagerSetRunMode(kAPP_PowerModeRun, CLOCK_MANAGER_SPEED_RUN);
+	}
+
+	if (menuSystemGetRootMenuNumber() == UI_CHANNEL_MODE)
+	{
+		currentChannelData = &channelScreenChannelData;
+		uiChannelModeLoadChannelData(true, false);
+	}
+	else
+	{
+		currentChannelData = &settingsVFOChannel[nonVolatileSettings.currentVFONumber];
+		uiVFOModeloadChannelData(false);
+	}
+
+	aprsBeaconingResetTimers();
+}
 
 static void calculateActiveSatelliteData(bool forceFrequencyUpdate)
 {
@@ -1372,8 +1531,8 @@ static void calculateActiveSatelliteData(bool forceFrequencyUpdate)
 
 	satelliteCalculateForDateTimeSecs(currentActiveSatellite, uiDataGlobal.dateTimeSecs, &currentSatelliteResults, SATELLITE_PREDICTION_LEVEL_FULL);
 
-	uint32_t rxF = currentSatelliteResults.rxFreq / 10;
-	uint32_t txF = currentSatelliteResults.txFreq / 10;
+	uint32_t rxF = currentSatelliteResults.freqs[currentSatelliteFreqIndex].rxFreq / 10;
+	uint32_t txF = currentSatelliteResults.freqs[currentSatelliteFreqIndex].txFreq / 10;
 	currentChannelData->txFreq = txF;// Tx freq can be updated immediately
 	// Only update the Rx freq is its off by more than 500Hz,
 	// to prevent constant dropout in the Rx caused by the process of changing the frequency of the AT1846S
@@ -1395,12 +1554,12 @@ static void calculateActiveSatelliteData(bool forceFrequencyUpdate)
 			satelliteVisible = true;// satellite acquired
 
 			voicePromptsInitWithOverride();
-			voicePromptsAppendLanguageString(&currentLanguage->satellite);
+			voicePromptsAppendLanguageString(currentLanguage->satellite);
 			voicePromptsAppendString(currentActiveSatellite->name);
-			voicePromptsAppendLanguageString(&currentLanguage->azimuth);
+			voicePromptsAppendLanguageString(currentLanguage->azimuth);
 
 			char buf[16];
-			snprintf(buf, 16, "%03d%c", currentSatelliteResults.azimuthAsInteger,176);
+			snprintf(buf, 16, "%03d%c", currentSatelliteResults.azimuthAsInteger, 176);
 			voicePromptsAppendString(buf);
 			voicePromptsPlay();
 		}
@@ -1411,8 +1570,8 @@ static void calculateActiveSatelliteData(bool forceFrequencyUpdate)
 		{
 			satelliteVisible = false;// satellite lost
 			voicePromptsInitWithOverride();
-			voicePromptsAppendLanguageString(&currentLanguage->satellite);
-			voicePromptsAppendLanguageString(&currentLanguage->off);
+			voicePromptsAppendLanguageString(currentLanguage->satellite);
+			voicePromptsAppendLanguageString(currentLanguage->off);
 			voicePromptsPlay();
 		}
 	}

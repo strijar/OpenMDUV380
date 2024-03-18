@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -73,7 +73,6 @@ menuStatus_t uiMessageBox(uiEvent_t *ev, bool isFirstRun)
 		}
 		else
 		{
-
 			if (ev->hasEvent)
 			{
 				handleEvent(ev);
@@ -92,6 +91,12 @@ static void handleEvent(uiEvent_t *ev)
 		{
 			return;
 		}
+	}
+
+	if ((ev->events & FUNCTION_EVENT) && (ev->function == FUNC_REDRAW))
+	{
+		updateScreen(true);
+		return;
 	}
 
 	if (KEYCHECK_SHORTUP(ev->keys, KEY_GREEN))
@@ -208,11 +213,13 @@ static void updateScreen(bool forceRedraw)
 		{
 			if (uiDataGlobal.MessageBox.decoration != MESSAGEBOX_DECORATION_NONE)
 			{
+				displayThemeApply(THEME_ITEM_FG_DECORATION, THEME_ITEM_BG_NOTIFICATION);
 				displayDrawRoundRectWithDropShadow(4, 4 + DISPLAY_V_OFFSET, DISPLAY_SIZE_X - (2 * 4), DISPLAY_SIZE_Y - (uiDataGlobal.MessageBox.buttons != MESSAGEBOX_BUTTONS_NONE ? FONT_SIZE_3_HEIGHT : 0) - 6 - DISPLAY_V_EXTRA_PIXELS, 5, true);
 			}
 
 			if (strlen(uiDataGlobal.MessageBox.message))
 			{
+				displayThemeApply(THEME_ITEM_FG_NOTIFICATION, THEME_ITEM_BG_NOTIFICATION);
 				displayMessage();
 			}
 
@@ -228,6 +235,7 @@ static void updateScreen(bool forceRedraw)
 
 			if (forceRedraw)
 			{
+				displayThemeApply(THEME_ITEM_FG_TEXT_INPUT, THEME_ITEM_BG);
 				displayMessage();
 
 				uiDataGlobal.MessageBox.buttons = MESSAGEBOX_BUTTONS_OK;
@@ -236,6 +244,7 @@ static void updateScreen(bool forceRedraw)
 			else
 			{
 				// Clear input
+				displayThemeResetToDefault();
 				displayFillRect(0, TITLE_BOX_HEIGHT + 2, DISPLAY_SIZE_X,
 						DISPLAY_SIZE_Y - TITLE_BOX_HEIGHT - FONT_SIZE_3_HEIGHT - 2, true);
 			}
@@ -243,6 +252,7 @@ static void updateScreen(bool forceRedraw)
 			memset(pinStr, 0, sizeof(pinStr));
 			memcpy(pinStr, uiDataGlobal.FreqEnter.digits, SAFE_MIN(uiDataGlobal.MessageBox.pinLength, FREQ_ENTER_DIGITS_MAX));
 
+			displayThemeApply(THEME_ITEM_FG_TEXT_INPUT, THEME_ITEM_BG);
 			displayPrintCentered(DISPLAY_Y_POS_RX_FREQ, pinStr, FONT_SIZE_3);
 
 			// Cursor
@@ -269,6 +279,7 @@ static void updateScreen(bool forceRedraw)
 			break;
 	}
 
+	displayThemeResetToDefault();
 	displayRender();
 }
 
@@ -349,7 +360,9 @@ static void displayMessage(void)
 			decoration = true; // Override decoration
 
 			// Display title
+			displayThemeApply(THEME_ITEM_FG_DECORATION, THEME_ITEM_BG_MENU_NAME);
 			displayDrawRoundRectWithDropShadow(2, 2, (DISPLAY_SIZE_X - 6), TITLE_BOX_HEIGHT, 3, true);
+			displayThemeApply(THEME_ITEM_FG_MENU_NAME, THEME_ITEM_BG_MENU_NAME);
 
 			y = 3;
 		}
