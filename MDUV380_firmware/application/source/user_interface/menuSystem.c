@@ -137,7 +137,7 @@ static menuFunctionData_t menuFunctions[] =
 		{ NULL,               		0 },	/* Was Poweroff	*/
 		{ NULL,                		0 },	/* Was VFOMode */
 		{ NULL,            			0 },	/* Was ChannelMode */
-		{ menuLockScreen,           0 },
+		{ NULL,           			0 },	/* Was menuLockScreen */
 		{ menuPrivateCall,          0 },
 		{ menuContactDetails,       0 }, // Contact New
 };

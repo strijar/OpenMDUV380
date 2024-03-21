@@ -34,6 +34,7 @@
 #include "user_interface/uiMenu.h"
 #include "user_interface/uiHeader.h"
 #include "user_interface/uiCaller.h"
+#include "user_interface/uiLockScreen.h"
 #include "functions/tx.h"
 
 #include "functions/codeplug.h"
@@ -96,6 +97,17 @@ static void unloadCallback(lv_event_t * e) {
 static void keyCallback(lv_event_t * e) {
 	uint32_t	key = lv_event_get_key(e);
 	int			mode = trxGetMode();
+
+	if (key == '#' && buttonsPressed(BUTTON_SK2)) {
+		lockDisplay = !lockDisplay;
+		soundSetMelody(MELODY_KEY_LONG_BEEP);
+		return;
+	}
+
+	if (lockDisplay) {
+		soundSetMelody(MELODY_ERROR_BEEP);
+		return;
+	}
 
 	switch (key) {
 		case LV_KEY_ESC:
@@ -181,6 +193,11 @@ static void buttonCallback(lv_event_t * e) {
 
 	switch (event->button) {
 		case BUTTON_PTT:
+			if (lockPTT) {
+				soundSetMelody(MELODY_ERROR_BEEP);
+				return;
+			}
+
 			switch (event->state) {
 				case BUTTON_PRESS:
 					rxPowerSavingSetLevel(ECOPHASE_POWERSAVE_INACTIVE);

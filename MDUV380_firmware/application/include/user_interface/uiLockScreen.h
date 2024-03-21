@@ -1,6 +1,7 @@
 /*
- * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
+ *                         Oleg Belousov, R1CBU
  *
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions
@@ -26,7 +27,13 @@
  *
  */
 
-#include "user_interface/uiLockScreen.h"
 
-bool lockDisplay = false;
-bool lockPTT = false;
+#ifndef INCLUDE_USER_INTERFACE_UILOCKSCREEN_H_
+#define INCLUDE_USER_INTERFACE_UILOCKSCREEN_H_
+
+#include <stdbool.h>
+
+extern bool lockDisplay;
+extern bool lockPTT;
+
+#endif /* INCLUDE_USER_INTERFACE_UILOCKSCREEN_H_ */
