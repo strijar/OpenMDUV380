@@ -183,6 +183,7 @@ static void buttonCallback(lv_event_t * e) {
 		case BUTTON_PTT:
 			switch (event->state) {
 				case BUTTON_PRESS:
+					rxPowerSavingSetLevel(ECOPHASE_POWERSAVE_INACTIVE);
 					txTurnOn();
 					break;
 
