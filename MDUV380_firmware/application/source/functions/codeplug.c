@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2019      Kai Ludwig, DG4KLU
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -232,7 +232,7 @@ uint16_t codeplugCSSToInt(uint16_t tone)
 		return bcd2int(tone);
 	}
 
-	return tone;
+	return ((tone == 0x0) ? CODEPLUG_CSS_TONE_NONE : tone);
 }
 
 // Converts an int (with flags if DCS) to codeplug coded-squelch system value
@@ -246,7 +246,7 @@ uint16_t codeplugIntToCSS(uint16_t tone)
 		return int2bcd(tone);
 	}
 
-	return tone;
+	return ((tone == 0x0) ? CODEPLUG_CSS_TONE_NONE : tone);
 }
 
 void codeplugUtilConvertBufToString(char *codeplugBuf, char *outBuf, int len)
@@ -538,11 +538,12 @@ struct
 		{ _getLDMRFlag1, CODEPLUG_CHANNEL_LIBREDMR_FLAG1_NO_ECO,         5 }, // CHANNEL_FLAG_NO_ECO,
 		{ _getLDMRFlag1, CODEPLUG_CHANNEL_LIBREDMR_FLAG1_OUT_OF_BAND,    4 }, // CHANNEL_FLAG_OUT_OF_BAND,
 		{ _getLDMRFlag1, CODEPLUG_CHANNEL_LIBREDMR_FLAG1_USE_LOCATION,   3 }, // CHANNEL_FLAG_USE_LOCATION
+		{ _getLDMRFlag1, CODEPLUG_CHANNEL_LIBREDMR_FLAG1_FORCE_DMO,      2 }, // CHANNEL_FLAG_FORCE_DMO
 		// flag2
 		{ _getFlag2,     CODEPLUG_CHANNEL_FLAG2_TIMESLOT_TWO,            6 }, // CHANNEL_FLAG_TIMESLOT_TWO,
 		// flag3
-		{ _getFlag3,     CODEPLUG_CHANNEL_FLAG3_STE,                     6 }, // CODEPLUG_CHANNEL_FLAG3_STE,
-		{ _getFlag3,     CODEPLUG_CHANNEL_FLAG3_NON_STE,                 5 }, // CODEPLUG_CHANNEL_FLAG3_NON_STE,
+		{ _getFlag3,     CODEPLUG_CHANNEL_FLAG3_STE,                     6 }, // CHANNEL_FLAG_STE,
+		{ _getFlag3,     CODEPLUG_CHANNEL_FLAG3_NON_STE,                 5 }, // CHANNEL_FLAG_NON_STE,
 		// flag4
 		{ _getFlag4,     CODEPLUG_CHANNEL_FLAG4_POWER,                   7 }, // CHANNEL_FLAG_POWER,
 		{ _getFlag4,     CODEPLUG_CHANNEL_FLAG4_VOX,                     6 }, // CHANNEL_FLAG_VOX,
@@ -614,6 +615,7 @@ void codeplugChannelGetDataForIndex(int index, struct_codeplugChannel_t *channel
 	channelBuf->rxFreq = bcd2int(channelBuf->rxFreq);
 	channelBuf->txTone = codeplugCSSToInt(channelBuf->txTone);
 	channelBuf->rxTone = codeplugCSSToInt(channelBuf->rxTone);
+
 	channelBuf->NOT_IN_CODEPLUG_flag = 0x00;
 	channelBuf->NOT_IN_CODEPLUG_CALCULATED_DISTANCE_X10 = -1;
 

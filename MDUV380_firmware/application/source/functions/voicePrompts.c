@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -206,7 +206,7 @@ void voicePromptsTick(void)
 		{
 			promptTail--;
 
-			if ((promptTail == 0) && trxCarrierDetected() && (trxGetMode() == RADIO_MODE_ANALOG))
+			if ((promptTail == 0) && trxCarrierDetected(RADIO_DEVICE_PRIMARY) && (trxGetMode() == RADIO_MODE_ANALOG))
 			{
 				radioSetAudioPath(true);					// Set the audio path to FM -> audio amp.
 			}

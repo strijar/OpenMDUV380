@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2020-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -117,10 +117,13 @@ uint32_t buttonsRead(void)
 	GPIO_InitStruct.Pull = GPIO_PULLDOWN;
 
 	GPIO_InitStruct.Pin =
-#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 			LCD_D5_Pin |
 #endif
-			LCD_D6_Pin | LCD_D7_Pin;
+#if ! defined(PLATFORM_MD2017)
+			LCD_D6_Pin |
+#endif
+			LCD_D7_Pin;
 	HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
 	// Set ROW2 (K3) in OUTPUT mode, as keyboard code sets it to floating (avoiding Multiple key press combination problems).
@@ -140,14 +143,14 @@ uint32_t buttonsRead(void)
 
 #if defined(PLATFORM_MDUV380)
 	if (HAL_GPIO_ReadPin(LCD_D7_GPIO_Port, LCD_D7_Pin) == GPIO_PIN_SET)
-#elif defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017) // Top side button -> ORANGE
+#elif defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017) // Top side button -> ORANGE
 	if (HAL_GPIO_ReadPin(LCD_D5_GPIO_Port, LCD_D5_Pin) == GPIO_PIN_SET)
 #endif
 	{
 #if defined(PLATFORM_MD380)
 		result |= BUTTON_SK2;
 		checkMButtonState(&result, MBUTTON_SK2, BUTTON_SK2);
-#elif defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#elif defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 		result |= BUTTON_ORANGE;
 		checkMButtonState(&result, MBUTTON_ORANGE, BUTTON_ORANGE);
 #else
@@ -156,6 +159,7 @@ uint32_t buttonsRead(void)
 #endif
 	}
 
+#if !defined(PLATFORM_MD2017)
 	if (HAL_GPIO_ReadPin(LCD_D6_GPIO_Port, LCD_D6_Pin) == GPIO_PIN_SET)
 	{
 #if defined(PLATFORM_MD380)
@@ -166,8 +170,9 @@ uint32_t buttonsRead(void)
 		checkMButtonState(&result, MBUTTON_SK2, BUTTON_SK2);
 #endif
 	}
+#endif
 
-#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 	if (HAL_GPIO_ReadPin(LCD_D7_GPIO_Port, LCD_D7_Pin) == GPIO_PIN_SET)
 	{
 		result |= BUTTON_SK1;

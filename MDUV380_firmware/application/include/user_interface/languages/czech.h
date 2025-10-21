@@ -1,6 +1,6 @@
 /* -*- coding: binary; -*- */
 /*
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions
@@ -318,7 +318,9 @@ const stringsTable_t czechLanguage =
 .aprs_turn_angle			= "Úhel zat.", // MaxLen 16 (with ':' + 5..90 + '<degree>')
 .aprs_turn_slope			= "Sklon zat", // MaxLen 16 (with ':' + 1..255 + '<degree>/v')
 .aprs_turn_time				= "Doba zat.", // MaxLen 16 (with ':' + 5..180 + 's')
-.auto_lock				= "Auto lock", // MaxLen 16 (with ':' + .off or 0.5..15 (.5 step) + 'min')
+.auto_lock				= "Auto zámek", // MaxLen 16 (with ':' + .off or 0.5..15 (.5 step) + 'min')
+.trackball				= "Trackball", // MaxLen 16 (with ':' + .on or .off)
+.dmr_force_dmo				= "Vynutit DMO", // MaxLen 16 (with ':' + .n_a or .on or .off)
 };
 /********************************************************************
  *

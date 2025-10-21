@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2019      Kai Ludwig, DG4KLU
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Colin, G4EML
  *                         Daniel Caujolle-Bert, F1RMB
  *
@@ -27,7 +27,6 @@
  * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
-#include "hardware/radioHardwareInterface.h"
 #include "functions/calibration.h"
 #include "functions/ticks.h"
 #include "hardware/HR-C6000.h"
@@ -62,19 +61,22 @@ const frequencyHardwareBand_t RADIO_HARDWARE_FREQUENCY_BANDS[RADIO_BANDS_TOTAL_N
 #else
 const frequencyHardwareBand_t RADIO_HARDWARE_FREQUENCY_BANDS[RADIO_BANDS_TOTAL_NUM] =  {
 													{
-														.calTableMinFreq = 13600000,
+														.calIQTableMinFreq = 13600000,
+														.calPowerTableMinFreq = 13500000,
 														.minFreq=12700000,
 														.maxFreq=17800000
 													},// VHF
 #if !(defined(PLATFORM_MD9600) || defined(PLATFORM_MD380))
 													{
-														.calTableMinFreq = 13600000,
+														.calIQTableMinFreq = 13600000,
+														.calPowerTableMinFreq = 13500000,
 														.minFreq=19000000,
 														.maxFreq=28200000
 													},// 220Mhz
 #endif
 													{
-														.calTableMinFreq = 40000000,
+														.calIQTableMinFreq = 40000000,
+														.calPowerTableMinFreq = 40000000,
 														.minFreq=38000000,
 														.maxFreq=56400000
 													}// UHF
@@ -141,19 +143,11 @@ const frequencyBand_t DEFAULT_USER_FREQUENCY_BANDS[RADIO_BANDS_TOTAL_NUM] =  {
 
 //const uint32_t RSSI_NOISE_SAMPLE_PERIOD_PIT = 25U;// 25 milliseconds
 
-static int txPowerLevel = -1;
-static bool analogSignalReceived = false;
-static bool analogTriggeredAudio = false;
-static bool digitalSignalReceived = false;
 static volatile ticksTimer_t trxNextRssiNoiseSampleTimer = { 0, 0 };
 static volatile ticksTimer_t trxNextSquelchCheckingTimer = { 0, 0 };
 
 static uint8_t trxCssMeasureCount = 0;
 
-static volatile int currentMode = RADIO_MODE_NONE;
-static bool currentBandWidthIs25kHz = BANDWIDTH_12P5KHZ;
-static int currentRxFrequency = -1;
-static int currentTxFrequency = -1;
 static uint8_t currentCC = 1;
 
 #define CTCSS_HOLD_DELAY            6
@@ -165,9 +159,6 @@ static bool rxCSSactive = false;
 //static uint8_t rxCSSTriggerCount = 0;
 static int trxCurrentDMRTimeSlot;
 
-
-volatile uint8_t trxRxSignal = 0;
-volatile uint8_t trxRxNoise = 255;
 volatile uint8_t trxTxVox;
 volatile uint8_t trxTxMic;
 
@@ -183,19 +174,12 @@ volatile uint32_t trxDMRstartTime;
 
 static uint8_t voice_gain_tx = 0x31; // default voice_gain_tx fro calibration, needs to be declared here in case calibration:OFF
 
-static int lastSetTxFrequency = -1;
-static int lastSetTxPowerLevel = -1;
-
 volatile bool trxTransmissionEnabled = false;
 volatile bool trxIsTransmitting = false;
 volatile bool txPAEnabled = false;
 
 uint32_t trxTalkGroupOrPcId = 9;// Set to local TG just in case there is some problem with it not being loaded
 uint32_t trxDMRID = 0;// Set ID to 0. Not sure if its valid. This value needs to be loaded from the codeplug.
-
-int trxCurrentBand[2] = { RADIO_BAND_VHF, RADIO_BAND_VHF };// Rx and Tx band.
-volatile int trxDMRModeRx = DMR_MODE_DMO;// simplex
-int trxDMRModeTx = DMR_MODE_DMO;// simplex
 
 
 // DTMF Order: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, A, B, C, D, *, #
@@ -210,6 +194,9 @@ static uint8_t trxAnalogFilterLevel = ANALOG_FILTER_CSS;
 
 volatile bool trxDMRSynchronisedRSSIReadPending = false;
 
+static uint8_t trxSaveVoiceGainTx = 0xff;
+static uint16_t trxSaveDeviation = 0xff;
+
 
 static void trxUpdateC6000Calibration(void);
 static void trxUpdateRadioCalibration(void);
@@ -218,7 +205,7 @@ static void trxUpdateRadioCalibration(void);
 // =================================================================
 //
 
-uint8_t trxGetAnalogFilterLevel()
+uint8_t trxGetAnalogFilterLevel(void)
 {
 	return trxAnalogFilterLevel;
 }
@@ -230,12 +217,12 @@ void trxSetAnalogFilterLevel(uint8_t newFilterLevel)
 
 int trxGetMode(void)
 {
-	return currentMode;
+	return currentRadioDevice->currentMode;
 }
 
 bool trxGetBandwidthIs25kHz(void)
 {
-	return currentBandWidthIs25kHz;
+	return currentRadioDevice->currentBandWidthIs25kHz;
 }
 
 void trxSetModeAndBandwidth(int mode, bool bandwidthIs25kHz)
@@ -245,8 +232,8 @@ void trxSetModeAndBandwidth(int mode, bool bandwidthIs25kHz)
 		rxPowerSavingSetState(ECOPHASE_POWERSAVE_INACTIVE);
 	}
 
-	digitalSignalReceived = false;
-	analogSignalReceived = false;
+	currentRadioDevice->digitalSignalReceived = false;
+	currentRadioDevice->analogSignalReceived = false;
 	ticksTimerStart((ticksTimer_t *)&trxNextRssiNoiseSampleTimer, RSSI_NOISE_SAMPLE_PERIOD_PIT);
 	ticksTimerStart((ticksTimer_t *)&trxNextSquelchCheckingTimer, RSSI_NOISE_SAMPLE_PERIOD_PIT);
 	trxCssMeasureCount = 0;
@@ -258,9 +245,9 @@ void trxSetModeAndBandwidth(int mode, bool bandwidthIs25kHz)
 		mode = RADIO_MODE_ANALOG;
 	}
 
-	if ((mode != currentMode) || (bandwidthIs25kHz != currentBandWidthIs25kHz))
+	if ((mode != currentRadioDevice->currentMode) || (bandwidthIs25kHz != currentRadioDevice->currentBandWidthIs25kHz))
 	{
-		currentMode = mode;
+		currentRadioDevice->currentMode = mode;
 
 		taskENTER_CRITICAL();
 		switch(mode)
@@ -273,19 +260,19 @@ void trxSetModeAndBandwidth(int mode, bool bandwidthIs25kHz)
 				trxUpdateRadioCalibration();
 				break;
 			case RADIO_MODE_ANALOG:
-				currentBandWidthIs25kHz = bandwidthIs25kHz;
+				currentRadioDevice->currentBandWidthIs25kHz = bandwidthIs25kHz;
 				//radioSetAudioPath(true);							//select the FM audio Path
 				HRC6000TerminateDigital();
 				radioSetMode(RADIO_MODE_ANALOG);
 				trxUpdateC6000Calibration();
-				radioSetIF(trxCurrentBand[TRX_RX_FREQ_BAND], currentBandWidthIs25kHz);
+				radioSetIF(currentRadioDevice->trxCurrentBand[TRX_RX_FREQ_BAND], currentRadioDevice->currentBandWidthIs25kHz);
 				trxUpdateRadioCalibration();
 				break;
 			case RADIO_MODE_DIGITAL:
-				currentBandWidthIs25kHz = BANDWIDTH_12P5KHZ;// DMR bandwidth is 12.5kHz
+				currentRadioDevice->currentBandWidthIs25kHz = BANDWIDTH_12P5KHZ;// DMR bandwidth is 12.5kHz
 				radioSetMode(RADIO_MODE_DIGITAL);
 				trxUpdateC6000Calibration();
-				radioSetIF(trxCurrentBand[TRX_RX_FREQ_BAND], currentBandWidthIs25kHz);
+				radioSetIF(currentRadioDevice->trxCurrentBand[TRX_RX_FREQ_BAND], currentRadioDevice->currentBandWidthIs25kHz);
 				trxUpdateRadioCalibration();
 				HRC6000InitDigital();
 				break;
@@ -317,7 +304,7 @@ void trxSetModeAndBandwidth(int mode, bool bandwidthIs25kHz)
 	}
 }
 
-int trxGetNextOrPrevBandFromFrequency(int frequency, bool nextBand)
+uint32_t trxGetNextOrPrevBandFromFrequency(uint32_t frequency, bool nextBand)
 {
 	if (nextBand)
 	{
@@ -326,7 +313,7 @@ int trxGetNextOrPrevBandFromFrequency(int frequency, bool nextBand)
 			return 0; // First band
 		}
 
-		for(int band = 0; band < RADIO_BANDS_TOTAL_NUM - 1; band++)
+		for(uint32_t band = 0; band < RADIO_BANDS_TOTAL_NUM - 1; band++)
 		{
 			if (frequency > RADIO_HARDWARE_FREQUENCY_BANDS[band].maxFreq && frequency < RADIO_HARDWARE_FREQUENCY_BANDS[band + 1].minFreq)
 			{
@@ -341,7 +328,7 @@ int trxGetNextOrPrevBandFromFrequency(int frequency, bool nextBand)
 			return (RADIO_BANDS_TOTAL_NUM - 1); // Last band
 		}
 
-		for (int band = 1; band < RADIO_BANDS_TOTAL_NUM; band++)
+		for (uint32_t band = 1; band < RADIO_BANDS_TOTAL_NUM; band++)
 		{
 			if (frequency < RADIO_HARDWARE_FREQUENCY_BANDS[band].minFreq && frequency > RADIO_HARDWARE_FREQUENCY_BANDS[band - 1].maxFreq)
 			{
@@ -350,12 +337,12 @@ int trxGetNextOrPrevBandFromFrequency(int frequency, bool nextBand)
 		}
 	}
 
-	return -1;
+	return FREQUENCY_OUT_OF_BAND;
 }
 
-int trxGetBandFromFrequency(int frequency)
+uint32_t trxGetBandFromFrequency(uint32_t frequency)
 {
-	for (int i = 0; i < RADIO_BANDS_TOTAL_NUM; i++)
+	for (uint32_t i = 0; i < RADIO_BANDS_TOTAL_NUM; i++)
 	{
 		if ((frequency >= RADIO_HARDWARE_FREQUENCY_BANDS[i].minFreq) && (frequency <= RADIO_HARDWARE_FREQUENCY_BANDS[i].maxFreq))
 		{
@@ -363,10 +350,10 @@ int trxGetBandFromFrequency(int frequency)
 		}
 	}
 
-	return -1;
+	return FREQUENCY_OUT_OF_BAND;
 }
 
-bool trxCheckFrequencyInAmateurBand(int frequency)
+bool trxCheckFrequencyInAmateurBand(uint32_t frequency)
 {
 	if (nonVolatileSettings.txFreqLimited == BAND_LIMITS_FROM_CPS)
 	{
@@ -381,6 +368,7 @@ bool trxCheckFrequencyInAmateurBand(int frequency)
 #endif
 			((frequency >= DEFAULT_USER_FREQUENCY_BANDS[RADIO_BAND_UHF].minFreq) && (frequency <= DEFAULT_USER_FREQUENCY_BANDS[RADIO_BAND_UHF].maxFreq));
 	}
+
 	return true;// Setting must be BAND_LIMITS_NONE
 }
 
@@ -389,7 +377,7 @@ void trxReadVoxAndMicStrength(void)
 	radioReadVoxAndMicStrength();
 }
 
-// Need to postone the next AT1846ReadRSSIAndNoise() call (see trxReadRSSIAndNoise())
+// Need to postpone the next AT1846ReadRSSIAndNoise() call (see trxReadRSSIAndNoise())
 // msOverride parameter is used if > 0
 void trxPostponeReadRSSIAndNoise(uint32_t msOverride)
 {
@@ -401,18 +389,19 @@ void trxReadRSSIAndNoise(bool force)
 {
 	if (rxPowerSavingIsRxOn() && (ticksTimerHasExpired((ticksTimer_t *)&trxNextRssiNoiseSampleTimer) || force))
 	{
-		radioReadRSSIAndNoiseForBand(trxCurrentBand[TRX_RX_FREQ_BAND]);
+		radioReadRSSIAndNoiseForBand(currentRadioDevice->trxCurrentBand[TRX_RX_FREQ_BAND]);
 		ticksTimerStart((ticksTimer_t *)&trxNextRssiNoiseSampleTimer, RSSI_NOISE_SAMPLE_PERIOD_PIT);
 	}
 }
 
-bool trxCarrierDetected(void)
+bool trxCarrierDetected(RadioDevice_t deviceId)
 {
+	TRXDevice_t *radioDevice = &radioDevices[deviceId];// Get pointer to device to make code below more efficient
 	uint8_t squelch = 0;
 
 	trxReadRSSIAndNoise(true); // We need to get the RSSI and noise now.
 
-	switch(currentMode)
+	switch(radioDevice->currentMode)
 	{
 		case RADIO_MODE_NONE:
 			return false;
@@ -425,45 +414,47 @@ bool trxCarrierDetected(void)
 			}
 			else
 			{
-				squelch = TRX_SQUELCH_MAX - ((nonVolatileSettings.squelchDefaults[trxCurrentBand[TRX_RX_FREQ_BAND]] - 1) * TRX_SQUELCH_INC);
+				squelch = TRX_SQUELCH_MAX - ((nonVolatileSettings.squelchDefaults[radioDevice->trxCurrentBand[TRX_RX_FREQ_BAND]] - 1) * TRX_SQUELCH_INC);
 			}
 			break;
 
 		case RADIO_MODE_DIGITAL:
-			squelch = TRX_SQUELCH_MAX - ((nonVolatileSettings.squelchDefaults[trxCurrentBand[TRX_RX_FREQ_BAND]] - 1) * TRX_SQUELCH_INC);
+			squelch = TRX_SQUELCH_MAX - ((nonVolatileSettings.squelchDefaults[radioDevice->trxCurrentBand[TRX_RX_FREQ_BAND]] - 1) * TRX_SQUELCH_INC);
 			break;
 	}
-	return (trxRxNoise < squelch);
+	return (radioDevice->trxRxNoise < squelch);
 }
 
-bool trxCheckDigitalSquelch(void)
+bool trxCheckDigitalSquelch(RadioDevice_t deviceId)
 {
+	TRXDevice_t *radioDevice = &radioDevices[deviceId];// Get pointer to device to make code below more efficient
+
 	if (ticksTimerHasExpired((ticksTimer_t *)&trxNextSquelchCheckingTimer))
 	{
-		if (currentMode != RADIO_MODE_NONE)
+		if (radioDevice->currentMode != RADIO_MODE_NONE)
 		{
 			uint8_t squelch;
 
-			squelch = TRX_SQUELCH_MAX - ((nonVolatileSettings.squelchDefaults[trxCurrentBand[TRX_RX_FREQ_BAND]] - 1) * TRX_SQUELCH_INC);
+			squelch = TRX_SQUELCH_MAX - ((nonVolatileSettings.squelchDefaults[radioDevice->trxCurrentBand[TRX_RX_FREQ_BAND]] - 1) * TRX_SQUELCH_INC);
 
-			if (trxRxNoise < squelch)
+			if (radioDevice->trxRxNoise < squelch)
 			{
 				if ((uiDataGlobal.rxBeepState & RX_BEEP_CARRIER_HAS_STARTED) == 0)
 				{
 					uiDataGlobal.rxBeepState |= (RX_BEEP_CARRIER_HAS_STARTED | RX_BEEP_CARRIER_HAS_STARTED_EXEC);
 				}
 
-				if(!digitalSignalReceived)
+				if(!radioDevice->digitalSignalReceived)
 				{
-					digitalSignalReceived = true;
+					radioDevice->digitalSignalReceived = true;
 					LedWrite(LED_GREEN, 1);
 				}
 			}
 			else
 			{
-				if (digitalSignalReceived)
+				if (radioDevice->digitalSignalReceived)
 				{
-					digitalSignalReceived = false;
+					radioDevice->digitalSignalReceived = false;
 					LedWrite(LED_GREEN, 0);
 				}
 
@@ -476,14 +467,14 @@ bool trxCheckDigitalSquelch(void)
 
 		ticksTimerStart((ticksTimer_t *)&trxNextSquelchCheckingTimer, RSSI_NOISE_SAMPLE_PERIOD_PIT);
 	}
-	return digitalSignalReceived;
+	return radioDevice->digitalSignalReceived;
 }
 
-void trxTerminateCheckAnalogSquelch(void)
+void trxTerminateCheckAnalogSquelch(RadioDevice_t deviceId)
 {
 	disableAudioAmp(AUDIO_AMP_MODE_RF);
-	analogSignalReceived = false;
-	analogTriggeredAudio = false;
+	radioDevices[deviceId].analogSignalReceived = false;
+	radioDevices[deviceId].analogTriggeredAudio = false;
 	trxCssMeasureCount = 0;
 }
 
@@ -495,12 +486,12 @@ bool trxCheckAnalogSquelch(void)
 		{
 			disableAudioAmp(AUDIO_AMP_MODE_RF);
 		}
-		analogSignalReceived = false;
-		analogTriggeredAudio = false;
+		currentRadioDevice->analogSignalReceived = false;
+		currentRadioDevice->analogTriggeredAudio = false;
 		return false;
 	}
 
-	if (uiVFOModeSweepScanning(false) || (currentMode == RADIO_MODE_NONE))
+	if (uiVFOModeSweepScanning(false) || (currentRadioDevice->currentMode == RADIO_MODE_NONE))
 	{
 		return false;
 	}
@@ -518,14 +509,14 @@ bool trxCheckAnalogSquelch(void)
 		}
 		else
 		{
-			squelch = TRX_SQUELCH_MAX - ((nonVolatileSettings.squelchDefaults[trxCurrentBand[TRX_RX_FREQ_BAND]] - 1) * TRX_SQUELCH_INC);
+			squelch = TRX_SQUELCH_MAX - ((nonVolatileSettings.squelchDefaults[currentRadioDevice->trxCurrentBand[TRX_RX_FREQ_BAND]] - 1) * TRX_SQUELCH_INC);
 		}
 
-		if (trxRxNoise < squelch) //noise less than squelch level = signal present.
+		if (currentRadioDevice->trxRxNoise < squelch) //noise less than squelch level = signal present.
 		{
-			if ((analogSignalReceived == false) || (getAudioAmpStatus() & AUDIO_AMP_MODE_RF) == 0)            // open squelch if this is the first occurrence or if the audio amp was turned off by something else.
+			if ((currentRadioDevice->analogSignalReceived == false) || (getAudioAmpStatus() & AUDIO_AMP_MODE_RF) == 0)            // open squelch if this is the first occurrence or if the audio amp was turned off by something else.
 			{
-				analogSignalReceived = true;
+				currentRadioDevice->analogSignalReceived = true;
 				LedWrite(LED_GREEN, 1);
 
 				// FM: Replace Carrier beeps with Talker beeps if Caller beep option is selected.
@@ -544,15 +535,15 @@ bool trxCheckAnalogSquelch(void)
 					}
 				}
 
-				analogTriggeredAudio = true;
+				currentRadioDevice->analogTriggeredAudio = true;
 				trxCssMeasureCount = 0;
 			}
 		}
-		if (trxRxNoise > squelch + TRX_SQUELCH_HIST)							//add hysteresis to delay squelch closing. This prevents squelch chattering.
+		if (currentRadioDevice->trxRxNoise > squelch + TRX_SQUELCH_HIST)							//add hysteresis to delay squelch closing. This prevents squelch chattering.
 		{
-			if (analogSignalReceived || LedRead(LED_GREEN))
+			if (currentRadioDevice->analogSignalReceived || LedRead(LED_GREEN))
 			{
-				analogSignalReceived = false;
+				currentRadioDevice->analogSignalReceived = false;
 				LedWrite(LED_GREEN, 0);
 
 				// FM: Replace Carrier beeps with Talker beeps if Caller beep option is selected.
@@ -571,18 +562,18 @@ bool trxCheckAnalogSquelch(void)
 					}
 				}
 
-				analogTriggeredAudio = false;
+				currentRadioDevice->analogTriggeredAudio = false;
 				trxCssMeasureCount = 0;
 			}
 		}
 
 		bool cssFlag = (rxCSSactive ? trxCheckCSSFlag(currentChannelData->rxTone) : false);
 
-		if (analogSignalReceived)
+		if (currentRadioDevice->analogSignalReceived)
 		{
 			if (((getAudioAmpStatus() & AUDIO_AMP_MODE_RF) == 0) && ((rxCSSactive == false) || cssFlag))
 			{
-				if (analogTriggeredAudio) // Execute that block of code just once after valid signal is received.
+				if (currentRadioDevice->analogTriggeredAudio) // Execute that block of code just once after valid signal is received.
 				{
 					taskENTER_CRITICAL();
 					if (!voicePromptsIsPlaying())
@@ -590,7 +581,7 @@ bool trxCheckAnalogSquelch(void)
 						radioSetAudioPath(true);						//Select the FM Audio Path
 						enableAudioAmp(AUDIO_AMP_MODE_RF);
 						displayLightTrigger(false);
-						analogTriggeredAudio = false;
+						currentRadioDevice->analogTriggeredAudio = false;
 						trxCssMeasureCount = 0;
 					}
 					taskEXIT_CRITICAL();
@@ -609,8 +600,8 @@ bool trxCheckAnalogSquelch(void)
 					if (trxCssMeasureCount >= CTCSS_HOLD_DELAY)
 					{
 						disableAudioAmp(AUDIO_AMP_MODE_RF);
-						analogSignalReceived = false;
-						analogTriggeredAudio = false;
+						currentRadioDevice->analogSignalReceived = false;
+						currentRadioDevice->analogTriggeredAudio = false;
 						trxCssMeasureCount = 0;
 					}
 				}
@@ -640,27 +631,52 @@ bool trxCheckAnalogSquelch(void)
 		ticksTimerStart((ticksTimer_t *)&trxNextSquelchCheckingTimer, RSSI_NOISE_SAMPLE_PERIOD_PIT);
 	}
 
-	return analogSignalReceived;
+	return currentRadioDevice->analogSignalReceived;
 }
 
-void trxResetSquelchesState(void)
+void trxResetSquelchesState(RadioDevice_t deviceId)
 {
-	digitalSignalReceived = false;
-	analogSignalReceived = false;
+	radioDevices[deviceId].digitalSignalReceived = false;
+	radioDevices[deviceId].analogSignalReceived = false;
 }
 
-void trxSetFrequency(int fRx, int fTx, int dmrMode)
+void trxSetFrequency(uint32_t fRx, uint32_t fTx, int dmrMode)
 {
+	//
+	// Freq could be identical, but not the power of the current channel
+	//
 	if (currentChannelData->libreDMR_Power != 0x00)
 	{
-		txPowerLevel = currentChannelData->libreDMR_Power - 1;
+		currentRadioDevice->txPowerLevel = currentChannelData->libreDMR_Power - 1;
 	}
 	else
 	{
-		txPowerLevel = nonVolatileSettings.txPowerLevel;
+		currentRadioDevice->txPowerLevel = nonVolatileSettings.txPowerLevel;
 	}
 
-	if ((currentRxFrequency != fRx) || (currentTxFrequency != fTx))
+	if (dmrMode == DMR_MODE_AUTO)
+	{
+		// Most DMR radios determine whether to use Active or Passive DMR depending on whether the Tx and Rx freq are the same
+		// This prevents split simplex operation, but since no other radio appears to support split freq simplex
+		// Its easier to do things the same way as othe radios, and revisit this again in the future if split freq simplex is required.
+		if (fRx == fTx)
+		{
+			currentRadioDevice->trxDMRModeTx = DMR_MODE_DMO;
+			currentRadioDevice->trxDMRModeRx = DMR_MODE_DMO;
+		}
+		else
+		{
+			currentRadioDevice->trxDMRModeTx = DMR_MODE_RMO;
+			currentRadioDevice->trxDMRModeRx = DMR_MODE_RMO;
+		}
+	}
+	else
+	{
+		currentRadioDevice->trxDMRModeTx = dmrMode;
+		currentRadioDevice->trxDMRModeRx = dmrMode;
+	}
+
+	if ((currentRadioDevice->currentRxFrequency != fRx) || (currentRadioDevice->currentTxFrequency != fTx))
 	{
 		if (rxPowerSavingIsRxOn() == false)
 		{
@@ -668,34 +684,12 @@ void trxSetFrequency(int fRx, int fTx, int dmrMode)
 		}
 
 		taskENTER_CRITICAL();
-		trxCurrentBand[TRX_RX_FREQ_BAND] = trxGetBandFromFrequency(fRx);
+		currentRadioDevice->trxCurrentBand[TRX_RX_FREQ_BAND] = trxGetBandFromFrequency(fRx);
 
-		currentRxFrequency = fRx;
-		currentTxFrequency = fTx;
+		currentRadioDevice->currentRxFrequency = fRx;
+		currentRadioDevice->currentTxFrequency = fTx;
 
-		if (dmrMode == DMR_MODE_AUTO)
-		{
-			// Most DMR radios determine whether to use Active or Passive DMR depending on whether the Tx and Rx freq are the same
-			// This prevents split simplex operation, but since no other radio appears to support split freq simplex
-			// Its easier to do things the same way as othe radios, and revisit this again in the future if split freq simplex is required.
-			if (currentRxFrequency == currentTxFrequency)
-			{
-				trxDMRModeTx = DMR_MODE_DMO;
-				trxDMRModeRx = DMR_MODE_DMO;
-			}
-			else
-			{
-				trxDMRModeTx = DMR_MODE_RMO;
-				trxDMRModeRx = DMR_MODE_RMO;
-			}
-		}
-		else
-		{
-			trxDMRModeTx = dmrMode;
-			trxDMRModeRx = dmrMode;
-		}
-
-		if (currentMode == RADIO_MODE_DIGITAL)
+		if (currentRadioDevice->currentMode == RADIO_MODE_DIGITAL)
 		{
 			HRC6000TerminateDigital();
 		}
@@ -703,11 +697,11 @@ void trxSetFrequency(int fRx, int fTx, int dmrMode)
 		trxUpdateC6000Calibration();
 		trxUpdateRadioCalibration();
 
-		radioSetFrequency(currentRxFrequency, 0);
+		radioSetFrequency(currentRadioDevice->currentRxFrequency, false);
 		trxSetRX();
-		radioSetIF(trxCurrentBand[TRX_RX_FREQ_BAND], currentBandWidthIs25kHz);
+		radioSetIF(currentRadioDevice->trxCurrentBand[TRX_RX_FREQ_BAND], currentRadioDevice->currentBandWidthIs25kHz);
 
-		if (currentMode == RADIO_MODE_DIGITAL)
+		if (currentRadioDevice->currentMode == RADIO_MODE_DIGITAL)
 		{
 			HRC6000InitDigital();
 		}
@@ -718,19 +712,19 @@ void trxSetFrequency(int fRx, int fTx, int dmrMode)
 	}
 }
 
-int trxGetFrequency(void)
+uint32_t trxGetFrequency(void)
 {
 	if (trxTransmissionEnabled)
 	{
-		return currentTxFrequency;
+		return currentRadioDevice->currentTxFrequency;
 	}
 
-	return currentRxFrequency;
+	return currentRadioDevice->currentRxFrequency;
 }
 
 void trxSetRX(void)
 {
-	if (currentMode == RADIO_MODE_ANALOG)
+	if (currentRadioDevice->currentMode == RADIO_MODE_ANALOG)
 	{
 		trxActivateRx(true);
 	}
@@ -738,10 +732,10 @@ void trxSetRX(void)
 
 void trxConfigurePA_DAC_ForFrequencyBand(void)
 {
-	trxCurrentBand[TRX_TX_FREQ_BAND] = trxGetBandFromFrequency(currentTxFrequency);
-	calibrationGetPowerForFrequency(currentTxFrequency, &trxPowerSettings);
-	lastSetTxFrequency = currentTxFrequency;
-	lastSetTxPowerLevel = txPowerLevel;
+	currentRadioDevice->trxCurrentBand[TRX_TX_FREQ_BAND] = trxGetBandFromFrequency(currentRadioDevice->currentTxFrequency);
+	calibrationGetPowerForFrequency(currentRadioDevice->currentTxFrequency, &trxPowerSettings);
+	currentRadioDevice->lastSetTxFrequency = currentRadioDevice->currentTxFrequency;
+	currentRadioDevice->lastSetTxPowerLevel = currentRadioDevice->txPowerLevel;
 
 	trxUpdate_PA_DAC_Drive();
 }
@@ -752,7 +746,7 @@ void trxSetTX(void)
 
 	trxTransmissionEnabled = true;
 
-	if (currentMode == RADIO_MODE_ANALOG)
+	if (currentRadioDevice->currentMode == RADIO_MODE_ANALOG)
 	{
 		trxActivateTx(true);
 	}
@@ -760,12 +754,14 @@ void trxSetTX(void)
 
 void trxActivateRx(bool critical)
 {
-	trxIsTransmittingDMR = false;
-    radioSetRx(trxCurrentBand[TRX_RX_FREQ_BAND]);
-    radioSetFrequency(currentRxFrequency, 0);
-    radioSetIF(trxCurrentBand[TRX_RX_FREQ_BAND], currentBandWidthIs25kHz);
+	UNUSED_PARAMETER(critical);
 
-    trxUpdateC6000Calibration();// This seems to be needed, otherwise after transmission has ended the Rx appears to have a considerable freq offset
+	trxIsTransmittingDMR = false;
+	radioSetRx(currentRadioDevice->trxCurrentBand[TRX_RX_FREQ_BAND]);
+	radioSetFrequency(currentRadioDevice->currentRxFrequency, false);
+	radioSetIF(currentRadioDevice->trxCurrentBand[TRX_RX_FREQ_BAND], currentRadioDevice->currentBandWidthIs25kHz);
+
+	trxUpdateC6000Calibration();// This seems to be needed, otherwise after transmission has ended the Rx appears to have a considerable freq offset
 
 	ticksTimerStart((ticksTimer_t *)&trxNextRssiNoiseSampleTimer, RSSI_NOISE_SAMPLE_PERIOD_PIT);
 	ticksTimerStart((ticksTimer_t *)&trxNextSquelchCheckingTimer, RSSI_NOISE_SAMPLE_PERIOD_PIT);
@@ -773,18 +769,20 @@ void trxActivateRx(bool critical)
 
 void trxActivateTx(bool critical)
 {
-	if (currentMode == RADIO_MODE_NONE)
+	UNUSED_PARAMETER(critical);
+
+	if (currentRadioDevice->currentMode == RADIO_MODE_NONE)
 	{
 		return;
 	}
 
 	txPAEnabled = true;
-	trxRxSignal = 0;
-	trxRxNoise = 255;
+	currentRadioDevice->trxRxSignal = 0;
+	currentRadioDevice->trxRxNoise = 255;
 
-    radioSetFrequency(currentTxFrequency, 1);
+	radioSetFrequency(currentRadioDevice->currentTxFrequency, true);
 
-	radioSetTx(trxCurrentBand[TRX_TX_FREQ_BAND]);
+	radioSetTx(currentRadioDevice->trxCurrentBand[TRX_TX_FREQ_BAND]);
 }
 
 //start of DMR transmission so do a full activation of the transmitter
@@ -800,48 +798,72 @@ void trxFastDMRTx(bool tx)
 	radioFastTx(tx);
 }
 
-void trxSetPowerFromLevel(int powerLevel)
+void trxSetPowerFromLevel(uint8_t powerLevel)
 {
-	txPowerLevel = powerLevel;
+	currentRadioDevice->txPowerLevel = powerLevel;
 }
 
 void trxUpdate_PA_DAC_Drive(void)
 {
-	switch(txPowerLevel)
+	static const float fractionalPowers[3][4] = {
+#if defined(PLATFORM_RT84_DM1701)
+		// DM1701 or RT84 which have same RF hardware
+		{0.45f, 0.75f, 0.25f, 0.53f},// VHF
+		{0.45f, 0.75f, 0.25f, 0.53f},// 220Mhz - ESTIMATED - NOT TESTED PROBABLY NOT CORRECT
+		{0.46f, 0.73f, 0.14f, 0.36f},// UHF
+
+#else
+	#if defined(PLATFORM_VARIANT_UV380_PLUS_10W)
+		// 10W UV380
+		{0.58f, 0.83f, 0.21f, 0.45f},// VHF
+		{0.58f, 0.83f, 0.21f, 0.45f},// 220Mhz - ESTIMATED - NOT TESTED PROBABLY NOT CORRECT
+		{0.55f, 0.75f, 0.17f, 0.43f},// UHF
+
+	#else
+		//  5W UV380
+		{0.35f, 0.70f, 0.34f, 0.61f},// VHF
+		{0.38f, 0.70f, 0.30f, 0.59f},// 220Mhz - ESTIMATED - NOT TESTED PROBABLY NOT CORRECT
+		{0.40f, 0.70f, 0.25f, 0.55f},// UHF
+	#endif
+#endif
+	};//fractionalPowers
+
+#if defined(PLATFORM_VARIANT_UV380_PLUS_10W)
+	switch(currentRadioDevice->txPowerLevel)
 	{
 		case 0:// 50mW
 			if(trxPowerSettings.veryLowPower > 160)
 			{
-			txDACDrivePower = trxPowerSettings.veryLowPower - 160 ;		           //50mW power setting using a typical value for low gain radios
+				txDACDrivePower = trxPowerSettings.veryLowPower - 160 ;		           //50mW power setting using a typical value for low gain radios
 			}
 			else
 			{
-			txDACDrivePower = 0 ;		           //min power setting for high gain radios (may still be more than 50mW)
+				txDACDrivePower = 0 ;		           //min power setting for high gain radios (may still be more than 50mW)
 			}
 			break;
 		case 1:// 250mW
 			txDACDrivePower = trxPowerSettings.veryLowPower;
 			break;
 		case 2:// 500mW
-			txDACDrivePower = trxPowerSettings.veryLowPower + ((trxPowerSettings.lowPower - trxPowerSettings.veryLowPower)*0.33);
+			txDACDrivePower = trxPowerSettings.veryLowPower + ((trxPowerSettings.lowPower - trxPowerSettings.veryLowPower) * fractionalPowers[currentRadioDevice->trxCurrentBand[TRX_TX_FREQ_BAND]][0]);
 			break;
 		case 3:// 750mW
-			txDACDrivePower = trxPowerSettings.veryLowPower + ((trxPowerSettings.lowPower - trxPowerSettings.veryLowPower)*0.66);
+			txDACDrivePower = trxPowerSettings.veryLowPower + ((trxPowerSettings.lowPower - trxPowerSettings.veryLowPower) * fractionalPowers[currentRadioDevice->trxCurrentBand[TRX_TX_FREQ_BAND]][1]);
 			break;
 		case 4:// 1W
 			txDACDrivePower = trxPowerSettings.lowPower;
 			break;
 		case 5:// 2W
-			txDACDrivePower = trxPowerSettings.midPower;
+			txDACDrivePower = trxPowerSettings.lowPower + ((trxPowerSettings.midPower - trxPowerSettings.lowPower) * fractionalPowers[currentRadioDevice->trxCurrentBand[TRX_TX_FREQ_BAND]][2]);//calculate based on mid and low datapoints
 			break;
 		case 6:// 3W
-			txDACDrivePower = trxPowerSettings.midPower + ((trxPowerSettings.highPower - trxPowerSettings.midPower)*0.5);
+			txDACDrivePower = trxPowerSettings.lowPower + ((trxPowerSettings.midPower - trxPowerSettings.lowPower) * fractionalPowers[currentRadioDevice->trxCurrentBand[TRX_TX_FREQ_BAND]][3]);//calculate based on mid and low datapoints
 			break;
-		case 7:// 4W
+		case 7:// 5W
+			txDACDrivePower = trxPowerSettings.midPower;
+			break;
+		case 8:// 10W
 			txDACDrivePower = trxPowerSettings.highPower;
-			break;
-		case 8:// 5W
-			txDACDrivePower =trxPowerSettings.highPower + ((trxPowerSettings.highPower - trxPowerSettings.midPower)*0.5);
 			break;
 		case 9:// +W-
 			txDACDrivePower = nonVolatileSettings.userPower;
@@ -850,6 +872,51 @@ void trxUpdate_PA_DAC_Drive(void)
 			txDACDrivePower = trxPowerSettings.lowPower;
 			break;
 	}
+#else
+	switch(currentRadioDevice->txPowerLevel)
+	{
+		case 0:// 50mW
+			if(trxPowerSettings.veryLowPower > 160)
+			{
+				txDACDrivePower = trxPowerSettings.veryLowPower - 160 ;		           //50mW power setting using a typical value for low gain radios
+			}
+			else
+			{
+				txDACDrivePower = 0 ;		           //min power setting for high gain radios (may still be more than 50mW)
+			}
+			break;
+		case 1:// 250mW
+			txDACDrivePower = trxPowerSettings.veryLowPower;
+			break;
+		case 2:// 500mW
+			txDACDrivePower = trxPowerSettings.veryLowPower + ((trxPowerSettings.lowPower - trxPowerSettings.veryLowPower) * fractionalPowers[currentRadioDevice->trxCurrentBand[TRX_TX_FREQ_BAND]][0]);
+			break;
+		case 3:// 750mW
+			txDACDrivePower = trxPowerSettings.veryLowPower + ((trxPowerSettings.lowPower - trxPowerSettings.veryLowPower) * fractionalPowers[currentRadioDevice->trxCurrentBand[TRX_TX_FREQ_BAND]][1]);
+			break;
+		case 4:// 1W
+			txDACDrivePower = trxPowerSettings.lowPower;
+			break;
+		case 5:// 2W
+			txDACDrivePower = trxPowerSettings.midPower;// 2W on 5W radios
+			break;
+		case 6:// 3W
+			txDACDrivePower = trxPowerSettings.midPower + ((trxPowerSettings.highPower - trxPowerSettings.midPower) * fractionalPowers[currentRadioDevice->trxCurrentBand[TRX_TX_FREQ_BAND]][2]);//calculate based on high and mid datapoints
+			break;
+		case 7:// 4W
+			txDACDrivePower = trxPowerSettings.midPower + ((trxPowerSettings.highPower - trxPowerSettings.midPower) * fractionalPowers[currentRadioDevice->trxCurrentBand[TRX_TX_FREQ_BAND]][3]);//calculate based on high and mid datapoints
+			break;
+		case 8:// 5W
+			txDACDrivePower = trxPowerSettings.highPower;
+			break;
+		case 9:// +W-
+			txDACDrivePower = nonVolatileSettings.userPower;
+			break;
+		default:
+			txDACDrivePower = trxPowerSettings.lowPower;
+			break;
+	}
+#endif
 
 	if (txDACDrivePower > MAX_PA_DAC_VALUE)
 	{
@@ -862,9 +929,9 @@ uint16_t trxGetPA_DAC_Drive(void)
 	return txDACDrivePower;
 }
 
-int trxGetPowerLevel(void)
+uint8_t trxGetPowerLevel(void)
 {
-	return txPowerLevel;
+	return currentRadioDevice->txPowerLevel;
 }
 
 void trxCalcBandAndFrequencyOffset(CalibrationBand_t *calibrationBand, uint32_t *freq_offset)
@@ -872,10 +939,10 @@ void trxCalcBandAndFrequencyOffset(CalibrationBand_t *calibrationBand, uint32_t 
 // NOTE. For crossband duplex DMR, the calibration potentially needs to be changed every time the Tx/Rx is switched over on each 30ms cycle
 // But at the moment this is an unnecessary complication and I'll just use the Rx frequency to get the calibration offsets
 
-	if (trxCurrentBand[TRX_RX_FREQ_BAND] == RADIO_BAND_UHF)
+	if (currentRadioDevice->trxCurrentBand[TRX_RX_FREQ_BAND] == RADIO_BAND_UHF)
 	{
 		*calibrationBand = CalibrationBandUHF;
-		*freq_offset = (currentTxFrequency - 40000000) / 1000000;
+		*freq_offset = (currentRadioDevice->currentTxFrequency - 40000000) / 1000000;
 		if (*freq_offset > 8)
 		{
 			*freq_offset = 8;
@@ -884,7 +951,7 @@ void trxCalcBandAndFrequencyOffset(CalibrationBand_t *calibrationBand, uint32_t 
 	else
 	{
 		*calibrationBand = CalibrationBandVHF;
-		*freq_offset = (currentTxFrequency - 13600000) / 950000;
+		*freq_offset = (currentRadioDevice->currentTxFrequency - 13600000) / 950000;
 		if (*freq_offset > 4)
 		{
 			*freq_offset = 4;
@@ -894,7 +961,7 @@ void trxCalcBandAndFrequencyOffset(CalibrationBand_t *calibrationBand, uint32_t 
 
 static void trxUpdateC6000Calibration(void)
 {
-	int8_t cal = calibrationGetMod2Offset(trxCurrentBand[trxTransmissionEnabled ? TRX_TX_FREQ_BAND : TRX_RX_FREQ_BAND]);
+	int8_t cal = calibrationGetMod2Offset(currentRadioDevice->trxCurrentBand[trxTransmissionEnabled ? TRX_TX_FREQ_BAND : TRX_RX_FREQ_BAND]);
 	SPI0WritePageRegByte(0x04, 0x47, cal);			// Set the reference tuning offset
 	SPI0WritePageRegByte(0x04, 0x48, ((cal < 0) ? 0x03 : 0x00));
 	SPI0WritePageRegByte(0x04, 0x04, cal);									//Set MOD 2 Offset (Cal Value)
@@ -902,11 +969,11 @@ static void trxUpdateC6000Calibration(void)
 
 static void trxUpdateRadioCalibration(void)
 {
-	analogIGain = calibrationGetAnalogIGainForFrequency(currentTxFrequency);
-	analogQGain = calibrationGetAnalogQGainForFrequency(currentTxFrequency);
-	digitalIGain = calibrationGetDigitalIGainForFrequency(currentTxFrequency);
-	digitalQGain = calibrationGetDigitalQGainForFrequency(currentTxFrequency);
-	Mod2Offset = calibrationGetMod2Offset(trxCurrentBand[trxTransmissionEnabled ? TRX_TX_FREQ_BAND : TRX_RX_FREQ_BAND]);
+	analogIGain = calibrationGetAnalogIGainForFrequency(currentRadioDevice->currentTxFrequency);
+	analogQGain = calibrationGetAnalogQGainForFrequency(currentRadioDevice->currentTxFrequency);
+	digitalIGain = calibrationGetDigitalIGainForFrequency(currentRadioDevice->currentTxFrequency);
+	digitalQGain = calibrationGetDigitalQGainForFrequency(currentRadioDevice->currentTxFrequency);
+	Mod2Offset = calibrationGetMod2Offset(currentRadioDevice->trxCurrentBand[trxTransmissionEnabled ? TRX_TX_FREQ_BAND : TRX_RX_FREQ_BAND]);
 }
 
 void trxSetDMRColourCode(uint8_t colourCode)
@@ -979,6 +1046,21 @@ void trxUpdateTsForCurrentChannelWithSpecifiedContact(struct_codeplugContact_t *
 	HRC6000ResyncTimeSlot();
 }
 
+// Codeplug format (hex) -> octal
+static uint16_t convertCSSNative2BinaryCodedOctal(uint16_t nativeCSS)
+{
+	uint16_t octalCSS = 0;
+	uint16_t shift = 0;
+
+	while (nativeCSS)
+	{
+		octalCSS += (nativeCSS & 0xF) << shift;
+		nativeCSS >>= 4;
+		shift += 3;
+	}
+	return octalCSS;
+}
+
 void trxSetTxCSS(uint16_t tone)
 {
 	CodeplugCSSTypes_t type = codeplugGetCSSType(tone);
@@ -989,60 +1071,56 @@ void trxSetTxCSS(uint16_t tone)
 	}
 	else if (type == CSS_TYPE_CTCSS)
 	{
-		radioTxCSSOn(tone);
+		// value that is stored is 100 time the tone freq but its stored in the codeplug as freq times 10
+		tone *= 10;
+		radioTxCTCSOn(tone);
 	}
 	else if (type & CSS_TYPE_DCS)
 	{
-		radioTxDCSOn(tone);
+		uint16_t code = convertCSSNative2BinaryCodedOctal(tone & ~CSS_TYPE_DCS_MASK);
+
+		radioTxDCSOn(code, ((type & CSS_TYPE_DCS_INVERTED) != 0));
 	}
 }
 
-void trxSetRxCSS(uint16_t tone)
+void trxSetRxCSS(RadioDevice_t deviceId, uint16_t tone)
 {
-	taskENTER_CRITICAL();
 	CodeplugCSSTypes_t type = codeplugGetCSSType(tone);
 
 	if (type == CSS_TYPE_NONE)
 	{
-		radioRxCSSOff();
+		radioRxCSSOff(deviceId);
 		rxCSSactive = false;
 	}
 	else if (type == CSS_TYPE_CTCSS)
 	{
 		// value that is stored is 100 time the tone freq but its stored in the codeplug as freq times 10
 		tone *= 10;
-		radioRxCSSOn(tone);
+		radioRxCTCSOn(deviceId, tone);
 		rxCSSactive = (trxAnalogFilterLevel != ANALOG_FILTER_NONE);
 		// Force closing the AudioAmp
 		disableAudioAmp(AUDIO_AMP_MODE_RF);
-		analogSignalReceived = false;
-		analogTriggeredAudio = false;
+		radioDevices[deviceId].analogSignalReceived = false;
+		radioDevices[deviceId].analogTriggeredAudio = false;
 	}
 	else if (type & CSS_TYPE_DCS)
 	{
 		uint16_t code = convertCSSNative2BinaryCodedOctal(tone & ~CSS_TYPE_DCS_MASK);
-		if(type & CSS_TYPE_DCS_INVERTED)
-		{
-			radioRxDCSOn(code,0);
-		}
-		else
-		{
-			radioRxDCSOn(code,1);
-		}
+
+		radioRxDCSOn(deviceId, code, ((type & CSS_TYPE_DCS_INVERTED) != 0));
 		rxCSSactive = (trxAnalogFilterLevel != ANALOG_FILTER_NONE);
 		// Force closing the AudioAmp
 		disableAudioAmp(AUDIO_AMP_MODE_RF);
-		analogSignalReceived = false;
-		analogTriggeredAudio = false;
+		radioDevices[deviceId].analogSignalReceived = false;
+		radioDevices[deviceId].analogTriggeredAudio = false;
 	}
-	taskEXIT_CRITICAL();
 }
 
 bool trxCheckCSSFlag(uint16_t tone)
 {
 	CodeplugCSSTypes_t type = codeplugGetCSSType(tone);
 
-	return ((type != CSS_TYPE_NONE) && (radioCheckCSS()));
+	return ((type != CSS_TYPE_NONE) && (radioCheckCSS(tone, type)));
 }
 
 uint8_t trxGetCalibrationVoiceGainTx(void)
@@ -1068,22 +1146,6 @@ void trxDTMFoff(bool enableMic)
 	HRC6000DTMFoff(enableMic);
 }
 
-// Codeplug format (hex) -> octal
-uint16_t convertCSSNative2BinaryCodedOctal(uint16_t nativeCSS)
-{
-	uint16_t octalCSS = 0;
-	uint16_t shift = 0;
-
-	while (nativeCSS)
-	{
-		octalCSS += (nativeCSS & 0xF) << shift;
-		nativeCSS >>= 4;
-		shift += 3;
-	}
-	return octalCSS;
-}
-
-
 void trxSetMicGainFM(uint8_t gain)
 {
 	radioSetMicGainFM(gain);
@@ -1103,12 +1165,9 @@ void trxDisableTransmission(void)
 }
 
 // Returns true if the HR-C6000 has been powered off
-bool trxPowerUpDownRxAndC6000(bool powerUp, bool includeC6000)
+bool trxPowerUpDownRxAndC6000(bool powerUp, bool includeC6000, bool includeMic)
 {
 	bool status = false;
-
-//#warning VK3KYY Temporary change. Do not allow C6000 to be powered off in Eco modes
-	includeC6000 = true;
 
 	// Check the radio is not transmitting.
 	if ((powerUp == powerUpDownState) || trxTransmissionEnabled || trxIsTransmitting)
@@ -1116,25 +1175,32 @@ bool trxPowerUpDownRxAndC6000(bool powerUp, bool includeC6000)
 		return false;
 	}
 
+	// Force HRC6000 to power cycles in any ECO mode on STM32 platforms, as it seems
+	// there are some bad batches that breaks Beep and Audio until the operator enables
+	// monitor mode or restarts the radio.
+#if defined(STM32F405xx)
+	includeC6000 = true;
+#endif
+
 	if (powerUp)
 	{
 		radioPowerOn();
-		radioSetBandwidth(currentBandWidthIs25kHz);
+		radioSetBandwidth(currentRadioDevice->currentBandWidthIs25kHz);
 
 		if (includeC6000 && (voicePromptsIsPlaying() == false))
 		{
 			uint8_t spi_values[SIZE_OF_FILL_BUFFER];
 
 			// Always power up the C6000 even if its may already be powered up, because VP was playing
-			HAL_GPIO_WritePin(C6000_PWD_GPIO_Port, C6000_PWD_Pin, 0);// Power Up the C6000
+			HAL_GPIO_WritePin(C6000_PWD_GPIO_Port, C6000_PWD_Pin, GPIO_PIN_RESET); // Power Up the C6000
 			// Allow some time to the C6000 to get ready
 			vTaskDelay((10 / portTICK_PERIOD_MS));
 
 			HRC6000SetDmrRxGain(0);							//temporarily set the gain to 0. Any less and the buffer flush doesn't seem to work.
 			memset(spi_values, 0xAA, SIZE_OF_FILL_BUFFER);
-			SPI0SeClearPageRegByteWithMask(0x04, 0x06, 0xFD, 0x02); // SET OpenMusic bit (play Boot sound and Call Prompts)
+			SPI0ClearPageRegByteWithMask(0x04, 0x06, 0xFD, 0x02); // SET OpenMusic bit (play Boot sound and Call Prompts)
 			SPI0WritePageRegByteArray(0x03, 0x00, spi_values, SIZE_OF_FILL_BUFFER);
-			SPI0SeClearPageRegByteWithMask(0x04, 0x06, 0xFD, 0x00); // CLEAR OpenMusic bit (play Boot sound and Call Prompts)
+			SPI0ClearPageRegByteWithMask(0x04, 0x06, 0xFD, 0x00); // CLEAR OpenMusic bit (play Boot sound and Call Prompts)
 
 			SPI0WritePageRegByte(0x04, 0x06, 0x21); // Use SPI vocoder under MCU control
 
@@ -1145,47 +1211,19 @@ bool trxPowerUpDownRxAndC6000(bool powerUp, bool includeC6000)
 			soundInit();
 		}
 
-
-
-
-		// Enable the IRQ, conditionally.
-
 #if 0
+		// Enable the IRQ, conditionally.
 		if (NVIC_GetEnableIRQ(PORTC_IRQn) == 0)
 		{
 			NVIC_EnableIRQ(PORTC_IRQn);
 		}
 #endif
-
-		taskENTER_CRITICAL();
-		if (!voicePromptsIsPlaying())
-		{
-			if (includeC6000)
-			{
-
-//				NVIC_DisableIRQ(PORTC_IRQn);
-
-				// Ensure the ISR has exited before powering off the chip.
-				while (HRC6000IRQHandlerIsRunning());
-
-
-// vk3yy commented out as not supported by the MDUV380				HAL_GPIO_WritePin(C6000_PWD_GPIO_Port, C6000_PWD_Pin, 1);// Power down the C6000
-
-/* vk3kyy this is handled by the stm32cube
-//				SAI_TxEnable(I2S0, false);
-//				SAI_RxEnable(I2S0, false); */
-				status = true;
-			}
-
-
-		}
-		taskEXIT_CRITICAL();
 	}
 	else
 	{
 		taskENTER_CRITICAL();
 
-		radioPowerOff(false);
+		radioPowerOff(false, includeMic);
 
 #ifdef USE_AT1846S_DEEP_SLEEP
 		radioWriteReg2byte(0x30, 0x00, 0x00); // Now enter power down mode
@@ -1198,77 +1236,40 @@ bool trxPowerUpDownRxAndC6000(bool powerUp, bool includeC6000)
 				// Ensure the ISR has exited before powering off the chip.
 				while (HRC6000IRQHandlerIsRunning());
 
-				HAL_GPIO_WritePin(C6000_PWD_GPIO_Port, C6000_PWD_Pin, 1);// Power Up the C6000status = true;
+				HAL_GPIO_WritePin(C6000_PWD_GPIO_Port, C6000_PWD_Pin, GPIO_PIN_SET); // Power Up the C6000
+				status = true;
 			}
 		}
 		taskEXIT_CRITICAL();
 	}
 
-	 powerUpDownState = powerUp;
+	powerUpDownState = powerUp;
 
-	 return status;
+	return status;
 }
 
 void trxInvalidateCurrentFrequency(void)
 {
-	currentRxFrequency = -1;
-	currentTxFrequency = -1;
-	currentMode = RADIO_MODE_NONE;
+	currentRadioDevice->currentRxFrequency = FREQUENCY_UNSET;
+	currentRadioDevice->currentTxFrequency = FREQUENCY_UNSET;
+	currentRadioDevice->currentMode = RADIO_MODE_NONE;
 }
 
-static uint8_t trxSaveVoiceGainTx = 0xff;
-static uint16_t trxSaveDeviation = 0xff;
-
-
-
-// vk3kyy Dummy functions
-void trxSelectVoiceChannel(uint8_t channel) {
-	uint8_t valh;
-	uint8_t vall;
-
-	taskENTER_CRITICAL();
-	switch (channel)
-	{
-		case AT1846_VOICE_CHANNEL_TONE1:
-		case AT1846_VOICE_CHANNEL_TONE2:
-		case AT1846_VOICE_CHANNEL_DTMF:
-			radioSetClearReg2byteWithMask(0x79, 0xff, 0xff, 0xc0, 0x00); // Select single tone
-			radioSetClearReg2byteWithMask(0x57, 0xff, 0xfe, 0x00, 0x01); // Audio feedback on
-
-			radioReadReg2byte( 0x41, &valh, &trxSaveVoiceGainTx);
-			trxSaveVoiceGainTx &= 0x7f;
-
-			radioReadReg2byte( 0x59, &valh, &vall);
-			trxSaveDeviation = (vall + (valh << 8)) >> 6;
-			trxSaveDeviation = 0x40;
-
-			I2C_AT1846_set_register_with_mask(0x59, 0x003f, trxSaveDeviation, 6);
-//			radioSetClearReg2byteWithMask(0x41, 0xFF,0x80, 0x00, 0);// 0x0E is Tone deviation value from the normal GD77 calibration data
-
-			break;
-		default:
-			radioSetClearReg2byteWithMask(0x57, 0xff, 0xfe, 0x00, 0x00); // Audio feedback off
-			if (trxSaveVoiceGainTx != 0xff)
-			{
-				I2C_AT1846_set_register_with_mask(0x41, 0xFF80, trxSaveVoiceGainTx, 0);
-				trxSaveVoiceGainTx = 0xff;
-			}
-			if (trxSaveDeviation != 0xFF)
-			{
-				I2C_AT1846_set_register_with_mask(0x59, 0x003f, trxSaveDeviation, 6);
-				trxSaveDeviation = 0xFF;
-			}
-			break;
-	}
-	radioSetClearReg2byteWithMask(0x3a, 0x8f, 0xff, channel, 0x00);
-	taskEXIT_CRITICAL();
+void trxSelectVoiceChannel(uint8_t channel)
+{
+	radioSelectVoiceChannel(channel, &trxSaveVoiceGainTx, &trxSaveDeviation);
 }
+
 void trxRxAndTxOff(bool critical)
 {
+	UNUSED_PARAMETER(critical);
 }
+
 void trxRxOn(bool critical)
 {
+	UNUSED_PARAMETER(critical);
 }
+
 #if defined(MDUV380_VERSION_2) || defined (MDUV380_VERSION_4) || defined (MDUV380_VERSION_1)
 #define VHF_RSSI_OFFSET -135
 #define UHF_RSSI_OFFSET -145
@@ -1280,46 +1281,54 @@ void trxRxOn(bool critical)
 #define VHF_RSSI_DIVISOR 1.95
 #define UHF_RSSI_DIVISOR 1.95
 #endif
-int trxGetRSSIdBm(void)
+
+int trxGetRSSIdBm(RadioDevice_t deviceId)
 {
 	int dBm = 0;
 
-	if (trxCurrentBand[TRX_RX_FREQ_BAND] == RADIO_BAND_UHF)
+	if (radioDevices[deviceId].trxCurrentBand[TRX_RX_FREQ_BAND] == RADIO_BAND_UHF)
 	{
 		// Use fixed point maths to scale the RSSI value to dBm, based on data from VK4JWT and VK7ZJA
-		dBm = -151 + trxRxSignal;// Note no the RSSI value on UHF does not need to be scaled like it does on VHF
+		dBm = -151 + radioDevices[deviceId].trxRxSignal;// Note no the RSSI value on UHF does not need to be scaled like it does on VHF
 	}
 	else
 	{
 		// VHF
 		// Use fixed point maths to scale the RSSI value to dBm, based on data from VK4JWT and VK7ZJA
-		dBm = -164 + ((trxRxSignal * 32) / 27);
+		dBm = -164 + ((radioDevices[deviceId].trxRxSignal * 32) / 27);
 	}
 
 	return dBm;
 }
 
-int trxGetNoisedBm(void)
+int trxGetNoisedBm(RadioDevice_t deviceId)
 {
 	int dBm = 0;
 
-	if (trxCurrentBand[TRX_RX_FREQ_BAND] == RADIO_BAND_UHF)
+	if (radioDevices[deviceId].trxCurrentBand[TRX_RX_FREQ_BAND] == RADIO_BAND_UHF)
 	{
-		dBm = -151 + trxRxNoise;// Note no the RSSI value on UHF does not need to be scaled like it does on VHF
+		dBm = -151 + radioDevices[deviceId].trxRxNoise;// Note no the RSSI value on UHF does not need to be scaled like it does on VHF
 	}
 	else
 	{
 		// VHF
-		dBm = -164 + ((trxRxNoise * 32) / 27);
+		dBm = -164 + ((radioDevices[deviceId].trxRxNoise * 32) / 27);
 	}
 
 	return dBm;
 }
 
-int trxGetSNRMargindBm(void)
+int trxGetSNRMargindBm(RadioDevice_t deviceId)
 {
-	return (trxGetRSSIdBm() - trxGetNoisedBm());
+	return (trxGetRSSIdBm(deviceId) - trxGetNoisedBm(deviceId));
 }
 
+uint8_t trxGetSignalRaw(RadioDevice_t deviceId)
+{
+	return radioDevices[deviceId].trxRxSignal;
+}
 
-
+uint8_t trxGetNoiseRaw(RadioDevice_t deviceId)
+{
+	return radioDevices[deviceId].trxRxNoise;
+}

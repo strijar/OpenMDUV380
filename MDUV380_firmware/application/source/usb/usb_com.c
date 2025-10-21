@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2019      Kai Ludwig, DG4KLU
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -64,7 +64,7 @@ enum CPS_ACCESS_AREA
 #if defined(PLATFORM_GD77) || defined(PLATFORM_GD77S) || defined(PLATFORM_DM1801) || defined(PLATFORM_DM1801A) || defined(PLATFORM_RD5R)
 #define TASK_LOCK_WRITE()	  do { } while(0)
 #define TASK_UNLOCK_WRITE()	  do { } while(0)
-#elif defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#elif defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 #define TASK_LOCK_WRITE()	  do { taskENTER_CRITICAL(); } while(0)
 #define TASK_UNLOCK_WRITE()	  do { taskEXIT_CRITICAL(); } while(0)
 #else
@@ -220,7 +220,18 @@ static void cpsHandleReadCommand(void)
 
 		case CPS_ACCESS_DISPLAY_BUFFER:
 			rxPowerSavingSetState(ECOPHASE_POWERSAVE_INACTIVE); // Avoiding going into a state that USB doesn't work.
+#if defined(PLATFORM_VARIANT_DM1701)
+			if (address < (DISPLAY_Y_OFFSET * DISPLAY_SIZE_X * 2))
+			{
+				memset((uint8_t *)&usbComSendBuf[3], 0xFF, length);// send white for blank area
+			}
+			else
+			{
+				memcpy((uint8_t *)&usbComSendBuf[3], (uint8_t *)displayGetPrimaryScreenBuffer() + address - (DISPLAY_Y_OFFSET * DISPLAY_SIZE_X * 2), length);
+			}
+#else
 			memcpy((uint8_t *)&usbComSendBuf[3], (uint8_t *)displayGetPrimaryScreenBuffer() + address, length);
+#endif
 			result = true;
 			break;
 
@@ -269,7 +280,7 @@ static void cpsHandleReadCommand(void)
 				radioInfo.radioType = 6;
 #elif defined(PLATFORM_MD380)
 				radioInfo.radioType = 7;
-#elif defined(PLATFORM_DM1701) // because of BGR565 / RGB656 colour formats
+#elif defined(PLATFORM_RT84_DM1701) // because of BGR565 / RGB656 colour formats
 				radioInfo.radioType = ((DISPLAYLCD_TYPE_IS_RGB(displayLCD_Type) != 0) ? 10 : 8);
 #elif defined(PLATFORM_MD2017)
 				radioInfo.radioType = 9;
@@ -348,7 +359,7 @@ static void cpsHandleWriteCommand(void)
 				uint32_t length = (com_requestbuffer[6] << 8) + (com_requestbuffer[7] << 0);
 				bool calibrationWriting = false;
 
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 				if ((calibrationWriting == false) && addressInSegment(address, length, 0x10000, 0x200)) // Local calibration
 				{
 					calibrationWriting = true;
@@ -381,7 +392,7 @@ static void cpsHandleWriteCommand(void)
 					length = (COM_REQUESTBUFFER_SIZE - 8);
 				}
 
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 				// Temporary hack to prevent the QuickKeys getting overwritten by the codeplug
 				const int QUICKKEYS_BLOCK_END = (CODEPLUG_ADDR_QUICKKEYS + (CODEPLUG_QUICKKEYS_SIZE * sizeof(uint16_t)) - 1);
 				int end = (address + length) - 1;
@@ -429,7 +440,7 @@ static void cpsHandleWriteCommand(void)
 				else
 #endif
 				{
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 					if (calibrationWriting)
 					{
 						uint8_t *p = calibrationGetLocalDataPointer();
@@ -832,7 +843,7 @@ static void cpsHandleCommand(void)
 #if ! defined(PLATFORM_GD77S)
 						daytimeThemeChangeUpdate(true);
 #endif
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 						setRtc_custom(uiDataGlobal.dateTimeSecs);
 #endif
 						menuSatelliteScreenClearPredictions(true);

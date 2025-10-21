@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2019      Kai Ludwig, DG4KLU
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -305,7 +305,7 @@ bool settingsRestoreDefaultSettings(void)
 #if defined(PLATFORM_GD77S)
 			0U;
 #else
-  #if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+  #if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 	#if defined(PLATFORM_MD9600)
 	        BIT_BATTERY_VOLTAGE_IN_HEADER |
 	#else
@@ -435,7 +435,7 @@ void enableVoicePromptsIfLoaded(bool enableFullPrompts)
 void settingsEraseCustomContent(void)
 {
 	//Erase OpenGD77 custom content
-	SPI_Flash_eraseSector(0);// The first sector (4k) contains the OpenGD77 custom codeplug content e.g. Boot melody and boot image.
+	SPI_Flash_eraseSector(FLASH_ADDRESS_OFFSET + 0);// The first sector (4k) contains the OpenGD77 custom codeplug content e.g. Boot melody and boot image.
 }
 
 // --- Helpers ---
@@ -618,7 +618,7 @@ int settingsGetScanStepTimeMilliseconds(void)
 #if !defined(PLATFORM_GD77S)
 static void settingsVFOSanityCheck(struct_codeplugChannel_t *vfo, Channel_t vfoNumber)
 {
-	if ((trxGetBandFromFrequency(vfo->txFreq) == -1) || (trxGetBandFromFrequency(vfo->rxFreq) == -1))
+	if ((trxGetBandFromFrequency(vfo->txFreq) == FREQUENCY_OUT_OF_BAND) || (trxGetBandFromFrequency(vfo->rxFreq) == FREQUENCY_OUT_OF_BAND))
 	{
 		vfo->chMode = RADIO_MODE_ANALOG;
 		vfo->txFreq = vfo->rxFreq = DEFAULT_USER_FREQUENCY_BANDS[RADIO_BAND_VHF].minFreq;

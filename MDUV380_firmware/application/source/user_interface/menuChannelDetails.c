@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Colin Durbridge, G4EML
  *                         Daniel Caujolle-Bert, F1RMB
  *
@@ -27,8 +27,7 @@
  *
  */
 
-#include "functions/codeplug.h"
-#include "functions/settings.h"
+#include "user_interface/uiGlobals.h"
 #include "functions/trx.h"
 #include "user_interface/menuSystem.h"
 #include "user_interface/uiUtilities.h"
@@ -90,6 +89,7 @@ enum
 	CH_DETAILS_TA_TX_TS1,
 	CH_DETAILS_TA_TX_TS2,
 	CH_DETAILS_APRS_CONFIG,
+	CH_DETAILS_DMR_FORCE_DMO,
 	NUM_CH_DETAILS_ITEMS
 };// The last item in the list is used so that we automatically get a total number of items in the list
 
@@ -157,12 +157,16 @@ static void updateCursor(bool moved)
 {
 	if (uiDataGlobal.currentSelectedChannelNumber != CH_DETAILS_VFO_CHANNEL)
 	{
+		displayThemeApply(THEME_ITEM_BG, THEME_ITEM_BG_MENU_ITEM_SELECTED);
+
 		switch (menuDataGlobal.currentItemIndex)
 		{
 		case CH_DETAILS_NAME:
 			menuUpdateCursor(MIN(namePos, 15), moved, true);
 			break;
 		}
+
+		displayThemeResetToDefault();
 	}
 }
 
@@ -196,7 +200,7 @@ static void updateScreen(bool isFirstRun, bool allowedToSpeakUpdate)
 	{
 		keypadAlphaEnable = (menuDataGlobal.currentItemIndex == CH_DETAILS_NAME);
 
-		for(int i = 1 - ((MENU_MAX_DISPLAYED_ENTRIES - 1) / 2) - 1; i <= (MENU_MAX_DISPLAYED_ENTRIES - ((MENU_MAX_DISPLAYED_ENTRIES - 1) / 2) - 1); i++)
+		for (int i = MENU_START_ITERATION_VALUE; i <= MENU_END_ITERATION_VALUE; i++)
 		{
 			if ((settingOption == false) || (i == 0))
 			{
@@ -438,7 +442,7 @@ static void updateScreen(bool isFirstRun, bool allowedToSpeakUpdate)
 							else
 							{
 								int powerIndex = tmpChannel.libreDMR_Power - 1;
-								snprintf(rightSideVar, SCREEN_LINE_BUFFER_SIZE, "%s%s", POWER_LEVELS[powerIndex], POWER_LEVEL_UNITS[powerIndex]);
+								snprintf(rightSideVar, SCREEN_LINE_BUFFER_SIZE, "%s%s", getPowerLevel(powerIndex), getPowerLevelUnit(powerIndex));
 							}
 						}
 						break;
@@ -526,6 +530,17 @@ static void updateScreen(bool isFirstRun, bool allowedToSpeakUpdate)
 
 								snprintf(rightSideVar, SCREEN_LINE_BUFFER_SIZE, "%s", nameBuf);
 							}
+						}
+						break;
+					case CH_DETAILS_DMR_FORCE_DMO:
+						leftSide = currentLanguage->dmr_force_dmo;
+						if (tmpChannel.chMode == RADIO_MODE_ANALOG)
+						{
+							rightSideConst = currentLanguage->n_a;
+						}
+						else
+						{
+							rightSideConst = ((codeplugChannelGetFlag(&tmpChannel, CHANNEL_FLAG_FORCE_DMO) != 0) ? currentLanguage->yes : currentLanguage->no);
 						}
 						break;
 				}
@@ -758,7 +773,7 @@ static void handleEvent(uiEvent_t *ev)
 				int number = freqEnterRead(0, 8, (menuDataGlobal.currentItemIndex == CH_DETAILS_DMRID));
 
 				if (((menuDataGlobal.currentItemIndex == CH_DETAILS_RXFREQ) || (menuDataGlobal.currentItemIndex == CH_DETAILS_TXFREQ))
-						&& (trxGetBandFromFrequency(number) != -1))
+						&& (trxGetBandFromFrequency(number) != FREQUENCY_OUT_OF_BAND))
 				{
 					updateFrequency(number);
 				}
@@ -826,7 +841,7 @@ static void handleEvent(uiEvent_t *ev)
 						int number = freqEnterRead(0, 8, (menuDataGlobal.currentItemIndex == CH_DETAILS_DMRID));
 
 						if (((menuDataGlobal.currentItemIndex == CH_DETAILS_RXFREQ) || (menuDataGlobal.currentItemIndex == CH_DETAILS_TXFREQ))
-								&& (trxGetBandFromFrequency(number) != -1))
+								&& (trxGetBandFromFrequency(number) != FREQUENCY_OUT_OF_BAND))
 						{
 							updateFrequency(number);
 						}
@@ -919,7 +934,7 @@ static void handleEvent(uiEvent_t *ev)
 			}
 		}
 		else if (KEYCHECK_SHORTUP(ev->keys, KEY_RIGHT)
-#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 				|| KEYCHECK_SHORTUP(ev->keys, KEY_ROTARY_INCREMENT)
 #endif
 				|| (QUICKKEY_FUNCTIONID(ev->function) == FUNC_RIGHT))
@@ -972,7 +987,7 @@ static void handleEvent(uiEvent_t *ev)
 						bool voicePromptWasPlaying = voicePromptsIsPlaying();
 
 						cssIncrementFromEvent(ev, &tmpChannel.rxTone, &RxCSSIndex, &RxCSSType);
-						trxSetRxCSS(tmpChannel.rxTone);
+						trxSetRxCSS(RADIO_DEVICE_PRIMARY, tmpChannel.rxTone);
 						announceCSSCode(tmpChannel.rxTone, RxCSSType,
 								(((voicePromptWasPlaying == false) && (nonVolatileSettings.audioPromptMode > AUDIO_PROMPT_MODE_VOICE_LEVEL_2)) ? DIRECTION_RECEIVE : DIRECTION_NONE),
 								(voicePromptWasPlaying == false), AUDIO_PROMPT_MODE_VOICE_LEVEL_1);
@@ -1114,6 +1129,12 @@ static void handleEvent(uiEvent_t *ev)
 						}
 					}
 					break;
+				case CH_DETAILS_DMR_FORCE_DMO:
+					if (tmpChannel.chMode == RADIO_MODE_DIGITAL)
+					{
+						codeplugChannelSetFlag(&tmpChannel, CHANNEL_FLAG_FORCE_DMO, 1);// Set Channel DMR Force DMO Bit
+					}
+					break;
 			}
 
 			if (ev->events & FUNCTION_EVENT)
@@ -1136,7 +1157,7 @@ static void handleEvent(uiEvent_t *ev)
 			}
 		}
 		else if (KEYCHECK_SHORTUP(ev->keys, KEY_LEFT)
-#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 				|| KEYCHECK_SHORTUP(ev->keys, KEY_ROTARY_DECREMENT)
 #endif
 				|| (QUICKKEY_FUNCTIONID(ev->function) == FUNC_LEFT))
@@ -1190,7 +1211,7 @@ static void handleEvent(uiEvent_t *ev)
 						bool voicePromptWasPlaying = voicePromptsIsPlaying();
 
 						cssDecrementFromEvent(ev, &tmpChannel.rxTone, &RxCSSIndex, &RxCSSType);
-						trxSetRxCSS(tmpChannel.rxTone);
+						trxSetRxCSS(RADIO_DEVICE_PRIMARY, tmpChannel.rxTone);
 						announceCSSCode(tmpChannel.rxTone, RxCSSType,
 								(((voicePromptWasPlaying == false) && (nonVolatileSettings.audioPromptMode > AUDIO_PROMPT_MODE_VOICE_LEVEL_2)) ? DIRECTION_RECEIVE : DIRECTION_NONE),
 								(voicePromptWasPlaying == false), AUDIO_PROMPT_MODE_VOICE_LEVEL_1);
@@ -1347,6 +1368,12 @@ static void handleEvent(uiEvent_t *ev)
 						{
 							tmpChannel.aprsConfigIndex--;
 						}
+					}
+					break;
+				case CH_DETAILS_DMR_FORCE_DMO:
+					if (tmpChannel.chMode == RADIO_MODE_DIGITAL)
+					{
+						codeplugChannelSetFlag(&tmpChannel, CHANNEL_FLAG_FORCE_DMO, 0);// Clear Channel DMR Force DMO Bit
 					}
 					break;
 			}
@@ -1575,7 +1602,7 @@ static void applyShiftOffset(bool increase)
 		uint32_t txFreq = (tmpChannel.rxFreq + (shitOffsetValue * 10000));
 
 		// Check Frequency validity
-		if (trxGetBandFromFrequency(txFreq) != -1)
+		if (trxGetBandFromFrequency(txFreq) != FREQUENCY_OUT_OF_BAND)
 		{
 			char buf[SCREEN_LINE_BUFFER_SIZE];
 

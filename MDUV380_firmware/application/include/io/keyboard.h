@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2019      Kai Ludwig, DG4KLU
  * Copyright (C) 2019-2020 Alex, DL4LEX
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *                         Colin Durbridge, G4EML
  *
@@ -89,8 +89,8 @@
 
 #define KEY_DEBOUNCE_COUNTER   20
 
-#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
-#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 #define KEY_INCREASE KEY_RIGHT
 #define KEY_DECREASE KEY_LEFT
 #else

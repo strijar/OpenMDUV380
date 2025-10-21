@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -37,19 +37,20 @@
 #include "hardware/SPI_Flash.h"
 #include "functions/trx.h"
 #include "functions/rxPowerSaving.h"
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 #include "interfaces/batteryAndPowerManagement.h"
+#include "hardware/radioHardwareInterface.h"
 #endif
 
 #if defined(HAS_GPS)
-#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 #include "interfaces/gps.h"
 #endif
 #endif
 
 static const uint8_t DECOMPRESS_LUT[64] = { ' ', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '.' };
 
-#if defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 static  __attribute__((section(".ccmram")))
 #else // MD9600 and MK22
 static  __attribute__((section(".data.$RAM2")))
@@ -853,7 +854,7 @@ bool lastHeardListUpdate(uint8_t *dmrDataBuffer, bool forceOnHotspot)
 						item->talkGroupOrPcId = talkGroupOrPcId;
 						item->time = ticksGetMillis();
 						item->receivedTS = (dmrMonitorCapturedTS != -1) ? dmrMonitorCapturedTS : trxGetDMRTimeSlot();
-						item->dmrMode = trxDMRModeRx;
+						item->dmrMode = currentRadioDevice->trxDMRModeRx;
 						dmrRxAGCrxPeakAverage = item->rxAGCGain = DMR_RX_AGC_DEFAULT_PEAK_SAMPLES;
 						lastTG = talkGroupOrPcId;
 
@@ -892,7 +893,7 @@ bool lastHeardListUpdate(uint8_t *dmrDataBuffer, bool forceOnHotspot)
 					}
 
 					item->receivedTS = (dmrMonitorCapturedTS != -1) ? dmrMonitorCapturedTS : trxGetDMRTimeSlot();// Always update this in case the TS changed.
-					item->dmrMode = trxDMRModeRx;
+					item->dmrMode = currentRadioDevice->trxDMRModeRx;
 					contactDefinedForTA = true;
 				}
 			}
@@ -1360,6 +1361,10 @@ static void displaySplitOrSpanText(uint8_t y, char *text)
 					p--;
 				}
 
+#if defined(PLATFORM_RD5R)
+				y -= 6; // Avoid to write the 2nd line off the screen
+#endif
+
 				uint8_t rest = (uint8_t)((buffer + strlen(buffer)) - p) - ((*p == ' ') ? 1 : 0);
 
 				// rest is too long, just split the line in two chunks
@@ -1492,9 +1497,13 @@ void uiUtilityDisplayInformation(const char *str, displayInformation_t line, int
 	switch (line)
 	{
 		case DISPLAY_INFO_CONTACT_INVERTED:
-#if defined(PLATFORM_RD5R) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
 			displayThemeApply(THEME_ITEM_FG_CHANNEL_CONTACT, THEME_ITEM_BG);
-			displayFillRect(0, DISPLAY_Y_POS_CONTACT + 1, DISPLAY_SIZE_X, MENU_ENTRY_HEIGHT, false);
+#if defined(PLATFORM_RD5R) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
+			displayFillRect(0, DISPLAY_Y_POS_CONTACT
+#if defined(PLATFORM_RD5R)
+					+ 1
+#endif
+					, DISPLAY_SIZE_X, MENU_ENTRY_HEIGHT, false);
 #else
 			displayClearRows(2, 4, true);
 #endif
@@ -1513,7 +1522,7 @@ void uiUtilityDisplayInformation(const char *str, displayInformation_t line, int
 			displayThemeApply(THEME_ITEM_FG_CHANNEL_NAME, THEME_ITEM_BG);
 			inverted = true;
 			{
-#if defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 				displayFillRect(0, ((yOverride == -1) ? DISPLAY_Y_POS_CHANNEL_FIRST_LINE : yOverride), DISPLAY_SIZE_X, OVERRIDE_FRAME_HEIGHT, false);
 #else
 				int row = ((yOverride == -1) ? DISPLAY_Y_POS_CHANNEL_FIRST_LINE : yOverride)/8;
@@ -1576,7 +1585,7 @@ void uiUtilityDisplayInformation(const char *str, displayInformation_t line, int
 				displayPrintCentered(DISPLAY_Y_POS_CSS_INFO, buf, FONT_SIZE_1);
 
 				p = buf;
-				p += snprintf(p, bufLen, "SQL:%d%%", 5 * (((currentChannelData->sql == 0) ? nonVolatileSettings.squelchDefaults[trxCurrentBand[TRX_RX_FREQ_BAND]] : currentChannelData->sql) - 1));
+				p += snprintf(p, bufLen, "SQL:%d%%", 5 * (((currentChannelData->sql == 0) ? nonVolatileSettings.squelchDefaults[currentRadioDevice->trxCurrentBand[TRX_RX_FREQ_BAND]] : currentChannelData->sql) - 1));
 			}
 			else
 			{
@@ -1690,7 +1699,7 @@ void uiUtilityRenderQSOData(void)
 		{
 			// Group call
 			bool different = (((LinkHead->talkGroupOrPcId & 0xFFFFFF) != trxTalkGroupOrPcId ) ||
-					(((trxDMRModeRx != DMR_MODE_DMO) && (dmrMonitorCapturedTS != -1)) && (dmrMonitorCapturedTS != trxGetDMRTimeSlot())) ||
+					(((currentRadioDevice->trxDMRModeRx != DMR_MODE_DMO) && (dmrMonitorCapturedTS != -1)) && (dmrMonitorCapturedTS != trxGetDMRTimeSlot())) ||
 					(trxGetDMRColourCode() != currentChannelData->txColor));
 
 			uiUtilityDisplayInformation(LinkHead->talkgroup, different ? DISPLAY_INFO_CONTACT_INVERTED : DISPLAY_INFO_CONTACT, -1);
@@ -1779,7 +1788,7 @@ void uiUtilityRenderHeader(bool isVFODualWatchScanning, bool isVFOSweepScanning)
 	char buffer[SCREEN_LINE_BUFFER_SIZE];
 	static bool scanBlinkPhase = true;
 	static uint32_t blinkTime = 0;
-	int powerLevel = trxGetPowerLevel();
+	uint8_t powerLevel = trxGetPowerLevel();
 	bool isPerChannelPower = (currentChannelData->libreDMR_Power != 0x00);
 	bool scanIsActive = (uiDataGlobal.Scan.active || uiDataGlobal.Scan.toneActive);
 	bool batteryIsLow = batteryIsLowWarning();
@@ -1978,9 +1987,16 @@ void uiUtilityRenderHeader(bool isVFODualWatchScanning, bool isVFOSweepScanning)
 					{
 						bool tsInverted = false;
 
-						snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%s%d",
-								((contactTSActive && (monitorModeData.isEnabled == false)) ? "cS" : currentLanguage->ts),
-								((monitorModeData.isEnabled && (dmrMonitorCapturedTS != -1))? (dmrMonitorCapturedTS + 1) : trxGetDMRTimeSlot() + 1));
+						if (codeplugChannelGetFlag(currentChannelData, CHANNEL_FLAG_FORCE_DMO) == 0)
+						{
+							snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%s%d",
+									((contactTSActive && (monitorModeData.isEnabled == false)) ? "cS" : currentLanguage->ts),
+									((monitorModeData.isEnabled && (dmrMonitorCapturedTS != -1))? (dmrMonitorCapturedTS + 1) : trxGetDMRTimeSlot() + 1));
+						}
+						else
+						{
+							strncpy(buffer, "DMO", SCREEN_LINE_BUFFER_SIZE);
+						}
 
 						int16_t tsPixLen = (strlen(buffer) * 6);
 						int16_t tsXPos = ((FILTER_TEXT_X_CENTER + (itemOffset * 1)) - (tsPixLen >> 1));
@@ -1998,7 +2014,7 @@ void uiUtilityRenderHeader(bool isVFODualWatchScanning, bool isVFOSweepScanning)
 	}
 
 	// Power
-	sprintf(buffer, "%s%s", POWER_LEVELS[powerLevel], POWER_LEVEL_UNITS[powerLevel]);
+	sprintf(buffer, "%s%s", getPowerLevel(powerLevel), getPowerLevelUnit(powerLevel));
 
 	if (isVFOSweepScanning) // Need to shift to the right due to sweep span
 	{
@@ -2029,7 +2045,7 @@ void uiUtilityRenderHeader(bool isVFODualWatchScanning, bool isVFOSweepScanning)
 	}
 
 #if defined(HAS_GPS)
-#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 	if (nonVolatileSettings.gps >= GPS_MODE_ON)
 	{
 		displayPrintCore(DISPLAY_SIZE_X - 50, DISPLAY_Y_POS_HEADER, currentLanguage->gps, ((gpsData.Status & GPS_STATUS_HAS_FIX) ? FONT_SIZE_1_BOLD : FONT_SIZE_1), TEXT_ALIGN_LEFT, false);
@@ -2100,7 +2116,7 @@ static void drawHeaderBar(int *barWidth, int16_t barHeight)
 
 void uiUtilityDrawRSSIBarGraph(void)
 {
-	int rssi = trxGetRSSIdBm();
+	int rssi = trxGetRSSIdBm(RADIO_DEVICE_PRIMARY);
 
 	if ((rssi > SMETER_S9) && (trxGetMode() == RADIO_MODE_ANALOG))
 	{
@@ -2162,7 +2178,7 @@ void uiUtilityDrawFMMicLevelBarGraph(void)
 	trxReadVoxAndMicStrength();
 
 	uint16_t micdB =
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 			trxTxMic + // trxTxMic is in 0.2dB unit
 			((nonVolatileSettings.micGainFM) * 15)   //  mic gain adjustment is 3dB per increment of micGainFM, so scale it to 0.2dB increments
 
@@ -2172,7 +2188,7 @@ void uiUtilityDrawFMMicLevelBarGraph(void)
 			;
 
 	int barWidth = SAFE_MIN(
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 			((uint16_t)(((float)DISPLAY_SIZE_X / 200.0) * ((float)micdB - 150.0))) // display from 30dB to 70dB, = 150 to  350 units and span over 160pix
 #else
 			((uint16_t)(((float)DISPLAY_SIZE_X / 50.0) * ((float)micdB - 50.0))) // display from 50dB to 100dB, span over 128pix
@@ -2446,7 +2462,7 @@ ANNOUNCE_STATIC void announceContactNameTgOrPc(bool voicePromptWasPlaying)
 
 ANNOUNCE_STATIC void announcePowerLevel(bool voicePromptWasPlaying)
 {
-	int powerLevel = trxGetPowerLevel();
+	uint8_t powerLevel = trxGetPowerLevel();
 
 	if (!voicePromptWasPlaying)
 	{
@@ -2455,7 +2471,7 @@ ANNOUNCE_STATIC void announcePowerLevel(bool voicePromptWasPlaying)
 
 	if (powerLevel < 9)
 	{
-		voicePromptsAppendString((char *)POWER_LEVELS[powerLevel]);
+		voicePromptsAppendString((char *)getPowerLevel(powerLevel));
 		switch(powerLevel)
 		{
 			case 0://50mW
@@ -2527,7 +2543,14 @@ ANNOUNCE_STATIC void announceBatteryPercentage(void)
 
 ANNOUNCE_STATIC void announceTS(void)
 {
-	voicePromptsAppendLanguageString(currentLanguage->timeSlot);
+	if (codeplugChannelGetFlag(currentChannelData, CHANNEL_FLAG_FORCE_DMO) == 0)
+	{
+		voicePromptsAppendLanguageString(currentLanguage->timeSlot);
+	}
+	else
+	{
+		voicePromptsAppendString("DMO");
+	}
 	voicePromptsAppendInteger(trxGetDMRTimeSlot() + 1);
 }
 
@@ -2642,7 +2665,7 @@ ANNOUNCE_STATIC void announceSquelchLevel(bool voicePromptWasPlaying)
 		voicePromptsAppendLanguageString(currentLanguage->squelch);
 	}
 
-	snprintf(buf, BUFFER_LEN, "%d%%", 5 * (((currentChannelData->sql == 0) ? nonVolatileSettings.squelchDefaults[trxCurrentBand[TRX_RX_FREQ_BAND]] : currentChannelData->sql)-1));
+	snprintf(buf, BUFFER_LEN, "%d%%", 5 * (((currentChannelData->sql == 0) ? nonVolatileSettings.squelchDefaults[currentRadioDevice->trxCurrentBand[TRX_RX_FREQ_BAND]] : currentChannelData->sql)-1));
 	voicePromptsAppendString(buf);
 }
 
@@ -3071,9 +3094,9 @@ bool repeatVoicePromptOnSK1(uiEvent_t *ev)
 					voicePromptsTerminate();
 				}
 			}
-		}
 
-		return true;
+			return true;
+		}
 	}
 
 	return false;
@@ -3105,7 +3128,7 @@ bool handleMonitorMode(uiEvent_t *ev)
 			switch (monitorModeData.savedRadioMode)
 			{
 				case RADIO_MODE_ANALOG:
-					trxSetRxCSS(currentChannelData->rxTone);
+					trxSetRxCSS(RADIO_DEVICE_PRIMARY, currentChannelData->rxTone);
 					break;
 				case RADIO_MODE_DIGITAL:
 					trxSetDMRColourCode(monitorModeData.savedDMRCc);
@@ -3543,6 +3566,18 @@ static uint32_t dtmfGetToneDuration(uint32_t duration)
 	return ((starOrHash ? (uiDataGlobal.DTMFContactList.durations.otherDur * 10) : 0) + duration);
 }
 
+static void dtmfStopLocalTone(bool enableMic)
+{
+#if defined(PLATFORM_GD77) || defined(PLATFORM_GD77S) || defined(PLATFORM_DM1801) || defined(PLATFORM_DM1801A) || defined(PLATFORM_RD5R)
+	trxSelectVoiceChannel(AT1846_VOICE_CHANNEL_NONE);
+#else
+	trxDTMFoff(enableMic);
+	if(soundMelodyIsPlaying())
+	{
+		soundStopMelody();
+	}
+#endif
+}
 
 static void dtmfProcess(void)
 {
@@ -3569,15 +3604,7 @@ static void dtmfProcess(void)
 			}
 			else
 			{
-#if defined(PLATFORM_GD77) || defined(PLATFORM_GD77S) || defined(PLATFORM_DM1801) || defined(PLATFORM_DM1801A) || defined(PLATFORM_RD5R)
-				trxSelectVoiceChannel(AT1846_VOICE_CHANNEL_NONE);
-#else
-				trxDTMFoff(false);
-				if(soundMelodyIsPlaying())
-				{
-					soundStopMelody();
-				}
-#endif
+				dtmfStopLocalTone(false);
 			}
 
 			uiDataGlobal.DTMFContactList.inTone = !uiDataGlobal.DTMFContactList.inTone;
@@ -3588,15 +3615,7 @@ static void dtmfProcess(void)
 			if (uiDataGlobal.DTMFContactList.inTone)
 			{
 				uiDataGlobal.DTMFContactList.inTone = false;
-#if defined(PLATFORM_GD77) || defined(PLATFORM_GD77S) || defined(PLATFORM_DM1801) || defined(PLATFORM_DM1801A) || defined(PLATFORM_RD5R)
-				trxSelectVoiceChannel(AT1846_VOICE_CHANNEL_NONE);
-#else
-				trxDTMFoff(true);
-				if(soundMelodyIsPlaying())
-				{
-					soundStopMelody();
-				}
-#endif
+				dtmfStopLocalTone(true);
 				ticksTimerStart(&uiDataGlobal.DTMFContactList.nextPeriodTimer, (duration + (uiDataGlobal.DTMFContactList.durations.libreDMR_Tail * 100)));
 				return;
 			}
@@ -3681,6 +3700,7 @@ void dtmfSequenceStart(void)
 void dtmfSequenceStop(void)
 {
 	uiDataGlobal.DTMFContactList.poLen = 0U;
+	dtmfStopLocalTone(true);
 }
 
 void dtmfSequenceTick(bool popPreviousMenuOnEnding)
@@ -3812,6 +3832,20 @@ void showErrorMessage(const char *message)
 	displayPrintCentered(((DISPLAY_SIZE_Y - FONT_SIZE_3_HEIGHT) >> 1), message, FONT_SIZE_3);
 	displayThemeResetToDefault();
 	displayRender();
+}
+
+const char *getPowerLevel(uint8_t level)
+{
+#if defined(PLATFORM_MDUV380) && !defined(PLATFORM_VARIANT_UV380_PLUS_10W)
+	return POWER_LEVELS[(settingsIsOptionBitSet(BIT_FORCE_10W_RADIO) ? 1 : 0)][level];
+#else
+	return POWER_LEVELS[level];
+#endif
+}
+
+const char *getPowerLevelUnit(uint8_t level)
+{
+	return POWER_LEVEL_UNITS[level];
 }
 
 void uiSetUTCDateTimeInSecs(time_t_custom UTCdateTimeInSecs)
@@ -3986,7 +4020,7 @@ time_t_custom mktime_custom(const struct tm * tb)
     return (time_t_custom) t1;
 }
 
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 time_t_custom getRtcTime_custom(void)
 {
 	RTC_TimeTypeDef rtcTime = { 0 };
@@ -4396,4 +4430,26 @@ void uiChannelModeOrVFOModeThemeDaytimeChange(bool toggle, bool isChannelMode)
 	}
 }
 
+#endif
+
+#if defined(STM32F405xx) && ! defined(PLATFORM_MD9600)
+uint32_t cpuGetSignature(void)
+{
+	return (DBGMCU->IDCODE & 0x00000FFF);
+}
+
+uint32_t cpuGetRevision(void)
+{
+	return ((DBGMCU->IDCODE >> 16) & 0x0000FFFF);
+}
+
+uint32_t cpuGetPackage(void)
+{
+	return (((*(__IO uint16_t *) (0x1FFF7BF0)) & 0x0700) >> 8);
+}
+
+int32_t cpuGetFlashSize(void)
+{
+	return (*(__IO uint16_t *) (0x1FFF7A22));
+}
 #endif

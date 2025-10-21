@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2019      Kai Ludwig, DG4KLU
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Colin, G4EML
  *                         Daniel Caujolle-Bert, F1RMB
  *
@@ -35,13 +35,14 @@
 //#include "interfaces/i2c.h"
 #include "functions/calibration.h"
 #include "functions/codeplug.h"
+#include "hardware/radioHardwareInterface.h"
 
-#define RSSI_NOISE_SAMPLE_PERIOD_PIT  25U// 25 milliseconds
+#define RSSI_NOISE_SAMPLE_PERIOD_PIT  25U // 25 milliseconds
 
 // AT1846S defines
 
 #define BANDWIDTH_12P5KHZ false
-#define BANDWIDTH_25KHZ true
+#define BANDWIDTH_25KHZ   true
 
 // Note these do not apply to the MD9600 but have been included to allow stub functions to compile
 #define AT1846_VOICE_CHANNEL_NONE   0x00
@@ -61,22 +62,18 @@
 
 typedef struct
 {
-	int calTableMinFreq;
-	int minFreq;
-	int maxFreq;
+	int calPowerTableMinFreq;
+	int calIQTableMinFreq;
+	uint32_t minFreq;
+	uint32_t maxFreq;
 } frequencyHardwareBand_t;
 
 typedef struct
 {
-	int minFreq;
-	int maxFreq;
+	uint32_t minFreq;
+	uint32_t maxFreq;
 } frequencyBand_t;
 
-typedef struct trxFrequency
-{
-	int rxFreq;
-	int txFreq;
-} trxFrequency_t;
 
 enum RADIO_MODE { RADIO_MODE_NONE, RADIO_MODE_ANALOG, RADIO_MODE_DIGITAL };
 enum DMR_ADMIT_CRITERIA { ADMIT_CRITERIA_ALWAYS, ADMIT_CRITERIA_CHANNEL_FREE, ADMIT_CRITERIA_COLOR_CODE };
@@ -101,25 +98,17 @@ extern const uint16_t TRX_DCS_TONE;
 extern const uint8_t TRX_NUM_DCS;
 extern const uint16_t TRX_DCSCodes[];
 
-extern volatile int trxDMRModeRx;
-extern int trxDMRModeTx;
-
 extern volatile bool trxTransmissionEnabled;
 extern volatile bool trxIsTransmitting;
 extern uint32_t trxTalkGroupOrPcId;
 extern uint32_t trxDMRID;
-extern volatile uint8_t trxRxSignal;
-extern volatile uint8_t trxRxNoise;
 extern volatile uint8_t trxTxVox;
 extern volatile uint8_t trxTxMic;
 extern calibrationPowerValues_t trxPowerSettings;
-extern int trxCurrentBand[2];
 extern volatile bool txPAEnabled;
 extern volatile bool trxDMRSynchronisedRSSIReadPending;
 
 extern volatile uint16_t txDACDrivePower;
-extern volatile uint16_t UHFRxTuningVolts;
-extern volatile uint16_t VHFRxTuningVolts;
 extern volatile uint8_t analogIGain;
 extern volatile uint8_t analogQGain;
 extern volatile uint8_t digitalIGain;
@@ -129,36 +118,36 @@ extern volatile int8_t Mod2Offset;
 extern volatile bool trxIsTransmittingDMR;
 extern volatile uint32_t trxDMRstartTime;
 
-bool trxCarrierDetected(void);
-bool trxCheckDigitalSquelch(void);
+bool trxCarrierDetected(RadioDevice_t deviceId);
+bool trxCheckDigitalSquelch(RadioDevice_t deviceId);
 bool trxCheckAnalogSquelch(void);
-void trxResetSquelchesState(void);
+void trxResetSquelchesState(RadioDevice_t deviceId);
 int trxGetMode(void);
 bool trxGetBandwidthIs25kHz(void);
-int trxGetFrequency(void);
+uint32_t trxGetFrequency(void);
 void trxSetModeAndBandwidth(int mode, bool bandwidthIs25kHz);
-void trxSetFrequency(int fRx,int fTx, int dmrMode);
+void trxSetFrequency(uint32_t fRx, uint32_t fTx, int dmrMode);
 void trxSetRX(void);
 void trxSetTX(void);
 void trxRxAndTxOff(bool critical);
 void trxRxOn(bool critical);
 void trxActivateRx(bool critical);
 void trxActivateTx(bool critical);
-void trxSetPowerFromLevel(int powerLevel);
+void trxSetPowerFromLevel(uint8_t powerLevel);
 void trxUpdate_PA_DAC_Drive(void);
 uint16_t trxGetPA_DAC_Drive(void);
-int trxGetPowerLevel(void);
+uint8_t trxGetPowerLevel(void);
 void trxCalcBandAndFrequencyOffset(CalibrationBand_t *calibrationBand, uint32_t *freq_offset);
 void trxSetDMRColourCode(uint8_t colourCode);
 uint8_t trxGetDMRColourCode(void);
 int trxGetDMRTimeSlot(void);
 void trxSetDMRTimeSlot(int timeslot, bool resync);
 void trxSetTxCSS(uint16_t tone);
-void trxSetRxCSS(uint16_t tone);
+void trxSetRxCSS(RadioDevice_t deviceId, uint16_t tone);
 bool trxCheckCSSFlag(uint16_t tone);
-bool trxCheckFrequencyInAmateurBand(int tmp_frequency);
-int trxGetBandFromFrequency(int frequency);
-int trxGetNextOrPrevBandFromFrequency(int frequency, bool nextBand);
+bool trxCheckFrequencyInAmateurBand(uint32_t frequency);
+uint32_t trxGetBandFromFrequency(uint32_t frequency);
+uint32_t trxGetNextOrPrevBandFromFrequency(uint32_t frequency, bool nextBand);
 void trxReadVoxAndMicStrength(void);
 void trxPostponeReadRSSIAndNoise(uint32_t msOverride);
 void trxReadRSSIAndNoise(bool force);
@@ -173,18 +162,19 @@ void trxSetMicGainFM(uint8_t gain);
 
 void trxEnableTransmission(void);
 void trxDisableTransmission(void);
-bool trxPowerUpDownRxAndC6000(bool powerUp, bool includeC6000);
-uint8_t trxGetAnalogFilterLevel();
+bool trxPowerUpDownRxAndC6000(bool powerUp, bool includeC6000, bool includeMic);
+uint8_t trxGetAnalogFilterLevel(void);
 void trxSetAnalogFilterLevel(uint8_t newFilterLevel);
-void trxTerminateCheckAnalogSquelch(void);
+void trxTerminateCheckAnalogSquelch(RadioDevice_t deviceId);
 void trxInvalidateCurrentFrequency(void);
 void trxActivateDMRTx(void);
 void trxFastDMRTx(bool tx);
 
-int trxGetRSSIdBm(void);
-int trxGetNoisedBm(void);
-int trxGetSNRMargindBm(void);
-uint16_t convertCSSNative2BinaryCodedOctal(uint16_t nativeCSS);
+int trxGetRSSIdBm(RadioDevice_t deviceId);
+int trxGetNoisedBm(RadioDevice_t deviceId);
+int trxGetSNRMargindBm(RadioDevice_t deviceId);
+uint8_t trxGetSignalRaw(RadioDevice_t deviceId);
+uint8_t trxGetNoiseRaw(RadioDevice_t deviceId);
 void trxSelectVoiceChannel(uint8_t channel);
 void trxConfigurePA_DAC_ForFrequencyBand(void);
 

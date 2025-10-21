@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Colin Durbridge, G4EML
  *                         Daniel Caujolle-Bert, F1RMB
  *
@@ -27,8 +27,7 @@
  *
  */
 
-#include "functions/codeplug.h"
-#include "functions/settings.h"
+#include "user_interface/uiGlobals.h"
 #include "functions/trx.h"
 #include "user_interface/menuSystem.h"
 #include "user_interface/uiUtilities.h"
@@ -139,6 +138,8 @@ static void updateCursor(bool moved)
 	// Only display the cursor when the fields are displayed
 	if (menuContactDetailsState == MENU_CONTACT_DETAILS_DISPLAY)
 	{
+		displayThemeApply(THEME_ITEM_BG, THEME_ITEM_BG_MENU_ITEM_SELECTED);
+
 		switch (menuDataGlobal.currentItemIndex)
 		{
 			case CONTACT_DETAILS_NAME:
@@ -149,6 +150,8 @@ static void updateCursor(bool moved)
 				menuUpdateCursor(numPos, moved, true);
 				break;
 		}
+
+		displayThemeResetToDefault();
 	}
 }
 
@@ -188,7 +191,7 @@ static void updateScreen(bool isFirstRun, bool allowedToSpeakUpdate)
 	switch (menuContactDetailsState)
 	{
 		case MENU_CONTACT_DETAILS_DISPLAY:
-			for (int i = 1 - ((MENU_MAX_DISPLAYED_ENTRIES - 1) / 2) - 1; i <= (MENU_MAX_DISPLAYED_ENTRIES - ((MENU_MAX_DISPLAYED_ENTRIES - 1) / 2) - 1); i++)
+			for (int i = MENU_START_ITERATION_VALUE; i <= MENU_END_ITERATION_VALUE; i++)
 			{
 				mNum = menuGetMenuOffset(NUM_CONTACT_DETAILS_ITEMS, i);
 				if (mNum == MENU_OFFSET_BEFORE_FIRST_ENTRY)
@@ -435,7 +438,7 @@ static void handleEvent(uiEvent_t *ev)
 					}
 				}
 				else if (KEYCHECK_SHORTUP(ev->keys, KEY_RIGHT)
-#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 						|| KEYCHECK_SHORTUP(ev->keys, KEY_ROTARY_INCREMENT)
 #endif
 				)
@@ -487,7 +490,7 @@ static void handleEvent(uiEvent_t *ev)
 					}
 				}
 				else if (KEYCHECK_SHORTUP(ev->keys, KEY_LEFT)
-#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 						|| KEYCHECK_SHORTUP(ev->keys, KEY_ROTARY_DECREMENT)
 #endif
 				)

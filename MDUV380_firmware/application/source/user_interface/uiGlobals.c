@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -34,11 +34,20 @@ const int DBM_LEVELS[16] = {
 };
 
 #if defined(PLATFORM_MD9600)
-const char *POWER_LEVELS[]                  = { "100", "250", "500", "750", "1", "5", "10", "25", "40", "+W-"};
+const char *POWER_LEVELS[]                  = { "100", "250", "500", "750", "1", "5", "10", "25", "40", "+W-" };
+#elif defined(PLATFORM_VARIANT_UV380_PLUS_10W)
+const char *POWER_LEVELS[]                  = { "50", "250", "500", "750", "1", "2", "3", "5", "10", "+W-" };
+#elif defined(PLATFORM_MDUV380) && !defined(PLATFORM_VARIANT_UV380_PLUS_10W)
+const char *POWER_LEVELS[2][10]             =
+{
+		{ "50", "250", "500", "750", "1", "2", "3", "4",  "5", "+W-" },
+		{ "50", "250", "500", "750", "1", "2", "3", "5", "10", "+W-" }
+};
 #else
-const char *POWER_LEVELS[]                  = { "50", "250", "500", "750", "1", "2", "3", "4", "5", "+W-"};
+const char *POWER_LEVELS[]                  = { "50", "250", "500", "750", "1", "2", "3", "4", "5", "+W-" };
 #endif
-const char *POWER_LEVEL_UNITS[]             = { "mW", "mW",  "mW",  "mW",  "W", "W", "W", "W", "W", ""};
+
+const char *POWER_LEVEL_UNITS[]             = { "mW", "mW",  "mW",  "mW",  "W", "W", "W", "W", "W", "" };
 const char *DMR_DESTINATION_FILTER_LEVELS[] = { "TG", "Ct", "TGL" };
 const char *ANALOG_FILTER_LEVELS[]          = { "CTCSS|DCS" };
 
@@ -180,7 +189,7 @@ struct_codeplugZone_t currentZone =
 };
 
 
-#if defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 __attribute__((section(".ccmram")))
 #else // MD9600 and MK22 platforms
 __attribute__((section(".data.$RAM2")))

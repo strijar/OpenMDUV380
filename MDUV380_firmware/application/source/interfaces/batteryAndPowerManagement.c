@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2021-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -42,6 +42,8 @@
 #include "interfaces/gps.h"
 #include "interfaces/settingsStorage.h"
 
+//#define DEBUG_HARDWARE_SCREEN 1
+
 static uint32_t lowBatteryCount = 0;
 #define LOW_BATTERY_INTERVAL                       ((1000 * 60) * 5) // 5 minute;
 #define LOW_BATTERY_WARNING_VOLTAGE_DIFFERENTIAL   6	// Offset between the minimum voltage and when the battery warning audio starts. 6 = 0.6V
@@ -68,7 +70,7 @@ volatile uint32_t resumeTicks = 0;
 ticksTimer_t apoTimer;
 #endif
 
-#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 bool powerRotarySwitchIsOn(void)
 {
 	return (batteryVoltage > POWEROFF_VOLTAGE_THRESHOLD);
@@ -191,7 +193,7 @@ void batteryChecking(uiEvent_t *ev)
 
 	// Low battery or poweroff (non RD-5R)
 	bool powerSwitchIsOff =
-#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 			(powerRotarySwitchIsOn() == false);
 #else
 			false;
@@ -307,7 +309,7 @@ void powerDown(bool doNotSavePowerOffState)
 
 	gpioSetDisplayBacklightIntensityPercentage(0);
 	displaySetDisplayPowerMode(false);
-	radioPowerOff(true);
+	radioPowerOff(true, true);
 
 	//Reset the display, saves about 1mA
 	HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_SET);
@@ -327,12 +329,18 @@ void powerDown(bool doNotSavePowerOffState)
 	HAL_GPIO_WritePin(PWR_SW_GPIO_Port, PWR_SW_Pin, GPIO_PIN_RESET);
 }
 
-void die(bool usbMonitoring, bool maintainRTC, bool forceSuspend)
+void die(bool usbMonitoring, bool maintainRTC, bool forceSuspend, bool safeBoot)
 {
 	int8_t batteryCriticalCount = 0;
 #if !defined(PLATFORM_RD5R) && !defined(PLATFORM_GD77S)
 	uint32_t lowBatteryCriticalCount = 0;
 	ticksTimer_t nextPITCounterRunTimer = { .start = ticksGetMillis(), .timeout = SUSPEND_LOW_BATTERY_RATE };
+#if defined(DEBUG_HARDWARE_SCREEN)
+	uint16_t y = 8;
+#else
+
+	UNUSED_PARAMETER(safeBoot);
+#endif
 
 	if (!maintainRTC)
 	{
@@ -346,30 +354,154 @@ void die(bool usbMonitoring, bool maintainRTC, bool forceSuspend)
 	disableAudioAmp(AUDIO_AMP_MODE_PROMPT);
 	LedWrite(LED_GREEN, 0);
 	LedWrite(LED_RED, 0);
-	trxResetSquelchesState(); // Could be put in sleep state and awaken with a signal, so this will re-enable the audio AMP
+	trxResetSquelchesState(RADIO_DEVICE_PRIMARY); // Could be put in sleep state and awaken with a signal, so this will re-enable the audio AMP
 
-	trxPowerUpDownRxAndC6000(false, true);
+	trxPowerUpDownRxAndC6000(false, true, true);
 
 	if (usbMonitoring)
 	{
-		ticksTimer_t checkBatteryTimer = { .start = ticksGetMillis(), .timeout = 1000U };
+		ticksTimer_t checkBatteryTimer = { .start = ticksGetMillis(), .timeout = (safeBoot ? 500U : 1000U) };
+
+#if defined(DEBUG_HARDWARE_SCREEN)
+#warning SAFEBOOT HARDWARE DEBUG SCREEN ENABLED
+		if (safeBoot)
+		{
+#if defined(STM32F405xx) && ! defined(PLATFORM_MD9600)
+			char cpuTypeBuf[SCREEN_LINE_BUFFER_SIZE] = {0};
+			uint32_t vpHeader[2];
+
+			displayClearBuf();
+
+			sprintf(cpuTypeBuf, "CPU Type   :%s (%u)", ((NumInterruptPriorityBits == 4) ? "STM" : "TYT"), NumInterruptPriorityBits);
+			displayPrintAt(0, y, cpuTypeBuf , FONT_SIZE_2);
+			y += FONT_SIZE_2_HEIGHT;
+
+			sprintf(cpuTypeBuf, "CPU Sig    :0x%04X", cpuGetSignature());
+			displayPrintAt(0, y, cpuTypeBuf , FONT_SIZE_2);
+			y += FONT_SIZE_2_HEIGHT;
+
+			sprintf(cpuTypeBuf, "CPU Rev    :0x%04X", cpuGetRevision());
+			displayPrintAt(0, y, cpuTypeBuf , FONT_SIZE_2);
+			y += FONT_SIZE_2_HEIGHT;
+
+			sprintf(cpuTypeBuf, "CPU Pack   :0x%04X", cpuGetPackage());
+			displayPrintAt(0, y, cpuTypeBuf , FONT_SIZE_2);
+			y += FONT_SIZE_2_HEIGHT;
+
+			sprintf(cpuTypeBuf, "CPU Flash  :%dkb", cpuGetFlashSize());
+			displayPrintAt(0, y, cpuTypeBuf , FONT_SIZE_2);
+			y += FONT_SIZE_2_HEIGHT;
+
+			sprintf(cpuTypeBuf, "Flash Type :0x%X", flashChipPartNumber);
+			displayPrintAt(0, y, cpuTypeBuf , FONT_SIZE_2);
+			y += FONT_SIZE_2_HEIGHT;
+
+			sprintf(cpuTypeBuf, "NVRAM :0x%X %u", nonVolatileSettings.magicNumber, settingsIsOptionBitSet(BIT_SETTINGS_UPDATED));
+			displayPrintAt(0, y, cpuTypeBuf , FONT_SIZE_2);
+			y += FONT_SIZE_2_HEIGHT;
+
+			sprintf(cpuTypeBuf, "Codec :%s", (codecIsAvailable() ? "OK" : "KO"));
+			displayPrintAt(0, y, cpuTypeBuf , FONT_SIZE_2);
+			y += FONT_SIZE_2_HEIGHT;
+
+			SPI_Flash_read(VOICE_PROMPTS_FLASH_HEADER_ADDRESS, (uint8_t *)&vpHeader, sizeof(vpHeader));
+			sprintf(cpuTypeBuf, "VP :0x%X 0x%X", vpHeader[0], vpHeader[1]);
+			displayPrintAt(0, y, cpuTypeBuf , FONT_SIZE_2);
+			y += FONT_SIZE_2_HEIGHT;
+
+			displayRender();
+#endif
+		}
+#endif
 
 		while(true)
 		{
 			tick_com_request();
 			vTaskDelay((0 / portTICK_PERIOD_MS));
 
-			if (ticksTimerHasExpired(&checkBatteryTimer))
+#if defined(DEBUG_HARDWARE_SCREEN)
+			if (safeBoot)
 			{
-				batteryCriticalCount += (batteryLastReadingIsCritical() ? 1 : (batteryCriticalCount ? -1 : 0));
-
-				if (batteryCriticalCount > (LOW_BATTERY_VOLTAGE_RECOVERY_TIME / 1000))
+				if (ticksTimerHasExpired(&checkBatteryTimer)) // reuse this timer
 				{
-					powerDown(true);
-					while(true); // won't reach this.
+					char buf[SCREEN_LINE_BUFFER_SIZE];
+					uint16_t ypos = y;
+					uint32_t buttons = 0;
+					int button_event = EVENT_BUTTON_NONE;
+					uint32_t key = keyboardRead();
+#if defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701)
+					uint8_t rotDir = ' ';
+#elif defined(PLATFORM_MD2017)
+					uint8_t trackDir = ' ';
+#endif
+
+					buttonsCheckButtonsEvent(&buttons, &button_event, false);
+
+					displayFillRect(0, ypos, DISPLAY_SIZE_X, DISPLAY_SIZE_Y - y, true);
+
+					sprintf(buf, "Ps :%u, Lvl :%u %d", powerRotarySwitchIsOn(), potLevel, getVolumeControl());
+					displayPrintAt(0, ypos, buf , FONT_SIZE_2);
+					ypos += FONT_SIZE_2_HEIGHT;
+
+					sprintf(buf, "V :%d, ADC :%d", lastValidBatteryVoltage, adcGetBatteryVoltage());
+					displayPrintAt(0, ypos, buf , FONT_SIZE_2);
+					ypos += FONT_SIZE_2_HEIGHT;
+
+					sprintf(buf, "Btn :0x%X, Evt :%d", buttons, button_event);
+					displayPrintAt(0, ypos, buf , FONT_SIZE_2);
+					ypos += FONT_SIZE_2_HEIGHT;
+
+					sprintf(buf, "Key :%3d [%c]", key, ((key != 0) ? key : ' '));
+					displayPrintAt(0, ypos, buf , FONT_SIZE_2);
+					ypos += FONT_SIZE_2_HEIGHT;
+
+#if defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701)
+					if (rotaryData.Direction != 0)
+					{
+						rotDir = ((rotaryData.Direction == 1) ? '+' : '-');
+
+						nonVolatileSettings.displayBacklightPercentage[DAY] += ((rotaryData.Direction > 0) ?
+								(nonVolatileSettings.displayBacklightPercentage[DAY] >= 10 ? 10 : 1)
+								:
+								(nonVolatileSettings.displayBacklightPercentage[DAY] >= 20 ? -10 : -1));
+						nonVolatileSettings.displayBacklightPercentage[DAY] = CLAMP(nonVolatileSettings.displayBacklightPercentage[DAY], 0, 100);
+						gpioSetDisplayBacklightIntensityPercentage(nonVolatileSettings.displayBacklightPercentage[DAY]);
+						rotaryData.Direction = 0;
+					}
+					sprintf(buf, "Rot :[%c], Bcl :%d%%", rotDir, nonVolatileSettings.displayBacklightPercentage[DAY]);
+#elif defined(PLATFORM_MD2017)
+					if (trackballData.Count > (2 + 1)) // TRACKBALL_FAST_MOTION + 1
+					{
+						trackDir = trackballData.Direction;
+						trackballData.Count -= 2; // TRACKBALL_FAST_MOTION
+					}
+					sprintf(buf, "TBall :[%c], Cnt :%d", trackDir, trackballData.Count);
+#endif
+					displayPrintAt(0, ypos, buf , FONT_SIZE_2);
+					//ypos += FONT_SIZE_2_HEIGHT;
+
+					displayRenderRows(y / 8, ((ypos / 8) + (FONT_SIZE_2_HEIGHT / 8)));
+					ticksTimerStart(&checkBatteryTimer, 200U);
 				}
 
-				ticksTimerStart(&checkBatteryTimer, 1000U);
+				batteryUpdate();
+				getVolumeControl(); // continue to average value..
+			}
+			else
+#endif
+			{
+				if (ticksTimerHasExpired(&checkBatteryTimer))
+				{
+					batteryCriticalCount += (batteryLastReadingIsCritical() ? 1 : (batteryCriticalCount ? -1 : 0));
+
+					if (batteryCriticalCount > (LOW_BATTERY_VOLTAGE_RECOVERY_TIME / 1000))
+					{
+						powerDown(true);
+						while(true); // won't reach this.
+					}
+
+					ticksTimerStart(&checkBatteryTimer, 1000U);
+				}
 			}
 		}
 	}
@@ -492,7 +624,7 @@ void die(bool usbMonitoring, bool maintainRTC, bool forceSuspend)
 			if (uiDataGlobal.SatelliteAndAlarmData.alarmType != ALARM_TYPE_NONE)
 			{
 				bool wakingUp =
-#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 						(buttonsRead() & BUTTON_ORANGE);
 #else // MD-UV3x0 | RT3S
 						((buttonsRead() & (BUTTON_SK2 | BUTTON_PTT)) == (BUTTON_SK2 | BUTTON_PTT));
@@ -502,7 +634,7 @@ void die(bool usbMonitoring, bool maintainRTC, bool forceSuspend)
 				{
 					// Wait for button(s) release
 					while (
-#if (defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017))
+#if (defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017))
 							(buttonsRead() & BUTTON_ORANGE)
 #else
 							(buttonsRead() & (BUTTON_SK2 | BUTTON_PTT))
@@ -553,7 +685,7 @@ void wakeFromSleep(void)
 	// But do it again, just in case, as its important that the radio will turn off when the power control is turned to off
 */
 
-	trxPowerUpDownRxAndC6000(true, true);
+	trxPowerUpDownRxAndC6000(true, true, true);
 
 	// Reset counters before enabling watchdog
 	hrc6000Task.AliveCount = TASK_FLAGGED_ALIVE;
@@ -657,7 +789,7 @@ void powerOffFinalStage(bool maintainRTC, bool forceSuspend)
 
 	displayEnableBacklight(false, 0);
 
-#if ! (defined(PLATFORM_RD5R))// || defined(PLATFORM_MD9600) || defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017))
+#if ! (defined(PLATFORM_RD5R))// || defined(PLATFORM_MD9600) || defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017))
 	// This turns the power off to the CPU.
 	if (!maintainRTC)
 	{
@@ -665,7 +797,7 @@ void powerOffFinalStage(bool maintainRTC, bool forceSuspend)
 	}
 #endif
 
-	die(false, maintainRTC, forceSuspend);
+	die(false, maintainRTC, forceSuspend, false);
 }
 
 #if !defined(PLATFORM_GD77S)

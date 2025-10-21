@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2021-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -89,7 +89,7 @@ void rxPowerSavingSetState(ecoPhase_t newState)
 	{
 		if (rxPowerSavingState == ECOPHASE_POWERSAVE_ACTIVE___RX_IS_OFF)
 		{
-			hrc6000IsPoweredOff = trxPowerUpDownRxAndC6000(true, hrc6000IsPoweredOff);
+			hrc6000IsPoweredOff = trxPowerUpDownRxAndC6000(true, hrc6000IsPoweredOff, false);
 		}
 
 		rxPowerSavingState = newState;
@@ -120,7 +120,7 @@ void rxPowerSavingTick(uiEvent_t *ev, bool hasSignal)
 			{
 				if (rxPowerSavingState == ECOPHASE_POWERSAVE_ACTIVE___RX_IS_OFF)
 				{
-					hrc6000IsPoweredOff = trxPowerUpDownRxAndC6000(true, hrc6000IsPoweredOff);// Power up AT1846S, C6000 and preamp
+					hrc6000IsPoweredOff = trxPowerUpDownRxAndC6000(true, hrc6000IsPoweredOff, false);// Power up AT1846S, C6000 and preamp
 				}
 
 				if (powerSavingLevel >= LOW_SPEED_CLOCK_ECO_THRESHOLD)
@@ -140,7 +140,7 @@ void rxPowerSavingTick(uiEvent_t *ev, bool hasSignal)
 			if (ticksTimerHasExpired(&ecoPhaseTimer) &&
 					((powerSavingLevel > 0) && (codeplugChannelGetFlag(currentChannelData, CHANNEL_FLAG_NO_ECO) == 0)) &&
 					(melody_play == NULL) && (voicePromptsIsPlaying() == false)
-#if defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 					&& (voxIsEnabled() == false)
 #endif
 			)
@@ -166,14 +166,14 @@ void rxPowerSavingTick(uiEvent_t *ev, bool hasSignal)
 						// drop through
 
 					case ECOPHASE_POWERSAVE_ACTIVE___RX_IS_ON:
-						hrc6000IsPoweredOff = trxPowerUpDownRxAndC6000(false, (powerSavingLevel > 1));// Power down AT1846S, C6000 and preamp
+						hrc6000IsPoweredOff = trxPowerUpDownRxAndC6000(false, (powerSavingLevel > 1), false);// Power down AT1846S, C6000 and preamp
 						ticksTimerStart(&ecoPhaseTimer, (rxDuration * (1 << (powerSavingLevel - 1))));
 						rxPowerSavingState = ECOPHASE_POWERSAVE_ACTIVE___RX_IS_OFF;
 						break;
 
 					case ECOPHASE_POWERSAVE_ACTIVE___RX_IS_OFF:
 						//USB_DEBUG_printf("ECOPHASE_POWERSAVE_ACTIVE___RX_IS_ON\n");
-						hrc6000IsPoweredOff = trxPowerUpDownRxAndC6000(true, hrc6000IsPoweredOff);// Power up AT1846S, C6000 and preamps
+						hrc6000IsPoweredOff = trxPowerUpDownRxAndC6000(true, hrc6000IsPoweredOff, false);// Power up AT1846S, C6000 and preamps
 						ticksTimerStart(&ecoPhaseTimer, (rxDuration * 1));
 						trxPostponeReadRSSIAndNoise(0); // Give it a bit of time, after powering up, before checking the RSSI and Noise values
 						rxPowerSavingState = ECOPHASE_POWERSAVE_ACTIVE___RX_IS_ON;

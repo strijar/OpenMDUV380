@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2019      Kai Ludwig, DG4KLU
- * Copyright (C) 2020-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2020-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -48,13 +48,19 @@ bool radioSetClearReg2byteWithMask(uint8_t reg, uint8_t mask1, uint8_t mask2, ui
 void I2C_AT1846S_send_Settings(const uint8_t settings[][AT1846_BYTES_PER_COMMAND], int numSettings);
 void I2C_AT1846_set_register_with_mask(uint8_t reg, uint16_t mask, uint16_t value, uint8_t shift);
 
-void AT1846sSetBandWidth(bool Is25K);
-void AT1846sSetMode(int mode);
-void AT1846SSetTxCSS_DCS(uint16_t tone);
-
 void AT1846sInit(void);
 void AT1846sPostInit(void);
+void AT1846sSetBandWidth(bool Is25K);
+void AT1846sSetMode(int mode);
+void AT1846sSetRxCSSOff(RadioDevice_t deviceId);
+void AT1846sSetRxCTCSS(RadioDevice_t deviceId, uint16_t tone);
+void AT1846sSetRxDCS(RadioDevice_t deviceId, uint16_t code, bool inverted);
+void AT1846sSetTxCTCSS(uint16_t tone);
+void AT1846sSetTxDCS(uint16_t code, bool inverted);
 
-bool AT1846SWriteTone1Reg(uint16_t toneFreqVal);
+bool AT1846sCheckCSS(uint16_t tone, CodeplugCSSTypes_t type);
+bool AT1846sWriteTone1Reg(uint16_t toneFreqVal);
+void AT1846sSelectVoiceChannel(uint8_t channel, uint8_t *voiceGainTx, uint16_t *deviation);
+
 
 #endif /* _OPENGD77_AT1846S_H_ */

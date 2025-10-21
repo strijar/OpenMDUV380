@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2021-2024 Roger Clark, VK3KYY / G4KYF
  *                         Colin Durbridge, G4EML
  *                         Daniel Caujolle-Bert, F1RMB
  *

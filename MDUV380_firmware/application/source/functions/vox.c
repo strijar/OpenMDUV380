@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2020-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -79,7 +79,12 @@ void voxSetParameters(uint8_t threshold, uint8_t tailHalfSecond)
 
 bool voxIsEnabled(void)
 {
-	return ((codeplugChannelGetFlag(currentChannelData, CHANNEL_FLAG_VOX) != 0) && (settingsUsbMode != USB_MODE_HOTSPOT));
+	return ((codeplugChannelGetFlag(currentChannelData, CHANNEL_FLAG_VOX) != 0) &&
+			(codeplugChannelGetFlag(currentChannelData, CHANNEL_FLAG_RX_ONLY) == 0) && ((nonVolatileSettings.txFreqLimited == BAND_LIMITS_NONE) || trxCheckFrequencyInAmateurBand(currentChannelData->txFreq)
+#if defined(PLATFORM_MD9600)
+					|| (codeplugChannelGetFlag(currentChannelData, CHANNEL_FLAG_OUT_OF_BAND) != 0)
+#endif
+			) && (settingsUsbMode != USB_MODE_HOTSPOT));
 }
 
 bool voxIsTriggered(void)

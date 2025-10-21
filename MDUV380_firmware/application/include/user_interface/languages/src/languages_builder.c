@@ -1,7 +1,7 @@
 /* -*- mode: c; c-file-style: "k&r"; compile-command: "gcc -Wall -O2 -I../ -o languages_builder languages_builder.c"; -*- */
 
 /*
- * Copyright (C) 2023 Daniel Caujolle-Bert, F1RMB
+ * Copyright (C) 2023-2024 Daniel Caujolle-Bert, F1RMB
  *
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions
@@ -63,6 +63,7 @@
 #include "swedish.h"
 #include "hungarian.h"
 #include "croatian.h"
+#include "romanian.h"
 
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 0
@@ -106,6 +107,7 @@ const stringsTable_t languages[]=
      swedishLanguage,
      hungarianLanguage,
      croatianLanguage,
+     romanianLanguage,
 };
 
 const char *languageEnglishNames[] =
@@ -126,7 +128,8 @@ const char *languageEnglishNames[] =
      "PortuguesBrazil",
      "Swedish",
      "Hungarian",
-     "Croatian"
+     "Croatian",
+     "Romanian"
 };
 
 
@@ -176,7 +179,7 @@ static void checkLanguage(const stringsTable_t *l, const char *name)
 	       //fprintf(stdout, "                                                   1      \\0\n");
 	       //fprintf(stdout, "                                          1234567890123456\n");
 	       fprintf(stdout, "  > LENGTH ERROR in member #%3" PRIu64 " / %3" PRIu64 ":  ", i + 1, (len / LANGUAGE_TEXTS_LENGTH));
-	       fprintf(stdout, " '%-*s' len: %" PRIu64 " (max: %u)\n", LANGUAGE_TEXTS_LENGTH, buffer, strlen(buffer), (LANGUAGE_TEXTS_LENGTH - 1));
+	       fprintf(stdout, " '%-*s' len: >= %" PRIu64 " (max: %u)\n", LANGUAGE_TEXTS_LENGTH, buffer, strlen(buffer), (LANGUAGE_TEXTS_LENGTH - 1));
 
 	       hasError = true;
 	  }

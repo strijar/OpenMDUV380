@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2019      Kai Ludwig, DG4KLU
- * Copyright (C) 2020-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2020-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -74,7 +74,7 @@ enum DMR_Embedded_Data
 	DMR_EMBEDDED_DATA_GPS_INFO            = 8U
 };
 
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701)
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701)
 typedef struct
 {
 	uint8_t Mode;
@@ -113,7 +113,7 @@ bool HRC6000CheckTalkGroupFilter(void);
 void HRC6000SetMicGainDMR(uint8_t gain);
 void HRC6000FlushMusic(void);
 
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701)
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701)
 void HRC6000SetMicGainFM(uint8_t gain);
 void HRC6000SetFMTx(void);
 void HRC6000SetFMRx(void);

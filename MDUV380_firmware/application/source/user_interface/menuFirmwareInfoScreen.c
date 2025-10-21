@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -25,6 +25,7 @@
  * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
+#include "user_interface/uiGlobals.h"
 #include "user_interface/menuSystem.h"
 #include "user_interface/uiLocalisation.h"
 #include "user_interface/uiUtilities.h"
@@ -37,13 +38,20 @@ enum
 
 #if defined(PLATFORM_RD5R)
 #define maxDisplayedCreditsLines  3
-#elif defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
-#define maxDisplayedCreditsLines  11
+#elif defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
+#define maxDisplayedCreditsLines  11 // Does work with DM-1701 Y screen shrinkage
 #else
 #define maxDisplayedCreditsLines  5
 #endif
 
-static const char *creditTexts[] = { "Roger VK3KYY", "Daniel F1RMB", "Kai DG4KLU", "Colin G4EML", "Alex DL4LEX", "Dzmitry EW1ADG", "Jason VK7ZJA" };
+static const char *creditTexts[] =
+{
+		"Roger VK3KYY", "Daniel F1RMB", "Kai DG4KLU", "Colin G4EML", "Alex DL4LEX",
+#if defined(PLATFORM_RD5R)
+		"Dzmitry EW1ADG",
+#endif
+		"Jason VK7ZJA (SK)"
+};
 static const int maxCredits = (sizeof(creditTexts) / sizeof(creditTexts[0]));
 static const int maxCreditsPages = (maxCredits / maxDisplayedCreditsLines) + ((maxCredits % maxDisplayedCreditsLines) == 0 ? 0 : 1);
 
@@ -139,6 +147,15 @@ static void handleEvent(uiEvent_t *ev)
 	}
 }
 
+#if defined(STM32F405xx) && ! defined(PLATFORM_MD9600)
+#if 0
+static uint32_t cpuGetUnique32(uint32_t byteNumber)
+{
+	return (*(__IO uint32_t *) (0x1FFF7A10 + 4 * (byteNumber)));
+}
+#endif
+#endif
+
 static void displayBuildDetails(bool playVP)
 {
 #if !defined(PLATFORM_GD77S)
@@ -150,7 +167,7 @@ static void displayBuildDetails(bool playVP)
 
 	sprintf(dateTimeBuf, "%d%02d%02d%02d%02d%02d", BUILD_YEAR, BUILD_MONTH, BUILD_DAY, BUILD_HOUR, BUILD_MIN, BUILD_SEC);
 
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 	snprintf(versionBuf, SCREEN_LINE_BUFFER_SIZE, "[ %s", XSTRINGIFY(GITVERSION));
 #else
 	snprintf(versionBuf, SCREEN_LINE_BUFFER_SIZE, "[ %s", GITVERSION);
@@ -172,10 +189,10 @@ static void displayBuildDetails(bool playVP)
 #endif
 
 // STM32 platforms (Genuine or Clone)
-#if defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_MD9600) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_MD9600) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 	char cpuTypeBuf[SCREEN_LINE_BUFFER_SIZE] = {0};
 
-#if defined(PLATFORM_MD9600)
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_VARIANT_UV380_PLUS_10W)
 	strncpy(cpuTypeBuf,
 #if defined(MD9600_VERSION_1)
 			"HW v1 "
@@ -185,11 +202,13 @@ static void displayBuildDetails(bool playVP)
 			"HW v4 "
 #elif defined(MD9600_VERSION_5)
 			"HW v5 "
+#elif defined(PLATFORM_VARIANT_UV380_PLUS_10W)
+			"Plus 10W "
 #endif
 	, SCREEN_LINE_BUFFER_SIZE);
 #endif
 
-	strncat(cpuTypeBuf, (NumInterruptPriorityBits == 4) ? "CPU:STM" : " CPU:TYT", (SCREEN_LINE_BUFFER_SIZE - (strlen(cpuTypeBuf) - 1)));
+	strncat(cpuTypeBuf, (NumInterruptPriorityBits == 4) ? "CPU:STM" : "CPU:TYT", (SCREEN_LINE_BUFFER_SIZE - (strlen(cpuTypeBuf) - 1)));
 	displayPrintCentered(50, cpuTypeBuf , FONT_SIZE_2);
 #endif
 
@@ -202,11 +221,22 @@ static void displayBuildDetails(bool playVP)
 		voicePromptsAppendString(dateTimeBuf);
 		voicePromptsAppendLanguageString(currentLanguage->gitCommit);
 		voicePromptsAppendString(versionBuf);
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 		voicePromptsAppendString(cpuTypeBuf);
 #endif
 		promptsPlayNotAfterTx();
 	}
+
+#if defined(STM32F405xx) && ! defined(PLATFORM_MD9600)
+	sprintf(cpuTypeBuf, "CPU Sig  :0x%04X", cpuGetSignature());
+	displayPrintAt(8, 64, cpuTypeBuf , FONT_SIZE_2);
+	sprintf(cpuTypeBuf, "CPU Rev  :0x%04X", cpuGetRevision());
+	displayPrintAt(8, 74, cpuTypeBuf , FONT_SIZE_2);
+	sprintf(cpuTypeBuf, "CPU Pack :0x%04X", cpuGetPackage());
+	displayPrintAt(8, 84, cpuTypeBuf , FONT_SIZE_2);
+	sprintf(cpuTypeBuf, "CPU Flash:%dkb", cpuGetFlashSize());
+	displayPrintAt(8, 94, cpuTypeBuf , FONT_SIZE_2);
+#endif
 
 	displayFillTriangle(63 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 1), 59 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 3), 67 + DISPLAY_H_OFFSET, (DISPLAY_SIZE_Y - 3), blink);
 	displayRender();

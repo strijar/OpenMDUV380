@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -25,14 +25,17 @@
  * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
+#include "user_interface/uiGlobals.h"
 #include "user_interface/menuSystem.h"
 #include "user_interface/uiLocalisation.h"
 #include "user_interface/uiUtilities.h"
-#include "functions/settings.h"
-#include "functions/ticks.h"
+
+static bool handled = false;
+static bool alarmHasToBePlayed = false;
 
 static bool privateCallCallback(void);
-static bool handled = false;
+static void privateCallPostponedAlarm(void);
+static void privateCallCancelAlarmTimer(void);
 
 menuStatus_t menuPrivateCall(uiEvent_t *ev, bool isFirstRun)
 {
@@ -46,12 +49,14 @@ menuStatus_t menuPrivateCall(uiEvent_t *ev, bool isFirstRun)
 		if (handled)
 		{
 			handled = false;
+			privateCallCancelAlarmTimer();
 			keyboardReset();
 			menuSystemPopPreviousMenu();
 			return MENU_STATUS_SUCCESS;
 		}
 
-//		soundSetMelody(MELODY_PRIVATE_CALL);			//disable melody because it prevents the call from being heard.
+		alarmHasToBePlayed = true;
+
 		uiDataGlobal.PrivateCall.state = PRIVATE_CALL_ACCEPT;
 		uiDataGlobal.receivedPcId = LinkHead->id;
 		uiDataGlobal.receivedPcTS = (dmrMonitorCapturedTS != -1) ? dmrMonitorCapturedTS : trxGetDMRTimeSlot();
@@ -71,6 +76,8 @@ menuStatus_t menuPrivateCall(uiEvent_t *ev, bool isFirstRun)
 		uiDataGlobal.MessageBox.validatorCallback = privateCallCallback;
 
 		menuSystemPushNewMenu(UI_MESSAGE_BOX);
+
+		(void)addTimerCallback(privateCallPostponedAlarm, 1000, UI_MESSAGE_BOX, false);
 	}
 
 	return MENU_STATUS_SUCCESS;
@@ -86,13 +93,18 @@ void menuPrivateCallClear(void)
 
 void menuPrivateCallDismiss(void)
 {
+	privateCallCancelAlarmTimer();
+
 	handled = true;
+
 	uiDataGlobal.MessageBox.validatorCallback = NULL;
 	menuSystemPopPreviousMenu();
 }
 
 static bool privateCallCallback(void)
 {
+	privateCallCancelAlarmTimer();
+
 	if (uiDataGlobal.MessageBox.keyPressed == KEY_RED)
 	{
 		uiDataGlobal.PrivateCall.state = PRIVATE_CALL_DECLINED;
@@ -106,4 +118,32 @@ static bool privateCallCallback(void)
 	handled = true;
 
 	return true;
+}
+
+static void privateCallPostponedAlarm(void)
+{
+	uint32_t delay = 500U;
+
+	if (alarmHasToBePlayed)
+	{
+		if ((voicePromptsIsPlaying() == false) && (melody_play == NULL) && (getAudioAmpStatus() == AUDIO_AMP_MODE_NONE))
+		{
+			soundSetMelody(MELODY_PRIVATE_CALL);
+			delay = 5000U;
+		}
+
+		// Reinstanciate myself
+		(void)addTimerCallback(privateCallPostponedAlarm, delay, UI_MESSAGE_BOX, false);
+	}
+}
+
+static void privateCallCancelAlarmTimer(void)
+{
+	alarmHasToBePlayed = false;
+	cancelTimerCallback(privateCallPostponedAlarm, UI_MESSAGE_BOX);
+
+	if (melody_play == MELODY_PRIVATE_CALL)
+	{
+		soundStopMelody();
+	}
 }

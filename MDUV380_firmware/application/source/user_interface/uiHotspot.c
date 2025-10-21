@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  * Using information from the MMDVM_HS source code by Andy CA6JAU
@@ -441,7 +441,7 @@ void uiHotspotUpdateScreen(uint8_t rxCommandState)
 
 			displayPrintCore(0, 32, buffer, FONT_SIZE_3, TEXT_ALIGN_LEFT, false);
 
-			sprintf(buffer,"%s%s",POWER_LEVELS[hotspotPowerLevel],POWER_LEVEL_UNITS[hotspotPowerLevel]);
+			sprintf(buffer, "%s%s", getPowerLevel(hotspotPowerLevel), getPowerLevelUnit(hotspotPowerLevel));
 			displayPrintCore(0, 32, buffer, FONT_SIZE_3, TEXT_ALIGN_RIGHT, false);
 		}
 		val_before_dp = hotspotFreqRx / 100000;
@@ -564,7 +564,7 @@ void hotspotExit(void)
 	currentChannelData->libreDMR_Power = savedLibreDMR_Power;
 
 	trxTalkGroupOrPcId = savedTGorPC;// restore the current TG or PC
-	if (hotspotSavedPowerLevel != -1)
+	if (hotspotSavedPowerLevel != POWER_UNSET)
 	{
 		trxSetPowerFromLevel(hotspotSavedPowerLevel);
 	}

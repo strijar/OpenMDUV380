@@ -1,6 +1,6 @@
 /* -*- coding: windows-1252-unix; -*- */
 /*
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions
@@ -29,7 +29,7 @@
  * Translators: EA3IGM, EA3BIL, EA5SW
  *
  *
- * Rev: 11  11Mar2022 EA3BIL
+ * Rev: 05Marzo2024 EA3BIL
  */
 #ifndef USER_INTERFACE_LANGUAGES_SPANISH_H_
 #define USER_INTERFACE_LANGUAGES_SPANISH_H_
@@ -215,7 +215,7 @@ const stringsTable_t spanishLanguage =
 .dtmf_entry				= "Entrar DTMF",
 .name					= "Nombre",
 .carrier				= "Carrier",
-.zone_empty 				= "Zone empty", // Maxlen: 12 chars.
+.zone_empty 				= "Zona vacía", // Maxlen: 12 chars.
 .time					= "Hora",
 .uptime					= "Hora Encendido",
 .hours					= "Horas",
@@ -239,32 +239,32 @@ const stringsTable_t spanishLanguage =
 .not_set				= "NO DEFINIDO",
 .general_options		= "Opciones Grales.",
 .radio_options			= "Opciones Radio",
-.auto_night				= "Auto night", // MaxLen: 16 (with .on or .off)
-.dmr_rx_agc				= "DMR Rx AGC",
-.speaker_click_suppress			= "Click Suppr.",
+.auto_night				= "Auto noche", // MaxLen: 16 (with .on or .off)
+.dmr_rx_agc				= "DMR Rx CAG",
+.speaker_click_suppress			= "Quitar Click",
 .gps					= "GPS",
-.end_only				= "End only",
-.dmr_crc				= "DMR crc",
+.end_only				= "Sólo Fin",
+.dmr_crc				= "CRC DMR",
 .eco					= "Eco",
 .safe_power_on				= "Safe Pwr-On", // MaxLen: 16 (with ':' + .on or .off)
 .auto_power_off				= "Auto Pwr-Off", // MaxLen: 16 (with ':' + 30/60/90/120/180 or .no)
 .apo_with_rf				= "APO with RF" , // MaxLen: 16 (with ':' + .yes or .no or .n_a)
-.brightness_night				= "Nite bright", // MaxLen: 16 (with : + 0..100 + %)
-.freq_set_VHF			= "Freq VHF",
-.gps_acquiring			= "Acquiring",
+.brightness_night				= "Luz Noche", // MaxLen: 16 (with : + 0..100 + %)
+.freq_set_VHF			= "Frec VHF",
+.gps_acquiring			= "Buscando",
 .altitude				= "Alt",
-.calibration            = "Calibration",
-.freq_set_UHF                = "Freq UHF",
-.cal_frequency          = "Freq",
-.cal_pwr                = "Power level",
-.pwr_set                = "Power Adjust",
-.factory_reset          = "Factory Reset",
-.rx_tune				= "Rx Tuning",
+.calibration            = "Calibración",
+.freq_set_UHF                = "Frec UHF",
+.cal_frequency          = "Frec",
+.cal_pwr                = "Nivel Pot.",
+.pwr_set                = "Ajuest Pot",
+.factory_reset          = "Reset Fábrica",
+.rx_tune				= "RX Sintonía",
 .transmitTalkerAliasTS2	= "TA Tx TS2", // Maxlen 16 (with : + .ta_text, 'APRS' , .both or .off)
-.ta_text				= "Text",
-.daytime_theme_day			= "Day theme", // MaxLen: 16
-.daytime_theme_night			= "Night theme", // MaxLen: 16
-.theme_chooser				= "Theme chooser", // Maxlen: 16
+.ta_text				= "Texto",
+.daytime_theme_day			= "Tema Día", // MaxLen: 16
+.daytime_theme_night			= "Tema Noche", // MaxLen: 16
+.theme_chooser				= "Selección Tema", // Maxlen: 16
 .theme_options				= "Opciones Color",
 .theme_fg_default			= "Texto Pred.", // MaxLen: 16 (+ colour rect)
 .theme_bg				= "Fondo", // MaxLen: 16 (+ colour rect)
@@ -319,6 +319,8 @@ const stringsTable_t spanishLanguage =
 .aprs_turn_slope			= "T. Slope", // MaxLen 16 (with ':' + 1..255 + '°/v')
 .aprs_turn_time				= "T. Time", // MaxLen 16 (with ':' + 5..180 + 's')
 .auto_lock				= "Auto lock", // MaxLen 16 (with ':' + .off or 0.5..15 (.5 step) + 'min')
+.trackball				= "Trackball", // MaxLen 16 (with ':' + .on or .off)
+.dmr_force_dmo				= "Force DMO", // MaxLen 16 (with ':' + .n_a or .on or .off)
 };
 /********************************************************************
  *

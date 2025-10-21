@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -92,7 +92,47 @@ typedef uint32_t time_t_custom;     /* date/time in unix secs past 1-Jan-70 */
 #define DISPLAY_Y_POS_RSSI_VALUE              16
 #define DISPLAY_Y_POS_RSSI_BAR                27
 #define TITLE_BOX_HEIGHT                      15
-#elif defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#elif defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701)
+#define DISPLAY_H_EXTRA_PIXELS                32
+#define DISPLAY_H_OFFSET                     (DISPLAY_H_EXTRA_PIXELS / 2)
+#if defined(PLATFORM_VARIANT_DM1701)
+#define DISPLAY_V_EXTRA_PIXELS               (64 - DISPLAY_Y_OFFSET)
+#else
+#define DISPLAY_V_EXTRA_PIXELS                64
+#endif
+#define DISPLAY_V_OFFSET                     (DISPLAY_V_EXTRA_PIXELS / 2)
+#define MENU_ENTRY_HEIGHT                     16
+#define SQUELCH_BAR_H                          9
+#define V_OFFSET                               0
+#define OVERRIDE_FRAME_HEIGHT                 16
+#define VFO_LETTER_Y_OFFSET                    8
+#define LH_ENTRY_V_OFFSET                      0
+#define DISPLAY_Y_POS_HEADER                   2
+#define DISPLAY_X_POS_MENU_OFFSET              4
+#define DISPLAY_X_POS_MENU_TEXT_OFFSET       (DISPLAY_X_POS_MENU_OFFSET + 4)
+#define DISPLAY_Y_POS_MENU_START             (16 + MENU_ENTRY_HEIGHT)
+#if defined(PLATFORM_VARIANT_DM1701)
+#define DISPLAY_Y_POS_MENU_ENTRY_HIGHLIGHT   (32 + DISPLAY_V_OFFSET - (MENU_ENTRY_HEIGHT / 2))
+#else
+#define DISPLAY_Y_POS_MENU_ENTRY_HIGHLIGHT   (32 + DISPLAY_V_OFFSET)
+#endif
+#define DISPLAY_Y_POS_BAR                     10
+#define DISPLAY_Y_POS_CONTACT                (16 + 8)
+#define DISPLAY_Y_POS_CONTACT_TX             (34 + DISPLAY_V_OFFSET)
+#define DISPLAY_Y_POS_CONTACT_TX_FRAME       (34 + DISPLAY_V_OFFSET)
+#define DISPLAY_Y_POS_CHANNEL_FIRST_LINE     (32 + DISPLAY_V_OFFSET)
+#define DISPLAY_Y_POS_CHANNEL_SECOND_LINE    (48 + 48)
+#define DISPLAY_Y_POS_SQUELCH_BAR             16
+#define DISPLAY_Y_POS_CSS_INFO               (16 + 8)
+#define DISPLAY_Y_POS_SQL_INFO               (25 + 8)
+#define DISPLAY_Y_POS_TX_TIMER                (8 + 16)
+#define DISPLAY_Y_POS_RX_FREQ                (40 + 40)
+#define DISPLAY_Y_POS_TX_FREQ                (48 + 48)
+#define DISPLAY_Y_POS_ZONE                   (50 + DISPLAY_V_EXTRA_PIXELS)
+#define DISPLAY_Y_POS_RSSI_VALUE             (18 + 16)
+#define DISPLAY_Y_POS_RSSI_BAR               (40 + DISPLAY_V_OFFSET)
+#define TITLE_BOX_HEIGHT                      21
+#elif defined(PLATFORM_MD2017)
 #define DISPLAY_H_EXTRA_PIXELS                32
 #define DISPLAY_H_OFFSET                     (DISPLAY_H_EXTRA_PIXELS / 2)
 #define DISPLAY_V_EXTRA_PIXELS                64
@@ -121,8 +161,8 @@ typedef uint32_t time_t_custom;     /* date/time in unix secs past 1-Jan-70 */
 #define DISPLAY_Y_POS_RX_FREQ                (40 + 40)
 #define DISPLAY_Y_POS_TX_FREQ                (48 + 48)
 #define DISPLAY_Y_POS_ZONE                   (50 + DISPLAY_V_EXTRA_PIXELS)
-#define DISPLAY_Y_POS_RSSI_VALUE             (18 + 16)
-#define DISPLAY_Y_POS_RSSI_BAR               (40 + DISPLAY_V_OFFSET)
+#define DISPLAY_Y_POS_RSSI_VALUE             (DISPLAY_V_OFFSET - 12)
+#define DISPLAY_Y_POS_RSSI_BAR               (DISPLAY_V_OFFSET + 10)
 #define TITLE_BOX_HEIGHT                      21
 #elif defined(PLATFORM_MD9600)
 #define DISPLAY_H_EXTRA_PIXELS                 0
@@ -216,6 +256,16 @@ typedef uint32_t time_t_custom;     /* date/time in unix secs past 1-Jan-70 */
 #define SCAN_DMR_DUPLEX_SLOW_MIN_DWELL_TIME       (TIMESLOT_DURATION * 6)  //minimum time between steps when scanning DMR Duplex in slow mode.
 #define SCAN_DMR_SIMPLEX_SLOW_MIN_DWELL_TIME      (TIMESLOT_DURATION * 10) //minimum time between steps when scanning DMR Simplex in slow mode. (needs extra time to capture TDMA Pulsing)
 #define SCAN_DMR_DUPLEX_FAST_MIN_DWELL_TIME       TIMESLOT_DURATION        //minimum time between steps when scanning DMR Duplex in fast mode.
+//
+// Extra ms time added to dwell time, in ChannelMode screen only, introduced
+// when the SPI_Flash multiple read/read bug (MK22) got spotted and fixed.
+//
+#if defined(CPU_MK22FN512VLL12)
+#define SCAN_DMR_DUPLEX_FAST_EXTRA_DWELL_TIME     8
+#else
+#define SCAN_DMR_DUPLEX_FAST_EXTRA_DWELL_TIME     0
+#endif
+//
 #define SCAN_DMR_SIMPLEX_FAST_MIN_DWELL_TIME      (TIMESLOT_DURATION * 2)  //minimum time between steps when scanning DMR Simplex in fast mode. (needs extra time to capture TDMA Pulsing)
 
 #define SCAN_FREQ_CHANGE_SETTLING_INTERVAL     1 //Time after frequency is changed before RSSI sampling starts
@@ -223,7 +273,7 @@ typedef uint32_t time_t_custom;     /* date/time in unix secs past 1-Jan-70 */
 
 #define CH_DETAILS_VFO_CHANNEL                -1
 
-#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 #define VFO_SWEEP_NUM_SAMPLES                160
 #else
 #define VFO_SWEEP_NUM_SAMPLES                128
@@ -513,7 +563,11 @@ typedef struct
 } uiDataGlobal_t;
 
 
+#if defined(PLATFORM_MDUV380) && !defined(PLATFORM_VARIANT_UV380_PLUS_10W)
+extern const char 				*POWER_LEVELS[2][10];
+#else
 extern const char 				*POWER_LEVELS[];
+#endif
 extern const char 				*POWER_LEVEL_UNITS[];
 extern const char 				*DMR_DESTINATION_FILTER_LEVELS[];
 extern const char 				*DMR_CCTS_FILTER_LEVELS[];

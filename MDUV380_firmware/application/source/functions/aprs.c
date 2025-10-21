@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2023 Roger Clark, VK3KYY / G4KYF
- *                    Daniel Caujolle-Bert, F1RMB
+ * Copyright (C) 2023-2024 Roger Clark, VK3KYY / G4KYF
+ *                         Daniel Caujolle-Bert, F1RMB
  *
  *
  *
@@ -470,7 +470,7 @@ static void aprsTxEnded(void)
 	trxDTMFoff(true);
 	trxSelectVoiceChannel(AT1846_VOICE_CHANNEL_MIC);
 #else // PLATFORM_MD9600
-	AT1846SWriteTone1Reg(0);
+	AT1846sWriteTone1Reg(0);
 
 	disableAudioAmp(AUDIO_AMP_MODE_RF);
 	HAL_GPIO_WritePin(RX_AUDIO_MUX_GPIO_Port, RX_AUDIO_MUX_Pin, GPIO_PIN_SET);
@@ -719,7 +719,7 @@ static bool aprsSendPacket(codeplugAPRS_Config_t *config, aprsBeaconingLocation_
 	GPIO_PinWrite(GPIO_RX_audio_mux, Pin_RX_audio_mux, 1);
 	enableAudioAmp(AUDIO_AMP_MODE_RF);
 
-	AT1846SWriteTone1Reg(lastTone);
+	AT1846sWriteTone1Reg(lastTone);
 	trxSelectVoiceChannel(AT1846_VOICE_CHANNEL_TONE1);
 
 	aprsTxProgress = APRS_TX_IN_PROGRESS;
@@ -758,7 +758,7 @@ static bool aprsSendPacket(codeplugAPRS_Config_t *config, aprsBeaconingLocation_
 	trxSetTone1(lastTone);
 #else // PLATFORM_MD9600
 	uint32_t lastTone = 0;
-	AT1846SWriteTone1Reg(lastTone);
+	AT1846sWriteTone1Reg(lastTone);
 	trxSelectVoiceChannel(AT1846_VOICE_CHANNEL_TONE1);
 
 	int volume = getVolumeControl() + 30;
@@ -814,7 +814,7 @@ void aprsBitStreamSender(void)
 
 	if (newTone != lastTone)
 	{
-		AT1846SWriteTone1Reg(newTone);
+		AT1846sWriteTone1Reg(newTone);
 	}
 #else // CPU_MK22FN512VLL12
 #if defined(PLATFORM_MD9600)
@@ -836,7 +836,7 @@ void aprsBitStreamSender(void)
 	newTone = (encoderData.baudIs300 ? 16000 : 12000) + ((dataByte & 0x01) ? (encoderData.baudIs300 ? 2000 : 10000) : 0);
 	if (newTone != lastTone)
 	{
-		AT1846SWriteTone1Reg(newTone);
+		AT1846sWriteTone1Reg(newTone);
 		lastTone = newTone;
 	}
 #endif // PLATFORM_MD9600
@@ -1195,7 +1195,7 @@ static void aprsBeaconingTxStateTick(uiEvent_t *ev)
 			}
 #endif
 			// Need to wrap this in Task Critical to avoid bus contention on the I2C bus.
-			trxSetRxCSS(currentChannelData->rxTone);
+			trxSetRxCSS(RADIO_DEVICE_PRIMARY, currentChannelData->rxTone);
 			trxActivateRx(true);
 			trxIsTransmitting = false;
 			PTTToggledDown = false;

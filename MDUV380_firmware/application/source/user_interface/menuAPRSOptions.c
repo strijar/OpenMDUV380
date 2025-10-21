@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -30,7 +30,7 @@
 #include "main.h"
 #if defined(PLATFORM_MD9600)
 #include "hardware/ST7567.h"
-#elif (defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017))
+#elif (defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017))
 #include "hardware/HX8353E.h"
 #else
 #include "hardware/UC1701.h"
@@ -205,7 +205,7 @@ static void updateScreen(bool isFirstRun)
 	displayClearBuf();
 	bool settingOption = uiQuickKeysShowChoices(buf, SCREEN_LINE_BUFFER_SIZE, currentLanguage->aprs_options);
 
-	for (int i = 1 - ((MENU_MAX_DISPLAYED_ENTRIES - 1) / 2) - 1; i <= (MENU_MAX_DISPLAYED_ENTRIES - ((MENU_MAX_DISPLAYED_ENTRIES - 1) / 2) - 1); i++)
+	for (int i = MENU_START_ITERATION_VALUE; i <= MENU_END_ITERATION_VALUE; i++)
 	{
 		if ((settingOption == false) || (i == 0))
 		{
@@ -498,7 +498,7 @@ static void handleEvent(uiEvent_t *ev)
 	if ((ev->events & (KEY_EVENT | FUNCTION_EVENT)) && (menuDataGlobal.menuOptionsSetQuickkey == 0))
 	{
 		if (KEYCHECK_PRESS(ev->keys, KEY_RIGHT)
-#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 				|| KEYCHECK_SHORTUP(ev->keys, KEY_ROTARY_INCREMENT)
 #endif
 				|| (QUICKKEY_FUNCTIONID(ev->function) == FUNC_RIGHT))
@@ -577,7 +577,7 @@ static void handleEvent(uiEvent_t *ev)
 			}
 		}
 		else if (KEYCHECK_PRESS(ev->keys, KEY_LEFT)
-#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 				|| KEYCHECK_SHORTUP(ev->keys, KEY_ROTARY_DECREMENT)
 #endif
 				|| (QUICKKEY_FUNCTIONID(ev->function) == FUNC_LEFT))

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions
@@ -40,7 +40,7 @@ static inline void spi_flash_disable(void);
 #if defined(PLATFORM_MD9600)
 #define HANDLE_SPI  hspi2
 __attribute__((section(".data.$RAM2"))) uint8_t SPI_Flash_sectorbuffer[4096];
-#elif defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#elif defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 #define HANDLE_SPI  hspi1
 __attribute__((section(".ccmram"))) uint8_t SPI_Flash_sectorbuffer[4096];
 #else
@@ -89,7 +89,7 @@ bool SPI_Flash_init(void)
 
     flashChipPartNumber = SPI_Flash_readPartID();
 
-    // 4014 25Q80 8M bits 2M bytes, used in the GD-77
+    // 4014 25Q80 8M bits 1M bytes, used in the GD-77
     // 4015 25Q16 16M bits 2M bytes, used in the Baofeng DM-1801 ?
     // 4017 25Q64 64M bits. Used in Roger's special GD-77 radios modified on the TYT production line
     // 4018 25Q128 128M bits. MD9600 / MDUV380 / MD380 etc
@@ -162,6 +162,7 @@ bool SPI_Flash_write(uint32_t addr, uint8_t *dataBuf, int size)
 		{
 			return false;
 		}
+
 		for (int i = 0; i < 16; i++)
 		{
 			retVal = SPI_Flash_writePage(flashEndSector * 4096 + i * 256, SPI_Flash_sectorbuffer + i * 256);
@@ -171,8 +172,8 @@ bool SPI_Flash_write(uint32_t addr, uint8_t *dataBuf, int size)
 				return false;
 			}
 		}
-
 	}
+
 	return true;
 }
 
@@ -242,7 +243,7 @@ bool SPI_Flash_writePage(uint32_t addr_start,uint8_t *dataBuf)
 
 	do
 	{
-	    osDelay(1);
+		osDelay(1);
 		isBusy = spi_flash_busy();
 	} while ((waitCounter-- > 0) && isBusy);
 
@@ -264,7 +265,7 @@ bool SPI_Flash_eraseSector(uint32_t addr_start)
 
 	do
 	{
-	    osDelay(1);
+		osDelay(1);
 		isBusy = spi_flash_busy();
 	} while ((waitCounter-- > 0) && isBusy);
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -35,7 +35,7 @@
 #else
 #define LANGUAGE_TAG_MAGIC_NUMBER { 'G', 'D', '7', '7' }, { 'L', 'A', 'N', 'G' } // Never change this tag.
 #endif
-#define LANGUAGE_TAG_VERSION      { 0x00, 0x00, 0x00, 0x02 } // Bump the version each time the language struct is changed
+#define LANGUAGE_TAG_VERSION      { 0x00, 0x00, 0x00, 0x03 } // Bump the version each time the language struct is changed
 
 typedef struct
 {
@@ -327,6 +327,8 @@ typedef struct
    const char aprs_turn_slope[LANGUAGE_TEXTS_LENGTH];
    const char aprs_turn_time[LANGUAGE_TEXTS_LENGTH];
    const char auto_lock[LANGUAGE_TEXTS_LENGTH];
+   const char trackball[LANGUAGE_TEXTS_LENGTH];
+   const char dmr_force_dmo[LANGUAGE_TEXTS_LENGTH];
 } stringsTable_t;
 
 #endif // _OPENGD77_UILANGUAGE_H_

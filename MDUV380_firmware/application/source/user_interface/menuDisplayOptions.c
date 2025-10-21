@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -27,7 +27,7 @@
  */
 #if defined(PLATFORM_MD9600)
 #include "hardware/ST7567.h"
-#elif (defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017))
+#elif (defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017))
 #include "hardware/HX8353E.h"
 #else
 #include "hardware/UC1701.h"
@@ -53,7 +53,7 @@ static const int BACKLIGHT_MAX_TIMEOUT = 30;
 #if defined(PLATFORM_RD5R)
 static const int CONTRAST_MAX_VALUE = 10;// Maximum value which still seems to be readable
 static const int CONTRAST_MIN_VALUE = 0;// Minimum value which still seems to be readable
-#elif ! (defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017))
+#elif ! (defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017))
 static const int CONTRAST_MAX_VALUE = 30;// Maximum value which still seems to be readable
 static const int CONTRAST_MIN_VALUE = 5;// Minimum value which still seems to be readable
 #endif
@@ -72,7 +72,7 @@ enum
 	DISPLAY_MENU_BRIGHTNESS_NIGHT,
 #endif
 	DISPLAY_MENU_BRIGHTNESS_OFF,
-#if ! (defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017))
+#if ! (defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017))
 	DISPLAY_MENU_CONTRAST,
 #endif
 	DISPLAY_MENU_BACKLIGHT_MODE,
@@ -151,7 +151,7 @@ static void updateScreen(bool isFirstRun)
 	displayClearBuf();
 	bool settingOption = uiQuickKeysShowChoices(buf, SCREEN_LINE_BUFFER_SIZE, currentLanguage->display_options);
 
-	for(int i = 1 - ((MENU_MAX_DISPLAYED_ENTRIES - 1) / 2) - 1; i <= (MENU_MAX_DISPLAYED_ENTRIES - ((MENU_MAX_DISPLAYED_ENTRIES - 1) / 2) - 1); i++)
+	for (int i = MENU_START_ITERATION_VALUE; i <= MENU_END_ITERATION_VALUE; i++)
 	{
 		if ((settingOption == false) || (i == 0))
 		{
@@ -190,7 +190,7 @@ static void updateScreen(bool isFirstRun)
 					snprintf(rightSideVar, SCREEN_LINE_BUFFER_SIZE, "%d%%", nonVolatileSettings.displayBacklightPercentageOff);
 					break;
 
-#if ! (defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017))
+#if ! (defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017))
 				case DISPLAY_MENU_CONTRAST:
 					leftSide = currentLanguage->contrast;
 					snprintf(rightSideVar, SCREEN_LINE_BUFFER_SIZE, "%d", nonVolatileSettings.displayContrast);
@@ -469,7 +469,7 @@ static void handleEvent(uiEvent_t *ev)
 		bool displayIsLit = displayIsBacklightLit();
 
 		if (KEYCHECK_PRESS(ev->keys, KEY_RIGHT)
-#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 				|| KEYCHECK_SHORTUP(ev->keys, KEY_ROTARY_INCREMENT)
 #endif
 				|| (QUICKKEY_FUNCTIONID(ev->function) == FUNC_RIGHT))
@@ -491,7 +491,7 @@ static void handleEvent(uiEvent_t *ev)
 						settingsSet(nonVolatileSettings.displayBacklightPercentage[DAY], (int8_t) BACKLIGHT_MAX_PERCENTAGE);
 					}
 
-#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 					displayLightTrigger(true);
 #endif
 					break;
@@ -517,7 +517,7 @@ static void handleEvent(uiEvent_t *ev)
 					}
 					break;
 
-#if ! (defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017))
+#if ! (defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017))
 				case DISPLAY_MENU_CONTRAST:
 					if (nonVolatileSettings.displayContrast < CONTRAST_MAX_VALUE)
 					{
@@ -527,7 +527,7 @@ static void handleEvent(uiEvent_t *ev)
 					break;
 #endif
 				case DISPLAY_MENU_BACKLIGHT_MODE:
-#if (defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017))
+#if (defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017))
 					if (nonVolatileSettings.backlightMode < BACKLIGHT_MODE_BUTTONS )
 #else
 					if (nonVolatileSettings.backlightMode < BACKLIGHT_MODE_NONE)
@@ -572,7 +572,7 @@ static void handleEvent(uiEvent_t *ev)
 						settingsSet(nonVolatileSettings.displayBacklightPercentage[NIGHT], (int8_t) BACKLIGHT_MAX_PERCENTAGE);
 					}
 
-#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 					displayLightTrigger(true);
 #endif
 					break;
@@ -627,7 +627,8 @@ static void handleEvent(uiEvent_t *ev)
 #endif
 				case DISPLAY_TIMEZONE_VALUE:
 					{
-						int tz = (nonVolatileSettings.timezone & 0x7F) ;
+						int tz = (nonVolatileSettings.timezone & 0x7F);
+
 						if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
 						{
 							tz++;
@@ -640,10 +641,6 @@ static void handleEvent(uiEvent_t *ev)
 						if (tz <= ((14 * 4) + SETTINGS_TIMEZONE_UTC))
 						{
 							settingsSet(nonVolatileSettings.timezone, ((nonVolatileSettings.timezone & ~0x7F) + tz));
-						}
-						else
-						{
-							tz = (14 * 4) + SETTINGS_TIMEZONE_UTC;
 						}
 					}
 					break;
@@ -660,7 +657,7 @@ static void handleEvent(uiEvent_t *ev)
 			}
 		}
 		else if (KEYCHECK_PRESS(ev->keys, KEY_LEFT)
-#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 				|| KEYCHECK_SHORTUP(ev->keys, KEY_ROTARY_DECREMENT)
 #endif
 				|| (QUICKKEY_FUNCTIONID(ev->function) == FUNC_LEFT))
@@ -683,7 +680,7 @@ static void handleEvent(uiEvent_t *ev)
 					}
 
 					checkMinBacklightValue();
-#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 					displayLightTrigger(true);
 #endif
 					break;
@@ -703,7 +700,7 @@ static void handleEvent(uiEvent_t *ev)
 					}
 					break;
 
-#if ! (defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017))
+#if ! (defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017))
 				case DISPLAY_MENU_CONTRAST:
 					if (nonVolatileSettings.displayContrast > CONTRAST_MIN_VALUE)
 					{
@@ -752,7 +749,7 @@ static void handleEvent(uiEvent_t *ev)
 					}
 
 					checkMinBacklightValue();
-#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 					displayLightTrigger(true);
 #endif
 					break;
@@ -806,7 +803,8 @@ static void handleEvent(uiEvent_t *ev)
 #endif
 				case DISPLAY_TIMEZONE_VALUE:
 					{
-						int tz = (nonVolatileSettings.timezone & 0x7F) ;
+						int tz = (nonVolatileSettings.timezone & 0x7F);
+
 						if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
 						{
 							tz--;
@@ -819,10 +817,6 @@ static void handleEvent(uiEvent_t *ev)
 						if (tz >= ((-12 * 4) + SETTINGS_TIMEZONE_UTC))
 						{
 							settingsSet(nonVolatileSettings.timezone, ((nonVolatileSettings.timezone & ~0x7F) + tz));
-						}
-						else
-						{
-							tz = (-12 * 4) + SETTINGS_TIMEZONE_UTC;
 						}
 					}
 					break;
@@ -867,8 +861,8 @@ static void updateBacklightMode(uint8_t mode)
 	{
 		case BACKLIGHT_MODE_MANUAL:
 		case BACKLIGHT_MODE_NONE:
-#if ! (defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017))
-			displayEnableBacklight(false,nonVolatileSettings.displayBacklightPercentageOff); // Could be MANUAL previously, but in OFF state, so turn it OFF blindly.
+#if ! (defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017))
+			displayEnableBacklight(false, nonVolatileSettings.displayBacklightPercentageOff); // Could be MANUAL previously, but in OFF state, so turn it OFF blindly.
 #endif
 			break;
 		case BACKLIGHT_MODE_SQUELCH:
@@ -892,7 +886,7 @@ static void setDisplayInvert(bool invert)
 
 	settingsSetOptionBit(BIT_INVERSE_VIDEO, invert);
 	// Need to perform a full reset on the display to change back to non-inverted
-#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 	displaySetInvertedState(settingsIsOptionBitSet(BIT_INVERSE_VIDEO));
 #else
 	displayInit(settingsIsOptionBitSet(BIT_INVERSE_VIDEO));
@@ -911,12 +905,13 @@ static void checkMinBacklightValue(void)
 	}
 }
 
-static void buildTimeZoneBufferText(char * buffer)
+static void buildTimeZoneBufferText(char *buffer)
 {
-	int tz 		= (nonVolatileSettings.timezone & 0x7F);
+	int tz 		    = (nonVolatileSettings.timezone & 0x7F);
 	int hoursPart 	= abs((tz - SETTINGS_TIMEZONE_UTC) / 4);
 	int minutesPart = 15 * abs(tz % 4);// optimisation . No need to subtract the SETTINGS_TIMEZONE_UTC as we just extra act the modulus 4 part.
-	snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%c%2u:%02u",(tz >= SETTINGS_TIMEZONE_UTC)?'+':'-', abs(hoursPart),minutesPart);
+
+	snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%c%2u:%02u", (tz >= SETTINGS_TIMEZONE_UTC) ? '+' : '-', abs(hoursPart), minutesPart);
 }
 
 static void applySettings(void)
@@ -964,7 +959,7 @@ static void exitCallback(void *data)
 		{
 			settingsSetOptionBit(BIT_INVERSE_VIDEO, settingsIsOptionBitSetFromSettings(&originalNonVolatileSettings, BIT_INVERSE_VIDEO));
 			// Need to perform a full reset on the display to change back to non-inverted
-#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 			displaySetInvertedState(settingsIsOptionBitSet(BIT_INVERSE_VIDEO));
 #else
 			displayInit(settingsIsOptionBitSet(BIT_INVERSE_VIDEO));

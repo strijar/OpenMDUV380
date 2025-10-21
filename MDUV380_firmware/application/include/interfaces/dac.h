@@ -30,7 +30,7 @@
 
 #include "main.h"
 
-void dac_init(void);
-void dac_Out(int channel, uint16_t val);
+void dacInit(void);
+void dacOut(int channel, uint16_t val);
 
 #endif /* _OPENGD77_DAC_H_ */

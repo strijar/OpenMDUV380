@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -36,7 +36,7 @@
 #define DT_TERMINATOR_WITH_LC 	0x02U
 #define DMR_SYNC_DATA           0x40U
 
-#define HOTSPOT_VERSION_STRING "OpenGD77_HS v0.1.17"
+#define HOTSPOT_VERSION_STRING "OpenGD77_HS v0.1.18"
 
 typedef struct
 {
@@ -168,10 +168,10 @@ extern uint16_t hotspotCwpoLen;
 extern uint8_t hotspotCurrentRxCommandState;
 extern char hotspotMmdvmQSOInfoIP[22];
 extern DMRLC_t hotspotRxedDMR_LC; // used to stored LC info from RXed frames
-extern int hotspotSavedPowerLevel;
+extern uint8_t hotspotSavedPowerLevel;
 extern uint32_t hotspotFreqRx;
 extern uint32_t hotspotFreqTx;
 extern volatile MMDVM_STATE hotspotModemState;
-extern int hotspotPowerLevel;
+extern uint8_t hotspotPowerLevel;
 extern bool hotspotMmdvmHostIsConnected;
 #endif

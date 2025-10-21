@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2021-2024 Roger Clark, VK3KYY / G4KYF
  *                         Colin Durbridge, G4EML
  *                         Daniel Caujolle-Bert, F1RMB
  *
@@ -30,14 +30,19 @@
 #ifndef _OPENGD77_APPLICATION_MAIN_H_
 #define _OPENGD77_APPLICATION_MAIN_H_
 
+
 #define UNUSED_PARAMETER(x) (void)x // Not using UNUSED as it already exists in HAL
 
-#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 #define HAS_COLOURS        1
+#if ! defined(PLATFORM_MD2017)
 #define HAS_SOFT_VOLUME    1
+#endif
 #define HAS_GPS            1
 #define LOG_GPS_DATA       1
-
+#elif defined(PLATFORM_MD9600)
+#define HAS_GPS            1
+#define LOG_GPS_DATA       1
 #endif
 
 typedef enum
@@ -48,10 +53,14 @@ typedef enum
 } DayTime_t;
 
 extern bool headerRowIsDirty;
-extern int8_t lastVolume;
-extern bool isSuspended;
 extern char globalFailureMessage[];
 extern bool spiFlashInitHasFailed;
+#if ! defined(PLATFORM_MD9600) && ! defined(PLATFORM_MD2017)
+extern int8_t lastVolume;
+#endif
+#if ! defined(PLATFORM_MD9600)
+extern bool isSuspended;
+#endif
 
 void applicationMainTask(void);
 void applicationStandbyPowerLoop(void);

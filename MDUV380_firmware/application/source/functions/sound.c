@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2019      Kai Ludwig, DG4KLU
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions
@@ -165,11 +165,14 @@ void enableAudioAmp(uint8_t mode)
 
 void disableAudioAmp(uint8_t mode)
 {
-	audioAmpStatusMask &= ~mode;
-
-	if (audioAmpStatusMask == 0)
+	if (audioAmpStatusMask != 0x0)
 	{
-		radioAudioAmp(false);
+		audioAmpStatusMask &= ~mode;
+
+		if (audioAmpStatusMask == 0)
+		{
+			radioAudioAmp(false);
+		}
 	}
 }
 
@@ -537,7 +540,7 @@ static void soundBeepTaskFunction(void *data)
 
 					interruptsDisableC6000Interrupts();
 
-					while ((SPI0SeClearPageRegByteWithMask(0x04, 0x06, 0xFD, 0x02) == -1) &&  ((waitTimeout--) > 0))
+					while ((SPI0ClearPageRegByteWithMask(0x04, 0x06, 0xFD, 0x02) == -1) &&  ((waitTimeout--) > 0))
 					{
 						vTaskDelay((1 / portTICK_PERIOD_MS));
 					}
@@ -600,7 +603,7 @@ static void soundBeepTaskFunction(void *data)
 
 					interruptsDisableC6000Interrupts();
 
-					while ((SPI0SeClearPageRegByteWithMask(0x04, 0x06, 0xFD, 0x00) == -1) &&  ((waitTimeout--) >> 0))
+					while ((SPI0ClearPageRegByteWithMask(0x04, 0x06, 0xFD, 0x00) == -1) &&  ((waitTimeout--) >> 0))
 					{
 						vTaskDelay((1 / portTICK_PERIOD_MS));
 					}

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2021-2024 Roger Clark, VK3KYY / G4KYF
  *                         Colin Durbridge, G4EML
  *                         Daniel Caujolle-Bert, F1RMB
  *
@@ -329,16 +329,18 @@ void applicationMainTask(void)
 	bool hasSignal = false;
 	uiEvent_t ev = { .buttons = 0, .keys = NO_KEYCODE, .rotary = 0, .function = 0, .events = NO_EVENT, .hasEvent = false, .time = ticksGetMillis() };
 	ticksTimer_t volumeControlTimer = { 0, 0 };
+	bool safeBootMode = false;
+	bool forceSafeBootMode = false;
 
 	HAL_GPIO_WritePin(PWR_SW_GPIO_Port, PWR_SW_Pin, GPIO_PIN_SET);// keep the power on
-	batteryRAM_Init();
+	//batteryRAM_Init(); // Unused, save power
 
 	adcStartDMA();
 
 	//osDelay(500);
 	//USB_DEBUG_printf("FW started\n");
 
-#if defined(PLATFORM_DM1701)
+#if defined(PLATFORM_RT84_DM1701)
 	/* DM-1701
 	 * 		displayLCD_Type:
 	 * 			- 0: "Normal" mode
@@ -364,6 +366,10 @@ void applicationMainTask(void)
 	displayLCD_Type = SPI_Flash_readSingleSecurityRegister(0x301D);
 	displayLCD_Type &= 0x03;
 	displayLCD_Type |= DIPLAYLCD_TYPE_RGB;
+
+	/* MD-UV390 Plus 10W: byte at 0x301C == 0xF4
+	 */
+	//bool IsMDUV390_Plus_10W = (SPI_Flash_readSingleSecurityRegister(0x301C) == 0xF4);
 #else // MD-2017 (ATM unknown)
 	displayLCD_Type = (3 | DIPLAYLCD_TYPE_RGB);
 #endif
@@ -371,6 +377,8 @@ void applicationMainTask(void)
 	spiFlashInitHasFailed = !SPI_Flash_init();
 	if (spiFlashInitHasFailed)
 	{
+		safeBootBranching:
+
 		if (spiFlashInitHasFailed)
 		{
 			nonVolatileSettings.batteryCalibration = (0x05) + (0x07 << 4); // needed to get a correct default voltage reading
@@ -390,10 +398,10 @@ void applicationMainTask(void)
 		menuDataGlobal.controlData.stack[0] = MENU_EMPTY;
 		menuDataGlobal.currentItemIndex = 0;
 
-		snprintf(globalFailureMessage, SCREEN_LINE_BUFFER_SIZE, "%s", "FLASH MEM ERROR");
+		snprintf(globalFailureMessage, SCREEN_LINE_BUFFER_SIZE, "%s", (safeBootMode ? "SAFE BOOT" : "FLASH MEM ERROR"));
 		showErrorMessage(globalFailureMessage);
 
-		die(true, false, false);
+		die(true, false, false, safeBootMode);
 	}
 
 
@@ -441,14 +449,42 @@ void applicationMainTask(void)
 
 	soundInitBeepTask();
 
+	// Clear boot melody and image
+#if defined(PLATFORM_MD9600)
+	if ((buttonsFrontPanelRead() & (FRONT_KEY_P3 | FRONT_KEY_DOWN)) == (FRONT_KEY_P3 | FRONT_KEY_DOWN))
+#else
+	if ((buttons & BUTTON_SK2) && (keyboardRead() == KEY_FRONT_DOWN))
+#endif
+	{
+		settingsEraseCustomContent();
+#if !defined(PLATFORM_MD9600)
+		themeInit(true);
+#endif
+	}
+
+	// Safe boot mode
+#if defined(PLATFORM_MD9600)
+	if (forceSafeBootMode || (((buttonsFrontPanelRead() & FRONT_KEY_P3) == FRONT_KEY_P3) && (micButtonsRead() == KEY_0)))
+#else
+	if (forceSafeBootMode || ((buttons & BUTTON_SK1) && (keyboardRead() == KEY_0)))
+#endif
+	{
+#if !defined(PLATFORM_MD9600)
+		themeInit(false);
+#endif
+		safeBootMode = true;
+
+		goto safeBootBranching;
+	}
+
 	lastHeardInitList();
 	codeplugInitCaches();
 	dmrIDCacheInit();
 	voicePromptsCacheInit();
 
-	if (wasRestoringDefaultsettings || ((keyboardRead() & KEY_HASH) == KEY_HASH))
+	if (wasRestoringDefaultsettings || (keyboardRead() == KEY_HASH))
 	{
-		enableVoicePromptsIfLoaded(((keyboardRead() & KEY_HASH) == KEY_HASH));
+		enableVoicePromptsIfLoaded((keyboardRead() == KEY_HASH));
 	}
 
 	// Need to take care if the user has already been fully notified about the settings update
@@ -472,7 +508,7 @@ void applicationMainTask(void)
 	gpsInit();
 
 #if defined(LOG_GPS_DATA)
-	if (((keyboardRead() & KEY_5) == KEY_5) && ((buttons & BUTTON_SK1) == BUTTON_SK1))
+	if (((buttons & BUTTON_SK1) == BUTTON_SK1) && (keyboardRead() == KEY_5))
 	{
 		uiNotificationShow(NOTIFICATION_TYPE_MESSAGE, NOTIFICATION_ID_MESSAGE, 1500, "NMEA Clearing", true);
 		gpsLoggingClear();
@@ -493,9 +529,11 @@ void applicationMainTask(void)
 	ticksTimerStart(&apoTimer, ((nonVolatileSettings.apo * 30) * 60000U));
 	ticksTimerStart(&autolockTimer, (nonVolatileSettings.autolockTimer * 30000U));
 
-	if ((nonVolatileSettings.backlightMode == BACKLIGHT_MODE_MANUAL) || (nonVolatileSettings.backlightMode == BACKLIGHT_MODE_SQUELCH))
+	if ((nonVolatileSettings.backlightMode == BACKLIGHT_MODE_MANUAL) ||
+			(nonVolatileSettings.backlightMode == BACKLIGHT_MODE_BUTTONS) ||
+			(nonVolatileSettings.backlightMode == BACKLIGHT_MODE_SQUELCH))
 	{
-		displayEnableBacklight(true, 100);
+		displayEnableBacklight(true, -1);
 	}
 
 	aprsBeaconingInit();
@@ -541,7 +579,7 @@ void applicationMainTask(void)
 		}
 
 		// hack to allow SK1 + Up / Down to be Left / Right
-#if ! (defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)) // top side button IS orange
+#if ! (defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)) // top side button IS orange
 		if (buttons & BUTTON_SK1)
 		{
 			bool clearSK1 = false;
@@ -560,6 +598,9 @@ void applicationMainTask(void)
 			if ((keys.key == KEY_GREEN)
 #if defined(HAS_COLOURS) // SK1 + GREEN is used in the theme menu to reset theme to default.
 					&& (menuSystemGetCurrentMenuNumber() != MENU_THEME_ITEMS_BROWSER)
+#endif
+#if defined(PLATFORM_MDUV380)
+					&& (menuSystemGetCurrentMenuNumber() != MENU_CALIBRATION)
 #endif
 			)
 			{
@@ -874,7 +915,7 @@ void applicationMainTask(void)
 
 		hasSignal = false;
 
-		if(trxGetMode()== RADIO_MODE_ANALOG)
+		if(trxGetMode() == RADIO_MODE_ANALOG)
 		{
 			hasSignal = trxCheckAnalogSquelch();
 		}
@@ -884,7 +925,7 @@ void applicationMainTask(void)
 			{
 				trxReadRSSIAndNoise(false);
 
-				hasSignal = trxCheckDigitalSquelch();
+				hasSignal = trxCheckDigitalSquelch(RADIO_DEVICE_PRIMARY);
 			}
 			else
 			{

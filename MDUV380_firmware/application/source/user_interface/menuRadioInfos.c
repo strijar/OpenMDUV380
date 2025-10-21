@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -25,17 +25,14 @@
  * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
+#include "user_interface/uiGlobals.h"
 #include "user_interface/menuSystem.h"
 #include "user_interface/uiLocalisation.h"
 #include "user_interface/uiUtilities.h"
 #include "utils.h"
 #include "interfaces/pit.h"
-#include "functions/ticks.h"
-#include "user_interface/uiGlobals.h"
-#include "main.h"
 #include "functions/satellite.h"
-#include "functions/codeplug.h"
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 #include "interfaces/batteryAndPowerManagement.h"
 #include "semphr.h"
 #include "interfaces/gps.h"
@@ -70,7 +67,7 @@ typedef struct
 	bool     modified;
 } voltageCircularBuffer_t;
 
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 __attribute__((section(".ccmram")))
 #else
 __attribute__((section(".data.$RAM2")))
@@ -528,7 +525,7 @@ static void updateScreen(uiEvent_t *ev, bool forceRedraw)
 				}
 
 				displayPrintCentered((DISPLAY_SIZE_Y / 2) - 8, buffer,
-#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 						FONT_SIZE_3
 #else
 						FONT_SIZE_1
@@ -712,7 +709,8 @@ static void updateScreen(uiEvent_t *ev, bool forceRedraw)
 				// Draw chart values, according to style
 				for (size_t i = 0; i < histLen; i++)
 				{
-					uint32_t y = (uint32_t)(((hist[i] - CUTOFF_VOLTAGE_UPPER_HYST) * chartHeight) / (BATTERY_MAX_VOLTAGE - CUTOFF_VOLTAGE_UPPER_HYST));
+					uint32_t y = (uint32_t)((((CLAMP(hist[i], CUTOFF_VOLTAGE_UPPER_HYST, BATTERY_MAX_VOLTAGE)) - CUTOFF_VOLTAGE_UPPER_HYST) *
+							chartHeight) / (BATTERY_MAX_VOLTAGE - CUTOFF_VOLTAGE_UPPER_HYST));
 
 					if (graphStyle == GRAPH_FILL)
 					{
@@ -871,7 +869,7 @@ static void handleEvent(uiEvent_t *ev)
 	{
 		if (displayMode == RADIO_INFOS_LOCATION)
 		{
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 			gpsOnUsingQuickKey(true);
 #endif
 		}
@@ -907,7 +905,7 @@ static void handleEvent(uiEvent_t *ev)
 									((keypadInputDigits[3] - '0'))) - 1900;
 
 							uiSetUTCDateTimeInSecs(mktime_custom(&timeAndDate) - ((nonVolatileSettings.timezone & 0x80)?((nonVolatileSettings.timezone & 0x7F) - 64) * (15 * 60):0));
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 							setRtc_custom(uiDataGlobal.dateTimeSecs);
 #endif
 							keypadInputDigits[0] = 0;// clear digits
@@ -963,7 +961,7 @@ static void handleEvent(uiEvent_t *ev)
 
 									PIT2SecondsCounter = 0;//Synchronise PIT2SecondsCounter
 									uiSetUTCDateTimeInSecs(mktime_custom(&timeAndDate) - ((nonVolatileSettings.timezone & 0x80)?((nonVolatileSettings.timezone & 0x7F) - 64) * (15 * 60):0));
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 									setRtc_custom(uiDataGlobal.dateTimeSecs);
 #endif
 									menuSatelliteScreenClearPredictions(false);
@@ -994,7 +992,7 @@ static void handleEvent(uiEvent_t *ev)
 			case KEY_RED:
 				if ((displayMode == RADIO_INFOS_LOCATION) && BUTTONCHECK_DOWN(ev, BUTTON_SK2))
 				{
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 					gpsOnUsingQuickKey(false);
 #endif
 					return;
@@ -1087,7 +1085,7 @@ static void handleEvent(uiEvent_t *ev)
 				break;
 
 			case KEY_LEFT:
-#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 			case KEY_ROTARY_DECREMENT:
 #endif
 				switch(displayMode)
@@ -1117,7 +1115,7 @@ static void handleEvent(uiEvent_t *ev)
 				break;
 
 			case KEY_RIGHT:
-#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 			case KEY_ROTARY_INCREMENT:
 #endif
 				switch(displayMode)

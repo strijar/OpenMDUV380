@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2019      Kai Ludwig, DG4KLU
- * Copyright (C) 2020-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2020-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -41,6 +41,9 @@
 #include "functions/rxPowerSaving.h"
 #include "functions/ticks.h"
 #include "interfaces/gps.h"
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
+#include "hardware/radioHardwareInterface.h"
+#endif
 
 #define QSODATA_TIMER_TIMEOUT            2400
 #define QSODATA_RX_BEEP_TIMER_TIMEOUT   (QSODATA_TIMER_TIMEOUT - 1000)
@@ -325,7 +328,7 @@ uint8_t getCurrentTATxFlag(void)
 	uint8_t taTxFlagTS1 = currentChannelData->flag1 & 0x03;
 	uint8_t taTxFlagTS2 = (currentChannelData->flag1 >> 2) & 0x03;
 
-	if (trxDMRModeTx == DMR_MODE_DMO)
+	if (currentRadioDevice->trxDMRModeTx == DMR_MODE_DMO)
 	{
 		flag = taTxFlagTS1 | taTxFlagTS2;
 	}
@@ -677,7 +680,7 @@ static void hrc6000HandleLCData(void)
 				(((settingsUsbMode == USB_MODE_HOTSPOT) || (memcmp((uint8_t *)hrc.previousLCBuf, LCBuf, LC_DATA_LENGTH) != 0)) ||
 						(monitorModeData.isEnabled && monitorModeData.dmrIsValid && (monitorModeData.qsoInfoUpdated == false))))
 		{
-			if (((trxDMRModeRx == DMR_MODE_DMO) || hrc6000CheckTimeSlotFilter()) && hrc6000CheckColourCodeFilter()) // only do this for the selected timeslot, or when in Active mode
+			if (((currentRadioDevice->trxDMRModeRx == DMR_MODE_DMO) || hrc6000CheckTimeSlotFilter()) && hrc6000CheckColourCodeFilter()) // only do this for the selected timeslot, or when in Active mode
 			{
 				if ((LCBuf[0] == TG_CALL_FLAG) || (LCBuf[0] == PC_CALL_FLAG))
 				{
@@ -972,13 +975,16 @@ static inline void hrc6000SysReceivedDataInt(void)
 
 	rxSyncType = (reg_0x5F & 0x03); //received Sync Type
 
-	if (rxSyncType == BS_SYNC)       // if we are receiving from a base station (Repeater)
+	if (codeplugChannelGetFlag(currentChannelData, CHANNEL_FLAG_FORCE_DMO) == 0)
 	{
-		trxDMRModeRx = DMR_MODE_RMO; // switch to RMO mode to allow reception
-	}
-	else
-	{
-		trxDMRModeRx = DMR_MODE_DMO; // not base station so must be DMO
+		if (rxSyncType == BS_SYNC)       // if we are receiving from a base station (Repeater)
+		{
+			currentRadioDevice->trxDMRModeRx = DMR_MODE_RMO; // switch to RMO mode to allow reception
+		}
+		else
+		{
+			currentRadioDevice->trxDMRModeRx = DMR_MODE_DMO; // not base station so must be DMO
+		}
 	}
 
 	if (((slotState == DMR_STATE_RX_1) || (slotState == DMR_STATE_RX_2)) &&
@@ -1007,7 +1013,7 @@ static inline void hrc6000SysReceivedDataInt(void)
 
 	if (hrc6000CrcIsValid() && (rxSyncClass == SYNC_CLASS_DATA) && (rxDataType == 2))        //Terminator with LC
 	{
-		if ((trxDMRModeRx == DMR_MODE_DMO) && hrc6000CallAcceptFilter())
+		if ((currentRadioDevice->trxDMRModeRx == DMR_MODE_DMO) && hrc6000CallAcceptFilter())
 		{
 			slotState = DMR_STATE_RX_END;
 			trxIsTransmitting = false;
@@ -1117,7 +1123,7 @@ static inline void hrc6000SysReceivedDataInt(void)
 				}
 
 				if((settingsUsbMode != USB_MODE_HOTSPOT) && ((getAudioAmpStatus() & AUDIO_AMP_MODE_RF) == 0) &&
-						(((trxDMRModeRx == DMR_MODE_RMO) || (trxDMRModeRx == DMR_MODE_DMO)) && (hrc.tsAgreed > TS_STABLE_THRESHOLD)))
+						(((currentRadioDevice->trxDMRModeRx == DMR_MODE_RMO) || (currentRadioDevice->trxDMRModeRx == DMR_MODE_DMO)) && (hrc.tsAgreed > TS_STABLE_THRESHOLD)))
 				{
 					enableAudioAmp(AUDIO_AMP_MODE_RF);
 				}
@@ -1201,7 +1207,7 @@ static inline void hrc6000SysReceivedDataInt(void)
 						hrc.hasEncodedAudio = true;
 						hrc.hasAudioData = true;
 
-						if (trxDMRModeRx == DMR_MODE_RMO)
+						if (currentRadioDevice->trxDMRModeRx == DMR_MODE_RMO)
 						{
 							hrc.dmrMonitorCapturedTimeout = hrc6000GetTSTimeoutValue(); // Keep resetting the TS timeout
 						}
@@ -1277,7 +1283,7 @@ void hrc6000SysInterruptHandler(void)
 	{
 		if ((hrc.ccHold == false) && ((nonVolatileSettings.dmrCcTsFilter & DMR_CC_FILTER_PATTERN) == 0) && reg52Result)
 		{
-			if (trxGetSNRMargindBm() >= 5) // Minimum SNR Margin
+			if (trxGetSNRMargindBm(RADIO_DEVICE_PRIMARY) >= 5) // Minimum SNR Margin
 			{
 				uint32_t timeDiff = (ticksGetMillis() - hrc.lastRxColorCodeTime);
 
@@ -1298,7 +1304,7 @@ void hrc6000SysInterruptHandler(void)
 							trxSetDMRColourCode(hrc.rxColorCode);
 							SPI0WritePageRegByte(0x04, 0x40, 0xC3);  // Enable DMR Tx, DMR Rx, Passive Timing, Normal mode
 
-							if (trxDMRModeTx == DMR_MODE_RMO) // we need to do extra config while in RMO, otherwise the chip will get stuck on a wrong CC
+							if (currentRadioDevice->trxDMRModeTx == DMR_MODE_RMO) // we need to do extra config while in RMO, otherwise the chip will get stuck on a wrong CC
 							{
 								SPI0WritePageRegByte(0x04, 0x41, 0x20);  // Set Sync Fail Bit (Reset?))
 								SPI0WritePageRegByte(0x04, 0x41, 0x00);  // Reset
@@ -1590,7 +1596,7 @@ void hrc6000TimeslotInterruptHandler(void)
 	switch (slotState)
 	{
 		case DMR_STATE_RX_1: // Start RX (first step)
-			if (trxDMRModeRx == DMR_MODE_RMO)
+			if (currentRadioDevice->trxDMRModeRx == DMR_MODE_RMO)
 			{
 				bool tsMatches = hrc6000CheckTimeSlotFilter();
 
@@ -1840,7 +1846,7 @@ void hrc6000TimeslotInterruptHandler(void)
 			slotState = DMR_STATE_TX_END_3_RMO;
 #else
 
-			if (trxDMRModeTx == DMR_MODE_RMO)
+			if (currentRadioDevice->trxDMRModeTx == DMR_MODE_RMO)
 			{
 				SPI0WritePageRegByte(0x04, 0x40, 0xC3);   // Enable DMR Tx and Rx, Passive Timing
 				//SPI0WritePageRegByte(0x04, 0x41, 0x50);   // Receive during Next Timeslot And Layer2 Access success Bit
@@ -2251,7 +2257,7 @@ static void hrc6000Tick(void)
 			// Ensure the ISR has exited
 			while (hrc.inIRQHandler);
 
-			if (trxDMRModeTx == DMR_MODE_DMO)
+			if (currentRadioDevice->trxDMRModeTx == DMR_MODE_DMO)
 			{
 				if (settingsUsbMode != USB_MODE_HOTSPOT)
 				{
@@ -2471,7 +2477,7 @@ static void hrc6000Tick(void)
 						// switch to analog
 						trxSetModeAndBandwidth(RADIO_MODE_ANALOG, true);
 						currentChannelData->sql = CODEPLUG_MIN_VARIABLE_SQUELCH;
-						trxSetRxCSS(CODEPLUG_CSS_TONE_NONE);
+						trxSetRxCSS(RADIO_DEVICE_PRIMARY, CODEPLUG_CSS_TONE_NONE);
 						uiDataGlobal.displayQSOState = QSO_DISPLAY_DEFAULT_SCREEN;
 						headerRowIsDirty = true;
 					}
@@ -2568,7 +2574,7 @@ static void hrc6000Tick(void)
 		}
 	}
 
-	if ((trxDMRModeRx == DMR_MODE_RMO) &&
+	if ((currentRadioDevice->trxDMRModeRx == DMR_MODE_RMO) &&
 				(hrc.transmissionEnabled == false) && (dmrMonitorCapturedTS != -1) && (hrc.dmrMonitorCapturedTimeout > 0))
 	{
 		hrc.dmrMonitorCapturedTimeout--;
@@ -2672,7 +2678,7 @@ void HRC6000ResyncTimeSlot(void)
 		if (hrc.keepMonitorCapturedTSAfterTxing == false)
 		{
 			// If we are in RMO mode, without TS filtering, and currently receiving, toggles the active TS.
-			if ((trxDMRModeRx == DMR_MODE_RMO) && (dmrMonitorCapturedTS != -1) && (hrc.dmrMonitorCapturedTimeout > 0) &&
+			if ((currentRadioDevice->trxDMRModeRx == DMR_MODE_RMO) && (dmrMonitorCapturedTS != -1) && (hrc.dmrMonitorCapturedTimeout > 0) &&
 					((nonVolatileSettings.dmrCcTsFilter & DMR_TS_FILTER_PATTERN) == 0) &&
 					((slotState == DMR_STATE_RX_1) || (slotState == DMR_STATE_RX_2)))
 			{
@@ -2950,12 +2956,12 @@ bool HRC6000CheckCSS(void)
 
 void HRC6000SetLineOut(bool isOn)
 {
-	SPI0SeClearPageRegByteWithMask(0x04, 0xE2, 0xFD, isOn ? 0x02 : 0x00);				//Enable or disable the DAC output to Line out
+	SPI0ClearPageRegByteWithMask(0x04, 0xE2, 0xFD, isOn ? 0x02 : 0x00);				//Enable or disable the DAC output to Line out
 }
 
 void HRC6000SetMic(bool isOn)
 {
-	SPI0SeClearPageRegByteWithMask(0x04, 0xE0, 0xBF, isOn ? 0x40 : 0x00);				//Enable or disable the Mic Input to Line in 1
+	SPI0ClearPageRegByteWithMask(0x04, 0xE0, 0xBF, isOn ? 0x40 : 0x00);				//Enable or disable the Mic Input to Line in 1
 }
 
 void HRC6000SetFmAudio(bool isOn)
@@ -2984,7 +2990,7 @@ void HRC6000MuteFmAudio(bool isMute)
 	}
 }
 
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701)
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701)
 void HRC6000GetTone1Config(HRC6000_Tone1Config_t *cfg)
 {
 	memcpy(cfg, &savedTone1Config, sizeof(HRC6000_Tone1Config_t));

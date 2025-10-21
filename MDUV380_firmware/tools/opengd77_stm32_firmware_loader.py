@@ -17,8 +17,8 @@
 #
 # Adapted & hacked for the OpenGD77 (for STM32) project by:
 #
-#   Copyright (C) 2023 Daniel Caujolle-Bert, F1RMB
-#                      Roger Clark, VK3KYY / G4KYF
+#   Copyright (C) 2023-2024 Daniel Caujolle-Bert, F1RMB
+#                           Roger Clark, VK3KYY / G4KYF
 #
 #################################################################################################################################
 #
@@ -109,7 +109,7 @@ __DFU_INTERFACE = 0
 
 defaultVID = 0x0483
 defaultPID = 0xDF11
-version:Final = "1.1.0"
+version:Final = "1.1.1"
 
 class FWPlatformOutput(enum.Enum):
     MD_9600 = 0
@@ -330,8 +330,7 @@ MD380_ENCODE_CIPHER:Final = [
     0xf5, 0x8f, 0x20, 0x40, 0x9d, 0xbb, 0x6b, 0x2c, 0xa9, 0x67, 0x3d, 0x78, 0xc2, 0x62, 0xb7, 0x0c
 ]
 
-
-DM1801_ENCODE_CIPHER:Final = [
+DM1701_ENCODE_CIPHER:Final = [
     0x3a, 0x04, 0x74, 0xad, 0x90, 0xae, 0xb3, 0x78, 0xde, 0xfa, 0x73, 0x8d, 0xdc, 0x8c, 0x53, 0x67,
     0x27, 0x61, 0xf3, 0x6f, 0x95, 0xc8, 0xf1, 0x1f, 0xc5, 0xad, 0x17, 0x68, 0xfb, 0x1d, 0xd2, 0x51,
     0x2b, 0x07, 0xe6, 0xe2, 0x54, 0x40, 0x61, 0x40, 0x10, 0xca, 0xcd, 0x19, 0x68, 0x56, 0xaa, 0x42,
@@ -401,14 +400,16 @@ DM1801_ENCODE_CIPHER:Final = [
 
 # Python 3 deprecated getargspec in favour of getfullargspec, but
 # Python 2 doesn't have the latter, so detect which one to use
-getargspec = getattr(inspect, "getfullargspec", inspect.getargspec)
+# F1RMB: make it work with Python >= 3.11
+try:
+    getargspec = getattr(inspect, "getfullargspec", inspect.getargspec)
+except AttributeError:
+    getargspec = getattr(inspect, "getfullargspec", inspect.getfullargspec)
 
 if "length" in getargspec(usb.util.get_string).args:
     # PyUSB 1.0.0.b1 has the length argument
     def get_string(dev, index):
         return usb.util.get_string(dev, 255, index)
-
-
 else:
     # PyUSB 1.0.0.b2 dropped the length argument
     def get_string(dev, index):
@@ -871,7 +872,7 @@ def patch_and_download_firmware(firmwareFile, langFile, platform, progress=None)
     elif (platform == FWPlatformOutput.DM_1701):
         print("DM-1701", end="")
         for j in range(0, len(openFirmwareData)):
-            openFirmwareData[j] ^= DM1801_ENCODE_CIPHER[j % 1024];
+            openFirmwareData[j] ^= DM1701_ENCODE_CIPHER[j % 1024];
     print(":")
 
     wait_for_idle()

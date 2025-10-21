@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -25,12 +25,10 @@
  * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
-#include "main.h"
+#include "user_interface/uiGlobals.h"
 #include "user_interface/menuSystem.h"
 #include "user_interface/uiLocalisation.h"
 #include "user_interface/uiUtilities.h"
-#include "functions/settings.h"
-#include "functions/ticks.h"
 
 menuDataGlobal_t menuDataGlobal =
 {
@@ -457,15 +455,31 @@ static void menuSystemPreProcessEvent(uiEvent_t *ev)
 			}
 			else
 			{
-#if defined(PLATFORM_MD9600) || ! (defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)) // This block is for MD9600, MDUV380 or MD380
+#if defined(PLATFORM_MD9600) || !defined(PLATFORM_RT84_DM1701) // This block is for MD9600, MDUV380 or MD380
 				switch(ev->keys.key)
 				{
-#if ! (defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017) || defined(PLATFORM_MD9600))
+#if ! (defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017) || defined(PLATFORM_MD9600))
 					case KEY_UP:
 						ev->keys.key = KEY_LEFT;
 						break;
 					case KEY_DOWN:
 						ev->keys.key = KEY_RIGHT;
+						break;
+#elif defined(PLATFORM_MD2017)
+					// The two following events are possibly issued from the Trackball, check that and convert if needed
+					case KEY_UP:
+						// In Channel and VFO, KEY_UP has to be remapped to KEY_FONT_UP
+						if (ev->keys.event == (KEY_MOD_UP | KEY_MOD_PRESS))
+						{
+							ev->keys.key = KEY_FRONT_UP;
+						}
+						break;
+					case KEY_DOWN:
+						// In Channel and VFO, KEY_DOWN has to be remapped to KEY_FONT_DOWN
+						if (ev->keys.event == (KEY_MOD_UP | KEY_MOD_PRESS))
+						{
+							ev->keys.key = KEY_FRONT_DOWN;
+						}
 						break;
 #endif
 #if defined(PLATFORM_MD9600)
@@ -505,7 +519,7 @@ static void menuSystemPreProcessEvent(uiEvent_t *ev)
 						}
 						break;
 #endif
-#if defined(PLATFORM_MD9600) || ! (defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017))
+#if defined(PLATFORM_MD9600) || !defined(PLATFORM_RT84_DM1701)
 				}
 #endif
 #endif
@@ -601,8 +615,9 @@ void menuSystemInit(time_t_custom UTCdateTimeInSecs)
 	menuDataGlobal.controlData.stack[menuDataGlobal.controlData.stackPosition] = UI_SPLASH_SCREEN;// set the very first screen as the splash screen
 	menuDataGlobal.currentItemIndex = 0;
 
-	if ((nonVolatileSettings.backlightMode == BACKLIGHT_MODE_MANUAL)
-			|| (nonVolatileSettings.backlightMode == BACKLIGHT_MODE_BUTTONS) || (nonVolatileSettings.backlightMode == BACKLIGHT_MODE_SQUELCH))
+	if ((nonVolatileSettings.backlightMode == BACKLIGHT_MODE_MANUAL) ||
+			(nonVolatileSettings.backlightMode == BACKLIGHT_MODE_BUTTONS) ||
+			(nonVolatileSettings.backlightMode == BACKLIGHT_MODE_SQUELCH))
 	{
 		if (nonVolatileSettings.displayBacklightPercentageOff > 0)
 		{
@@ -637,7 +652,7 @@ const menuItemNewData_t mainMenuItems[] =
 	{   7, MENU_LAST_HEARD      },
 	{ 150, MENU_RADIO_INFOS     },
 	{ 173, MENU_SATELLITE       },
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(HAS_GPS)
 	{ 195, MENU_GPS		        },
 #endif
 };
@@ -672,7 +687,9 @@ static const menuItemNewData_t optionsMenuItems[] =
 #if defined(HAS_COLOURS)
 	{ 218, MENU_THEME           },
 #endif
+#if !defined(PLATFORM_GD77S)
 	{ 257, MENU_APRS            },
+#endif
 };
 
 const menuItemsList_t menuDataOptions =
@@ -752,11 +769,11 @@ int menuGetMenuOffset(int maxMenuItems, int loopOffset)
 {
 	int offset = menuDataGlobal.currentItemIndex + loopOffset;
 	int startOffset = 0;
-	int iter = (loopOffset + (MENU_MAX_DISPLAYED_ENTRIES / 2) + 1);
+	int iter = (loopOffset + (MENU_MAX_DISPLAYED_ENTRIES / 2) + ((MENU_MAX_DISPLAYED_ENTRIES & 0x01) ? 1 : 0));
 
 	if (maxMenuItems < MENU_MAX_DISPLAYED_ENTRIES)
 	{
-		startOffset = (MENU_MAX_DISPLAYED_ENTRIES - maxMenuItems) / 2;
+		startOffset = (((MENU_MAX_DISPLAYED_ENTRIES - ((MENU_MAX_DISPLAYED_ENTRIES & 0x01) ? 0 : 1)) - maxMenuItems) / 2);
 
 		if (iter <= startOffset)
 		{
@@ -804,7 +821,7 @@ int menuGetKeypadKeyValue(uiEvent_t *ev, bool digitsOnly)
 #if defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380)
 			KEY_0, KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8, KEY_9,
 			KEY_FRONT_UP, 0, KEY_FRONT_DOWN, 0 , KEY_STAR, KEY_HASH
-#elif defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#elif defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 			KEY_0, KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8, KEY_9,
 			KEY_LEFT, KEY_FRONT_UP, KEY_FRONT_DOWN, KEY_RIGHT, KEY_STAR, KEY_HASH
 #elif defined(PLATFORM_MD9600)
@@ -849,9 +866,13 @@ int menuGetKeypadKeyValue(uiEvent_t *ev, bool digitsOnly)
 void menuUpdateCursor(int pos, bool moved, bool render)
 {
 #if defined(PLATFORM_RD5R)
-	const int MENU_CURSOR_Y = 32;
-#elif defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+	const int MENU_CURSOR_Y = 35;
+#elif defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_VARIANT_DM1701)
+	const int MENU_CURSOR_Y = 66;
+#else
 	const int MENU_CURSOR_Y = 78;
+#endif
 #else
 	const int MENU_CURSOR_Y = 46;
 #endif

@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2019      Kai Ludwig, DG4KLU
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions
@@ -50,7 +50,7 @@ void SPI0Write(uint8_t *txBuf,uint8_t length);
 int SPI0WritePageRegByte(uint8_t page, uint8_t reg, uint8_t val);
 int SPI0WritePageRegByteExtended(uint8_t page, uint16_t reg, uint8_t val);
 int SPI0ReadPageRegByte(uint8_t page, uint8_t reg, volatile uint8_t *val);
-int SPI0SeClearPageRegByteWithMask(uint8_t page, uint8_t reg, uint8_t mask, uint8_t val);
+int SPI0ClearPageRegByteWithMask(uint8_t page, uint8_t reg, uint8_t mask, uint8_t val);
 int SPI0WritePageRegByteArray(uint8_t page, uint8_t reg, const uint8_t *values, uint8_t length);
 int SPI0ReadPageRegByteArray(uint8_t page, uint8_t reg, volatile uint8_t *values, uint8_t length);
 

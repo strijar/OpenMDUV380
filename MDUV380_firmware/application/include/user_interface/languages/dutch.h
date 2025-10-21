@@ -1,6 +1,6 @@
 /* -*- coding: windows-1252-unix; -*- */
 /*
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions
@@ -64,7 +64,7 @@ const stringsTable_t dutchLanguage =
 .new_contact				= "Nieuw Contact", // MaxLen: 16
 .dmr_contacts				= "DMR contacten", // MaxLen: 16
 .contact_details			= "Contact Details", // MaxLen: 16
-.hotspot_mode				= "Hotspot   ", // MaxLen: 16
+.hotspot_mode				= "Hotspot", // MaxLen: 16
 .built						= "Gemaakt", // MaxLen: 16
 .zones						= "Zones", // MaxLen: 16
 .keypad						= "Toetsenbord", // MaxLen: 12 (with .ptt)
@@ -97,19 +97,19 @@ const stringsTable_t dutchLanguage =
 .private					= "Privaat", // MaxLen: 16 (with .type)
 .all						= "Alle", // MaxLen: 16 (with .type)
 .type						= "Type", // MaxLen: 16 (with .type)
-.timeSlot					= "Tijdslot  ", // MaxLen: 16 (plus ':' and  .none, '1' or '2')
+.timeSlot					= "Tijdslot", // MaxLen: 16 (plus ':' and  .none, '1' or '2')
 .none						= "Geen", // MaxLen: 16 (with .timeSlot, "Rx CTCSS:" and ""Tx CTCSS:", .filter/.mode/.dmr_beep)
 .contact_saved				= "Contact Bewaard", // MaxLen: 16
 .duplicate					= "Dubbel", // MaxLen: 16
 .tg							= "TG",  // MaxLen: 8
 .pc							= "PO", // MaxLen: 8
 .ts							= "TS", // MaxLen: 8
-.mode						= "Modus   ",  // MaxLen: 12
+.mode						= "Modus",  // MaxLen: 12
 .colour_code				= "Kleur Code", // MaxLen: 16 (with ':' * .n_a)
 .n_a						= "nvt",// MaxLen: 16 (with ':' * .colour_code or .timeout_beep)
 .bandwidth				= "BW", // MaxLen: 16 (with : + .n_a, "25kHz" or "12.5kHz")
-.stepFreq					= "Stap  ", // MaxLen: 7 (with ':' + xx.xxkHz fitted)
-.tot						= "TOT   ", // MaxLen: 16 (with ':' + .off or 15..3825)
+.stepFreq					= "Stap", // MaxLen: 7 (with ':' + xx.xxkHz fitted)
+.tot						= "TOT", // MaxLen: 16 (with ':' + .off or 15..3825)
 .off						= "Uit", // MaxLen: 16 (with ':' + .timeout_beep, .band_limits)
 .zone_skip					= "Zone Oversl", // MaxLen: 16 (with ':' + .yes or .no)
 .all_skip					= "Alles Overs", // MaxLen: 16 (with ':' + .yes or .no)
@@ -120,19 +120,19 @@ const stringsTable_t dutchLanguage =
 .timeout_beep				= "Timeout Piep", // MaxLen: 16 (with ':' + .n_a or 5..20 + 's')
 .list_full				= "List full",
 .dmr_cc_scan				= "CC Scan", // MaxLen: 12 (with ':' + settings: .on or .off)
-.band_limits				= "Band Lim. ", // MaxLen: 16 (with ':' + .on or .off)
+.band_limits				= "Band Lim.", // MaxLen: 16 (with ':' + .on or .off)
 .beep_volume				= "Piepvolume", // MaxLen: 16 (with ':' + -24..6 + 'dB')
-.dmr_mic_gain				= "DMR Mic   ", // MaxLen: 16 (with ':' + -33..12 + 'dB')
-.fm_mic_gain				= "FM Mic    ", // MaxLen: 16 (with ':' + 0..31)
+.dmr_mic_gain				= "DMR Mic", // MaxLen: 16 (with ':' + -33..12 + 'dB')
+.fm_mic_gain				= "FM Mic", // MaxLen: 16 (with ':' + 0..31)
 .key_long					= "Toets Lang", // MaxLen: 11 (with ':' + x.xs fitted)
 .key_repeat					= "Toets Herh", // MaxLen: 11 (with ':' + x.xs fitted)
 .dmr_filter_timeout			= "Filter Tijd", // MaxLen: 16 (with ':' + 1..90 + 's')
-.brightness					= "Helderheid ", // MaxLen: 16 (with ':' + 0..100 + '%')
+.brightness					= "Helderheid", // MaxLen: 16 (with ':' + 0..100 + '%')
 .brightness_off				= "Min Helderh", // MaxLen: 16 (with ':' + 0..100 + '%')
-.contrast					= "Contrast   ", // MaxLen: 16 (with ':' + 12..30)
+.contrast					= "Contrast", // MaxLen: 16 (with ':' + 12..30)
 .screen_invert				= "Omkeren", // MaxLen: 16
 .screen_normal				= "Normaal", // MaxLen: 16
-.backlight_timeout			= "Timeout ", // MaxLen: 16 (with ':' + .no to 30s)
+.backlight_timeout			= "Timeout", // MaxLen: 16 (with ':' + .no to 30s)
 .scan_delay					= "Scan Vertr.", // MaxLen: 16 (with ':' + 1..30 + 's')
 .yes___in_uppercase			= "JA", // MaxLen: 8 (choice above green/red buttons)
 .no___in_uppercase			= "NEEN", // MaxLen: 8 (choice above green/red buttons)
@@ -154,18 +154,18 @@ const stringsTable_t dutchLanguage =
 .low_battery				= "BATTERY LEEG!!!", // MaxLen: 16
 .Auto						= "Auto", // MaxLen 16 (with .mode + ':')
 .manual						= "Manueel",  // MaxLen 16 (with .mode + ':')
-.ptt_toggle					= "PTT latch ", // MaxLen 16 (with ':' + .on or .off)
+.ptt_toggle					= "PTT latch", // MaxLen 16 (with ':' + .on or .off)
 .private_call_handling		= "Sta PO toe", // MaxLen 16 (with ':' + .on or .off)
 .stop						= "Stop", // Maxlen 16 (with ':' + .scan_mode/.dmr_beep)
 .one_line					= "1 lijn", // MaxLen 16 (with ':' + .contact)
 .two_lines					= "2 lijnen", // MaxLen 16 (with ':' + .contact)
 .new_channel				= "Nw Kanaal", // MaxLen: 16, leave room for a space and four channel digits after
 .priority_order				= "Volgord", // MaxLen 16 (with ':' + 'Cc/DB/TA')
-.dmr_beep					= "DMR Piep  ", // MaxLen 16 (with ':' + .star/.stop/.both/.none)
+.dmr_beep					= "DMR Piep", // MaxLen 16 (with ':' + .star/.stop/.both/.none)
 .start						= "Start", // MaxLen 16 (with ':' + .dmr_beep)
 .both						= "Beide", // MaxLen 16 (with ':' + .dmr_beep)
 .vox_threshold				= "VOX Drempel", // MaxLen 16 (with ':' + .off or 1..30)
-.vox_tail 					= "VOX Duur   ", // MaxLen 16 (with ':' + .n_a or '0.0s')
+.vox_tail 					= "VOX Duur", // MaxLen 16 (with ':' + .n_a or '0.0s')
 .audio_prompt				= "Melding ",// Maxlen 16 (with ':' + .silent, .beep or .voice_prompt_level_1)
 .silent						= "Stil", // Maxlen 16 (with : + audio_prompt)
 .rx_beep				= "RX beep", // MaxLen 16 (with ':' + .carrier/.talker/.both/.none)
@@ -185,7 +185,7 @@ const stringsTable_t dutchLanguage =
 .voice_prompt_level_3		= "Stem L3", // Maxlen 16 (with : + audio_prompt)
 .dmr_filter					= "DMR Filter",// MaxLen: 12 (with ':' + settings: "TG" or "Ct" or "TGL")
 .talker					= "Talker",
-.dmr_ts_filter				= "TS Filter ", // MaxLen: 12 (with ':' + settings: .on or .off)
+.dmr_ts_filter				= "TS Filter", // MaxLen: 12 (with ':' + settings: .on or .off)
 .dtmf_contact_list			= "FM DTMFcontacten", // Maxlen: 16
 .channel_power				= "K.Vermogen", //Displayed as "Ch Power:" + .from_master or "Ch Power:"+ power text e.g. "Power:500mW" . Max total length 16
 .from_master				= "Master",// Displayed if per-channel power is not enabled  the .channel_power
@@ -319,6 +319,8 @@ const stringsTable_t dutchLanguage =
 .aprs_turn_slope			= "T. Slope", // MaxLen 16 (with ':' + 1..255 + '°/v')
 .aprs_turn_time				= "T. Time", // MaxLen 16 (with ':' + 5..180 + 's')
 .auto_lock				= "Auto lock", // MaxLen 16 (with ':' + .off or 0.5..15 (.5 step) + 'min')
+.trackball				= "Trackball", // MaxLen 16 (with ':' + .on or .off)
+.dmr_force_dmo				= "Force DMO", // MaxLen 16 (with ':' + .n_a or .on or .off)
 };
 /********************************************************************
  *

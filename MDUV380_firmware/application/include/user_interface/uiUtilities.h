@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -268,6 +268,8 @@ void dtmfSequenceTick(bool popPreviousMenuOnEnding);
 
 void resetOriginalSettingsData(void);
 void showErrorMessage(const char *message);
+const char *getPowerLevel(uint8_t level);
+const char *getPowerLevelUnit(uint8_t level);
 
 uint8_t *coordsToMaidenhead(uint8_t *maidenheadBuffer, double longitude, double latitude);
 void buildLocationAndMaidenheadStrings(char *locationBufferOrNull, char *maidenheadBufferOrNull, bool locIsValid);
@@ -289,7 +291,7 @@ time_t getEpochTime(RTC_TimeTypeDef *rtcTime, RTC_DateTypeDef *rtcDate);
 struct tm *gmtime_r_Custom(const time_t_custom *__restrict tim_p, struct tm *__restrict res);
 time_t_custom mktime_custom(const struct tm * tb);
 
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 time_t_custom getRtcTime_custom(void);
 void setRtc_custom(time_t_custom tc);
 #endif
@@ -330,6 +332,13 @@ void daytimeThemeTick(void);
 void uiChannelModeOrVFOModeThemeDaytimeChange(bool toggle, bool isChannelMode);
 #else
 #define uiChannelModeOrVFOModeThemeDaytimeChange(x, y) do { } while(0)
+#endif
+
+#if defined(STM32F405xx) && ! defined(PLATFORM_MD9600)
+uint32_t cpuGetSignature(void);
+uint32_t cpuGetRevision(void);
+uint32_t cpuGetPackage(void);
+int32_t cpuGetFlashSize(void);
 #endif
 
 #endif

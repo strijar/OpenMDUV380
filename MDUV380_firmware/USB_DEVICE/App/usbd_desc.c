@@ -69,10 +69,14 @@
 #define USBD_PID_FS     148
 
 #if defined(PLATFORM_MDUV380)
+#if defined(PLATFORM_VARIANT_UV380_PLUS_10W)
+#define USBD_PRODUCT_STRING_FS     "OpenMDUV380Plus 10W Transceiver"
+#else
 #define USBD_PRODUCT_STRING_FS     "OpenMDUV380 Transceiver"
+#endif
 #elif defined(PLATFORM_MD9600)
 #define USBD_PRODUCT_STRING_FS     "OpenMD9600 Transceiver"
-#elif defined(PLATFORM_DM1701)
+#elif defined(PLATFORM_RT84_DM1701)
 #define USBD_PRODUCT_STRING_FS     "OpenDM1701 Transceiver"
 #elif defined(PLATFORM_MD2017)
 #define USBD_PRODUCT_STRING_FS     "OpenMD2017 Transceiver"
@@ -399,7 +403,9 @@ uint8_t * USBD_FS_USR_BOSDescriptor(USBD_SpeedTypeDef speed, uint16_t *length)
   */
 static void Get_SerialNum(void)
 {
-  uint32_t deviceserial0, deviceserial1, deviceserial2;
+  uint32_t deviceserial0;
+  uint32_t deviceserial1;
+  uint32_t deviceserial2;
 
   deviceserial0 = *(uint32_t *) DEVICE_ID1;
   deviceserial1 = *(uint32_t *) DEVICE_ID2;

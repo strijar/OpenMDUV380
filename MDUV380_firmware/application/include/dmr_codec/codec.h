@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2019 Kai Ludwig, DG4KLU
- *           (C) 2020-2023 Roger Clark, VK3KYY / G4KYF
+ *           (C) 2020-2024 Roger Clark, VK3KYY / G4KYF
  *
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions
@@ -34,7 +34,7 @@
 #include "functions/sound.h"
 
 
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380)  || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701)
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380)  || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701)
 #define CODEC_LOCATION_1 0x807537C
 #else
 #define CODEC_LOCATION_1 0x4400
@@ -47,7 +47,7 @@
 #define QUAUX(X) #X
 #define QU(X) QUAUX(X)
 
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380)  || defined(PLATFORM_DM1701)
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380)  || defined(PLATFORM_RT84_DM1701)
 #define AMBE_DECODE 0x08075954;
 #define AMBE_ENCODE 0x080754ac;
 #define AMBE_ENCODE_ECC 0x08075864;

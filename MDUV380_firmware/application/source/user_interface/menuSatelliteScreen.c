@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions
@@ -25,18 +25,16 @@
  *
  */
 #include <time.h>
-#include "main.h"
+#include "user_interface/uiGlobals.h"
 #include "utils.h"
 #include "user_interface/menuSystem.h"
 #include "user_interface/uiLocalisation.h"
 #include "user_interface/uiUtilities.h"
 #include "interfaces/clockManager.h"
 #include "interfaces/pit.h"
-#include "user_interface/uiGlobals.h"
 #include "functions/satellite.h"
-#include "functions/codeplug.h"
-#include "functions/ticks.h"
-#if defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#include "hardware/radioHardwareInterface.h"
+#if defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 #include "interfaces/batteryAndPowerManagement.h"
 #endif
 #if defined(USING_EXTERNAL_DEBUGGER)
@@ -45,8 +43,12 @@
 
 #if defined(PLATFORM_RD5R)
 #define NUM_PASSES_TO_DISPLAY_ON_LIST_SCREEN 2
-#elif defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#elif defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_VARIANT_DM1701)
+#define NUM_PASSES_TO_DISPLAY_ON_LIST_SCREEN 5
+#else
 #define NUM_PASSES_TO_DISPLAY_ON_LIST_SCREEN 6
+#endif
 #else
 #define NUM_PASSES_TO_DISPLAY_ON_LIST_SCREEN 3
 #endif
@@ -166,7 +168,7 @@ menuStatus_t menuSatelliteScreen(uiEvent_t *ev, bool isFirstRun)
 
 		currentChannelData = &satelliteChannelData;// Now make it available to the rest of the firmware e.g the Tx screen
 		trxSetModeAndBandwidth(satelliteChannelData.chMode, true);
-		trxSetRxCSS(satelliteChannelData.rxTone);// Never any Rx CTCSS
+		trxSetRxCSS(RADIO_DEVICE_PRIMARY, satelliteChannelData.rxTone);// Never any Rx CTCSS
 
 		currentActiveSatellite = &satelliteDataNative[uiDataGlobal.SatelliteAndAlarmData.currentSatellite];
 		menuSatelliteScreenNextUpdateTime = (ev->time - 1U);
@@ -319,14 +321,14 @@ static void updateScreen(uiEvent_t *ev, bool firstRun, bool announceVP)
 
 			displayPrintCentered(16, currentLanguage->predicting, FONT_SIZE_3);
 			displayDrawRect(2,
-#if defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 					(DISPLAY_SIZE_Y / 4)
 #else
 					(DISPLAY_SIZE_Y / 2)
 #endif
 					, DISPLAY_SIZE_X - 2, 12, true);
 			displayFillRect(3,
-#if defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 					(DISPLAY_SIZE_Y / 4)
 #else
 					(DISPLAY_SIZE_Y / 2)
@@ -449,7 +451,7 @@ static void updateScreen(uiEvent_t *ev, bool firstRun, bool announceVP)
 			{
 				satellitePass_t *displayedPredictionPass  = &currentActiveSatellite->predictions.passes[currentActiveSatellite->predictions.selectedPassNumber];
 				const int DOT_RADIUS = 2;
-#if defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 				const int MAX_RADIUS = 44;
 #else
 				const int MAX_RADIUS = ((DISPLAY_SIZE_Y / 2) - 4);
@@ -617,7 +619,7 @@ static void updateScreen(uiEvent_t *ev, bool firstRun, bool announceVP)
 
 					const uint32_t S_METER_BAR_WIDTH = 8;
 					// draw S meter with range S0 to S9.
-					int rssi = MIN(MAX(0, trxGetRSSIdBm() - SMETER_S0), (SMETER_S9 - SMETER_S0));
+					int rssi = MIN(MAX(0, trxGetRSSIdBm(RADIO_DEVICE_PRIMARY) - SMETER_S0), (SMETER_S9 - SMETER_S0));
 
 					rssi = (rssi * DISPLAY_SIZE_Y) / (SMETER_S9 - SMETER_S0);
 
@@ -970,7 +972,7 @@ static void handleEvent(uiEvent_t *ev)
 			}
 
 			case KEY_RIGHT:
-#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 			case KEY_ROTARY_INCREMENT:
 #endif
 				if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
@@ -997,7 +999,7 @@ static void handleEvent(uiEvent_t *ev)
 							// more squelch
 							if(currentChannelData->sql == 0) //If we were using default squelch level
 							{
-								currentChannelData->sql = nonVolatileSettings.squelchDefaults[trxCurrentBand[TRX_RX_FREQ_BAND]];//start the adjustment from that point.
+								currentChannelData->sql = nonVolatileSettings.squelchDefaults[currentRadioDevice->trxCurrentBand[TRX_RX_FREQ_BAND]];//start the adjustment from that point.
 							}
 
 							if (currentChannelData->sql < CODEPLUG_MAX_VARIABLE_SQUELCH)
@@ -1014,7 +1016,7 @@ static void handleEvent(uiEvent_t *ev)
 				break;
 
 			case KEY_LEFT:
-#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 			case KEY_ROTARY_DECREMENT:
 #endif
 				if (BUTTONCHECK_DOWN(ev, BUTTON_SK2))
@@ -1040,7 +1042,7 @@ static void handleEvent(uiEvent_t *ev)
 						// less squelch
 						if(currentChannelData->sql == 0) //If we were using default squelch level
 						{
-							currentChannelData->sql = nonVolatileSettings.squelchDefaults[trxCurrentBand[TRX_RX_FREQ_BAND]];//start the adjustment from that point.
+							currentChannelData->sql = nonVolatileSettings.squelchDefaults[currentRadioDevice->trxCurrentBand[TRX_RX_FREQ_BAND]];//start the adjustment from that point.
 						}
 
 						if (currentChannelData->sql > CODEPLUG_MIN_VARIABLE_SQUELCH)
@@ -1383,7 +1385,7 @@ static void loadKeps(void)
 						satelliteDataNative[numSatellitesLoaded].freqs[SATELLITE_VOICE_FREQ].armCTCSS = codeplugKepsData.data[numSatellitesLoaded].armCTCSS1;
 
 						satelliteDataNative[numSatellitesLoaded].freqs[SATELLITE_APRS_FREQ].rxFreq = codeplugKepsData.data[numSatellitesLoaded].rxFreq2;
-						satelliteDataNative[numSatellitesLoaded].freqs[SATELLITE_APRS_FREQ].txFreq = codeplugKepsData.data[numSatellitesLoaded].rxFreq2;
+						satelliteDataNative[numSatellitesLoaded].freqs[SATELLITE_APRS_FREQ].txFreq = codeplugKepsData.data[numSatellitesLoaded].txFreq2;
 						satelliteDataNative[numSatellitesLoaded].freqs[SATELLITE_APRS_FREQ].txCTCSS = 0;//codeplugKepsData.data[numSatellitesLoaded].txCTCSS1;
 						satelliteDataNative[numSatellitesLoaded].freqs[SATELLITE_APRS_FREQ].armCTCSS = 0;//codeplugKepsData.data[numSatellitesLoaded].armCTCSS1;
 
@@ -1519,7 +1521,7 @@ static void exitCallback(void *data)
 	else
 	{
 		currentChannelData = &settingsVFOChannel[nonVolatileSettings.currentVFONumber];
-		uiVFOModeloadChannelData(false);
+		uiVFOModeLoadChannelData(false);
 	}
 
 	aprsBeaconingResetTimers();

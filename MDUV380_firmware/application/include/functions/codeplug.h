@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2019      Kai Ludwig, DG4KLU
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -116,6 +116,7 @@ typedef enum
 	CHANNEL_FLAG_NO_ECO,
 	CHANNEL_FLAG_OUT_OF_BAND, // MD-9600 Only
 	CHANNEL_FLAG_USE_LOCATION,
+	CHANNEL_FLAG_FORCE_DMO,
 	// flag2
 	CHANNEL_FLAG_TIMESLOT_TWO,
 	// flag3
@@ -137,6 +138,7 @@ typedef enum
 #define CODEPLUG_CHANNEL_LIBREDMR_FLAG1_NO_ECO                   0x20
 #define CODEPLUG_CHANNEL_LIBREDMR_FLAG1_OUT_OF_BAND              0x10 // MD-9600 Only
 #define CODEPLUG_CHANNEL_LIBREDMR_FLAG1_USE_LOCATION             0x08
+#define CODEPLUG_CHANNEL_LIBREDMR_FLAG1_FORCE_DMO                0x04
 // flag2
 #define CODEPLUG_CHANNEL_FLAG2_TIMESLOT_TWO                      0x40
 // flag3
@@ -153,7 +155,7 @@ typedef enum
 
 extern int codeplugChannelsPerZone;
 
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 #define FLASH_ADDRESS_OFFSET  (128 * 1024)
 #else
 #define FLASH_ADDRESS_OFFSET  (0)

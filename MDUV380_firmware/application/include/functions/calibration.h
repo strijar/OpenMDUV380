@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2019      Kai Ludwig, DG4KLU
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -78,7 +78,7 @@ extern const int MAX_PA_DAC_VALUE;
 
 
 void calibrationInit(void);
-void calibrationReadFactory(void);
+void calibrationReadFactory(bool applyConversion);
 void calibrationSaveLocal(void);
 void calibrationReadLocal(void);
 void calibrationGetPowerForFrequency(int freq, calibrationPowerValues_t *powerSettings);
@@ -91,8 +91,8 @@ int8_t calibrationGetMod2Offset(int band);
 void calibrationSetMod2Offset(int band, int8_t value);
 bool calibrationGetRSSIMeterParams(calibrationRSSIMeter_t *rssiMeterValues);
 int interpolate(int lowerpoint, int upperpoint, int numerator, int denominator);
-uint8_t calibrationGetPower(int freqindex,int powerindex);
-void calibrationPutPower(int freqindex , int powerindex, uint8_t val);
+uint8_t calibrationGetPower(int freqindex, int powerindex);
+void calibrationPutPower(int freqindex, int powerindex, uint8_t val);
 uint8_t *calibrationGetLocalDataPointer(void);
 
 #endif

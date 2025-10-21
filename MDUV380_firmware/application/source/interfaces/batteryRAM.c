@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2021-2024 Roger Clark, VK3KYY / G4KYF
  *
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions
@@ -37,16 +37,15 @@ bool batteryRAM_Read(uint32_t offset, uint8_t *buf, uint32_t size)
 {
 	if ((offset + size) <= RAM_SIZE)
 	{
-		for(uint32_t i = 0; i< size; i++)
+		for(uint32_t i = 0; i < size; i++)
 		{
 			*buf++ = *(__IO uint8_t *)(BKPSRAM_BASE + (offset + i));
 		}
+
 		return true;
 	}
-	else
-	{
-		return false;
-	}
+
+	return false;
 }
 
 /*
@@ -57,17 +56,15 @@ bool batteryRAM_Write(uint32_t offset, uint8_t *buf, uint32_t size)
 {
 	if ((offset + size) <= RAM_SIZE)
 	{
-		for(uint32_t i = 0; i< size; i++)
+		for(uint32_t i = 0; i < size; i++)
 		{
-			*(__IO uint8_t *)(BKPSRAM_BASE + (offset + i)) = *buf;
-			buf++;
+			*(__IO uint8_t *)(BKPSRAM_BASE + (offset + i)) = *buf++;
 		}
+
 		return true;
 	}
-	else
-	{
-		return false;
-	}
+
+	return false;
 }
 
 void batteryRAM_Init(void)

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  * Low level DMR stream implementation informed by code written by
@@ -52,6 +52,9 @@
 #include "usb/usb_com.h"
 #include "functions/rxPowerSaving.h"
 #include "user_interface/uiHotspot.h"
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
+#include "hardware/radioHardwareInterface.h"
+#endif
 
 #define MMDVM_HEADER_LENGTH 4
 #define concat(a, b) a " GitID #" b ""
@@ -92,7 +95,7 @@ static bool hasRXOverflow(void);
 extern LinkItem_t *LinkHead;
 
 static const uint8_t PROTOCOL_VERSION = 1;
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 static const char HARDWARE[] = concat(HOTSPOT_VERSION_STRING, XSTRINGIFY(GITVERSION));
 #else
 static const char HARDWARE[] = concat(HOTSPOT_VERSION_STRING, GITVERSION);
@@ -249,9 +252,9 @@ uint32_t hotspotFreqRx = 0;
 uint32_t hotspotFreqTx = 0;
 char hotspotMmdvmQSOInfoIP[22] = {0}; // use 6x8 font; 21 char long
 DMRLC_t hotspotRxedDMR_LC; // used to stored LC info from RXed frames
-int hotspotSavedPowerLevel = -1;// no power level saved yet
+uint8_t hotspotSavedPowerLevel = POWER_UNSET;// no power level saved yet
 bool hotspotMmdvmHostIsConnected = false;
-int hotspotPowerLevel = 0;// no power level saved yet
+uint8_t hotspotPowerLevel = 0;// no power level saved yet
 volatile MMDVM_STATE hotspotModemState = STATE_IDLE;
 
 static volatile MMDVMHOST_RX_STATE MMDVMHostRxState;
@@ -1261,7 +1264,7 @@ static void getVersion(void)
 			"MD-UV380"
 #elif defined(PLATFORM_MD380)
 			"MD-380"
-#elif defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#elif defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 			"DM-1701"
 #else
 			"Unknown"
@@ -1811,8 +1814,8 @@ static void swapWithFakeTA(uint8_t *lc)
 
 static void setRSSIToFrame(uint8_t *frameData)
 {
-	frameData[DMR_FRAME_LENGTH_BYTES + MMDVM_HEADER_LENGTH]     = (trxRxSignal >> 8) & 0xFF;
-	frameData[DMR_FRAME_LENGTH_BYTES + MMDVM_HEADER_LENGTH + 1] = (trxRxSignal >> 0) & 0xFF;
+	frameData[DMR_FRAME_LENGTH_BYTES + MMDVM_HEADER_LENGTH]     = 0;
+	frameData[DMR_FRAME_LENGTH_BYTES + MMDVM_HEADER_LENGTH + 1] = radioDevices[RADIO_DEVICE_PRIMARY].trxRxSignal;
 }
 
 static bool hotspotSendVoiceFrame(volatile const uint8_t *receivedDMRDataAndAudio)

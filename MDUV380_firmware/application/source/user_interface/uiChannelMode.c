@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -32,7 +32,9 @@
 #include "user_interface/uiLocalisation.h"
 #include "functions/voicePrompts.h"
 #include "functions/rxPowerSaving.h"
-
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
+#include "hardware/radioHardwareInterface.h"
+#endif
 
 #if defined(HAS_COLOURS)
 #define NAME_BUFFER_LEN   25
@@ -312,7 +314,7 @@ menuStatus_t uiChannelMode(uiEvent_t *ev, bool isFirstRun)
 					m = ev->time;
 				}
 			}
-#if ! (defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017))
+#if ! (defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017))
 			if (uiDataGlobal.Scan.active == true)
 			{
 				scanning();
@@ -327,7 +329,7 @@ menuStatus_t uiChannelMode(uiEvent_t *ev, bool isFirstRun)
 			}
 		}
 
-#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 		if (uiDataGlobal.Scan.active == true)
 		{
 			scanning();
@@ -347,6 +349,27 @@ uint16_t byteSwap16(uint16_t in)
 	return ((in & 0xff << 8) | (in >> 8));
 }
 #endif
+
+static void hidesChannelDetails(void)
+{
+	if (uiDataGlobal.displayChannelSettings == true)
+	{
+		uiDataGlobal.displayChannelSettings = false;
+		uiDataGlobal.displayQSOState = uiDataGlobal.displayQSOStatePrev;
+
+		// Maybe QSO State has been overridden, double check if we could now
+		// display QSO Data
+		if (uiDataGlobal.displayQSOState == QSO_DISPLAY_DEFAULT_SCREEN)
+		{
+			if (isQSODataAvailableForCurrentTalker())
+			{
+				uiDataGlobal.displayQSOState = QSO_DISPLAY_CALLER_DATA;
+			}
+		}
+
+		uiChannelModeUpdateScreen(0);
+	}
+}
 
 static bool canCurrentZoneBeScanned(int *availableChannels)
 {
@@ -483,11 +506,11 @@ static void scanApplyNextChannel(void)
 		int dwellTime;
 		if(uiDataGlobal.Scan.stepTimeMilliseconds > 150)				// if >150ms use DMR Slow mode
 		{
-			dwellTime = ((trxDMRModeRx == DMR_MODE_DMO) ? SCAN_DMR_SIMPLEX_SLOW_MIN_DWELL_TIME : SCAN_DMR_DUPLEX_SLOW_MIN_DWELL_TIME);
+			dwellTime = ((currentRadioDevice->trxDMRModeRx == DMR_MODE_DMO) ? SCAN_DMR_SIMPLEX_SLOW_MIN_DWELL_TIME : SCAN_DMR_DUPLEX_SLOW_MIN_DWELL_TIME);
 		}
 		else
 		{
-			dwellTime = ((trxDMRModeRx == DMR_MODE_DMO) ? SCAN_DMR_SIMPLEX_FAST_MIN_DWELL_TIME : SCAN_DMR_DUPLEX_FAST_MIN_DWELL_TIME);
+			dwellTime = ((currentRadioDevice->trxDMRModeRx == DMR_MODE_DMO) ? SCAN_DMR_SIMPLEX_FAST_MIN_DWELL_TIME : (SCAN_DMR_DUPLEX_FAST_MIN_DWELL_TIME + SCAN_DMR_DUPLEX_FAST_EXTRA_DWELL_TIME));
 		}
 
 		uiDataGlobal.Scan.dwellTime = ((uiDataGlobal.Scan.stepTimeMilliseconds < dwellTime) ? dwellTime : uiDataGlobal.Scan.stepTimeMilliseconds);
@@ -539,7 +562,7 @@ void uiChannelModeLoadChannelData(bool useChannelDataInMemory, bool loadVoicePro
 
 #if defined(PLATFORM_MD9600)
 	// This could happen if a MK22 codeplug contains out of band channel(s) (like 220MHz) on an PLATFORM_MD9600.
-	if ((trxGetBandFromFrequency(currentChannelData->rxFreq) == -1) || (trxGetBandFromFrequency(currentChannelData->txFreq) == -1))
+	if ((trxGetBandFromFrequency(currentChannelData->rxFreq) == FREQUENCY_OUT_OF_BAND) || (trxGetBandFromFrequency(currentChannelData->txFreq) == FREQUENCY_OUT_OF_BAND))
 	{
 		// Flag it as out of band channel
 		if (codeplugChannelGetFlag(currentChannelData, CHANNEL_FLAG_OUT_OF_BAND) == 0)
@@ -547,7 +570,7 @@ void uiChannelModeLoadChannelData(bool useChannelDataInMemory, bool loadVoicePro
 			codeplugChannelSetFlag(currentChannelData, CHANNEL_FLAG_OUT_OF_BAND, 1);
 		}
 
-		trxSetFrequency(OUT_OF_BAND_FALLBACK_FREQUENCY, OUT_OF_BAND_FALLBACK_FREQUENCY, DMR_MODE_AUTO);
+		trxSetFrequency(OUT_OF_BAND_FALLBACK_FREQUENCY, OUT_OF_BAND_FALLBACK_FREQUENCY, (((currentChannelData->chMode == RADIO_MODE_DIGITAL) && (uiDataGlobal.reverseRepeaterChannel || codeplugChannelGetFlag(currentChannelData, CHANNEL_FLAG_FORCE_DMO))) ? DMR_MODE_DMO : DMR_MODE_AUTO));
 	}
 	else
 #endif
@@ -564,7 +587,7 @@ void uiChannelModeLoadChannelData(bool useChannelDataInMemory, bool loadVoicePro
 #endif
 
 		// If reverseRepeater mode is enabled (and mode is DIGITAL), force to DMR Active mode.
-		trxSetFrequency(rxFreq, txFreq, (((trxGetMode() == RADIO_MODE_DIGITAL) && uiDataGlobal.reverseRepeaterChannel) ? DMR_MODE_DMO : DMR_MODE_AUTO));
+		trxSetFrequency(rxFreq, txFreq, (((currentChannelData->chMode == RADIO_MODE_DIGITAL) && (uiDataGlobal.reverseRepeaterChannel || codeplugChannelGetFlag(currentChannelData, CHANNEL_FLAG_FORCE_DMO))) ? DMR_MODE_DMO : DMR_MODE_AUTO));
 	}
 
 	trxSetModeAndBandwidth(currentChannelData->chMode, (codeplugChannelGetFlag(currentChannelData, CHANNEL_FLAG_BW_25K) != 0));
@@ -577,7 +600,7 @@ void uiChannelModeLoadChannelData(bool useChannelDataInMemory, bool loadVoicePro
 			currentChannelData->txTone = CODEPLUG_CSS_TONE_NONE;
 			codeplugChannelSetFlag(currentChannelData, CHANNEL_FLAG_VOX, 0);
 		}
-		trxSetRxCSS(currentChannelData->rxTone);
+		trxSetRxCSS(RADIO_DEVICE_PRIMARY, currentChannelData->rxTone);
 	}
 	else
 	{
@@ -901,7 +924,7 @@ static void handleEvent(uiEvent_t *ev)
 		//    - MK22: UP without Shift (allows scan to be manually continued)
 		// or SK2 on its own (allows Backlight to be triggered)
 		if ((
-#if defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 				((ev->keys.key == KEY_FRONT_UP) || (ev->keys.key == KEY_ROTARY_INCREMENT))
 #elif defined(PLATFORM_MD9600)
 				((ev->keys.key == KEY_UP) || (ev->keys.key == KEY_RIGHT))
@@ -990,7 +1013,7 @@ static void handleEvent(uiEvent_t *ev)
 		// Display channel settings (RX/TX/etc) while SK1 is pressed
 		if ((uiDataGlobal.displayChannelSettings == false) && (monitorModeData.isEnabled == false) && BUTTONCHECK_DOWN(ev, BUTTON_SK1))
 		{
-			if (uiDataGlobal.Scan.active == false)
+			if ((uiDataGlobal.Scan.active == false) || (uiDataGlobal.Scan.active && (uiDataGlobal.Scan.state == SCAN_STATE_PAUSED)))
 			{
 				int prevQSODisp = uiDataGlobal.displayQSOStatePrev;
 				uiDataGlobal.displayChannelSettings = true;
@@ -1003,20 +1026,7 @@ static void handleEvent(uiEvent_t *ev)
 		}
 		else if ((uiDataGlobal.displayChannelSettings == true) && (BUTTONCHECK_DOWN(ev, BUTTON_SK1) == 0))
 		{
-			uiDataGlobal.displayChannelSettings = false;
-			uiDataGlobal.displayQSOState = uiDataGlobal.displayQSOStatePrev;
-
-			// Maybe QSO State has been overridden, double check if we could now
-			// display QSO Data
-			if (uiDataGlobal.displayQSOState == QSO_DISPLAY_DEFAULT_SCREEN)
-			{
-				if (isQSODataAvailableForCurrentTalker())
-				{
-					uiDataGlobal.displayQSOState = QSO_DISPLAY_CALLER_DATA;
-				}
-			}
-
-			uiChannelModeUpdateScreen(0);
+			hidesChannelDetails();
 			return;
 		}
 
@@ -1198,7 +1208,7 @@ static void handleEvent(uiEvent_t *ev)
 		)
 		{
 			// Long press allows the 5W+ power setting to be selected immediately
-#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380)
 			if (increasePowerLevel(true))
 			{
 				uiUtilityRedrawHeaderOnly(false, false);
@@ -1263,7 +1273,7 @@ static void handleEvent(uiEvent_t *ev)
 					{
 						if(currentChannelData->sql == 0)			//If we were using default squelch level
 						{
-							currentChannelData->sql = nonVolatileSettings.squelchDefaults[trxCurrentBand[TRX_RX_FREQ_BAND]];			//start the adjustment from that point.
+							currentChannelData->sql = nonVolatileSettings.squelchDefaults[currentRadioDevice->trxCurrentBand[TRX_RX_FREQ_BAND]];			//start the adjustment from that point.
 						}
 
 						if (currentChannelData->sql < CODEPLUG_MAX_VARIABLE_SQUELCH)
@@ -1335,7 +1345,7 @@ static void handleEvent(uiEvent_t *ev)
 				{
 					if(currentChannelData->sql == 0)			//If we were using default squelch level
 					{
-						currentChannelData->sql = nonVolatileSettings.squelchDefaults[trxCurrentBand[TRX_RX_FREQ_BAND]];			//start the adjustment from that point.
+						currentChannelData->sql = nonVolatileSettings.squelchDefaults[currentRadioDevice->trxCurrentBand[TRX_RX_FREQ_BAND]];			//start the adjustment from that point.
 					}
 
 					if (currentChannelData->sql > CODEPLUG_MIN_VARIABLE_SQUELCH)
@@ -1368,7 +1378,7 @@ static void handleEvent(uiEvent_t *ev)
 				{
 					currentChannelData->chMode = RADIO_MODE_ANALOG;
 					trxSetModeAndBandwidth(currentChannelData->chMode, (codeplugChannelGetFlag(currentChannelData, CHANNEL_FLAG_BW_25K) != 0));
-					trxSetRxCSS(currentChannelData->rxTone);
+					trxSetRxCSS(RADIO_DEVICE_PRIMARY, currentChannelData->rxTone);
 				}
 
 				announceItem(PROMPT_SEQUENCE_MODE, PROMPT_THRESHOLD_1);
@@ -1390,7 +1400,7 @@ static void handleEvent(uiEvent_t *ev)
 
 					disableAudioAmp(AUDIO_AMP_MODE_RF);
 					lastHeardClearLastID();
-					uiDataGlobal.displayQSOState = QSO_DISPLAY_DEFAULT_SCREEN;
+					uiDataGlobal.displayQSOState = uiDataGlobal.displayQSOStatePrev;
 					uiChannelModeUpdateScreen(0);
 
 					if (trxGetDMRTimeSlot() == 0)
@@ -1412,6 +1422,7 @@ static void handleEvent(uiEvent_t *ev)
 					trxSetModeAndBandwidth(RADIO_MODE_ANALOG, (bw25k != 0));
 					soundSetMelody(MELODY_NACK_BEEP);
 					headerRowIsDirty = true;
+					uiDataGlobal.displayQSOState = uiDataGlobal.displayQSOStatePrev;
 					uiChannelModeUpdateScreen(0);
 				}
 			}
@@ -1449,7 +1460,7 @@ static void handleEvent(uiEvent_t *ev)
 			uint32_t txFreq = (uiDataGlobal.reverseRepeaterChannel ? currentChannelData->rxFreq : currentChannelData->txFreq);
 
 			// If reverseRepeater mode is enabled (and mode is DIGITAL), force to DMR Active mode.
-			trxSetFrequency(rxFreq, txFreq, (((trxGetMode() == RADIO_MODE_DIGITAL) && uiDataGlobal.reverseRepeaterChannel) ? DMR_MODE_DMO : DMR_MODE_AUTO));
+			trxSetFrequency(rxFreq, txFreq, (((currentChannelData->chMode == RADIO_MODE_DIGITAL) && (uiDataGlobal.reverseRepeaterChannel || codeplugChannelGetFlag(currentChannelData, CHANNEL_FLAG_FORCE_DMO))) ? DMR_MODE_DMO : DMR_MODE_AUTO));
 
 			announceItem(PROMPT_SEQUENCE_CHANNEL_NAME_AND_CONTACT_OR_VFO_FREQ_AND_MODE, PROMPT_THRESHOLD_NEVER_PLAY_IMMEDIATELY);
 			uiDataGlobal.displayQSOState = QSO_DISPLAY_DEFAULT_SCREEN;
@@ -1457,9 +1468,9 @@ static void handleEvent(uiEvent_t *ev)
 			return;
 		}
 		else if (
-#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 				KEYCHECK_SHORTUP(ev->keys, KEY_ROTARY_DECREMENT)
-#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 				|| KEYCHECK_SHORTUP(ev->keys, KEY_FRONT_DOWN)
 #endif
 #else
@@ -1472,9 +1483,9 @@ static void handleEvent(uiEvent_t *ev)
 			return;
 		}
 		else if (
-#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 				KEYCHECK_SHORTUP(ev->keys, KEY_ROTARY_INCREMENT)
-#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 				|| KEYCHECK_SHORTUP(ev->keys, KEY_FRONT_UP)
 #endif
 #else
@@ -1487,7 +1498,7 @@ static void handleEvent(uiEvent_t *ev)
 			return;
 		}
 		else if (KEYCHECK_LONGDOWN(ev->keys,
-#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 				KEY_FRONT_UP
 #else
 				KEY_UP
@@ -1497,7 +1508,7 @@ static void handleEvent(uiEvent_t *ev)
 			if (uiDataGlobal.Scan.active == false)
 			{
 				scanStart(true);
-#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 				return;
 #endif
 			}
@@ -1866,7 +1877,7 @@ static void updateQuickMenuScreen(bool isFirstRun)
 	displayClearBuf();
 	bool settingOption = uiQuickKeysShowChoices(buf, SCREEN_LINE_BUFFER_SIZE, currentLanguage->quick_menu);
 
-	for(int i = 1 - ((MENU_MAX_DISPLAYED_ENTRIES - 1) / 2) - 1; i <= (MENU_MAX_DISPLAYED_ENTRIES - ((MENU_MAX_DISPLAYED_ENTRIES - 1) / 2) - 1); i++)
+	for (int i = MENU_START_ITERATION_VALUE; i <= MENU_END_ITERATION_VALUE; i++)
 	{
 		if ((settingOption == false) || (i == 0))
 		{
@@ -2198,7 +2209,7 @@ static void handleQuickMenuEvent(uiEvent_t *ev)
 	if ((ev->events & (KEY_EVENT | FUNCTION_EVENT)) && (menuDataGlobal.menuOptionsSetQuickkey == 0))
 	{
 		if (KEYCHECK_PRESS(ev->keys, KEY_RIGHT)
-#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 				|| KEYCHECK_SHORTUP(ev->keys, KEY_ROTARY_INCREMENT)
 #endif
 				|| (QUICKKEY_FUNCTIONID(ev->function) == FUNC_RIGHT))
@@ -2262,7 +2273,7 @@ static void handleQuickMenuEvent(uiEvent_t *ev)
 			}
 		}
 		else if (KEYCHECK_PRESS(ev->keys, KEY_LEFT)
-#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 				|| KEYCHECK_SHORTUP(ev->keys, KEY_ROTARY_DECREMENT)
 #endif
 				|| (QUICKKEY_FUNCTIONID(ev->function) == FUNC_LEFT))
@@ -2385,11 +2396,11 @@ static void scanStart(bool longPressBeep)
 		int dwellTime;
 		if(uiDataGlobal.Scan.stepTimeMilliseconds > 150)				// if >150ms use DMR Slow mode
 		{
-			dwellTime = ((trxDMRModeRx == DMR_MODE_DMO) ? SCAN_DMR_SIMPLEX_SLOW_MIN_DWELL_TIME : SCAN_DMR_DUPLEX_SLOW_MIN_DWELL_TIME);
+			dwellTime = ((currentRadioDevice->trxDMRModeRx == DMR_MODE_DMO) ? SCAN_DMR_SIMPLEX_SLOW_MIN_DWELL_TIME : SCAN_DMR_DUPLEX_SLOW_MIN_DWELL_TIME);
 		}
 		else
 		{
-			dwellTime = ((trxDMRModeRx == DMR_MODE_DMO) ? SCAN_DMR_SIMPLEX_FAST_MIN_DWELL_TIME : SCAN_DMR_DUPLEX_FAST_MIN_DWELL_TIME);
+			dwellTime = ((currentRadioDevice->trxDMRModeRx == DMR_MODE_DMO) ? SCAN_DMR_SIMPLEX_FAST_MIN_DWELL_TIME : (SCAN_DMR_DUPLEX_FAST_MIN_DWELL_TIME + SCAN_DMR_DUPLEX_FAST_EXTRA_DWELL_TIME));
 		}
 
 		uiDataGlobal.Scan.dwellTime = ((uiDataGlobal.Scan.stepTimeMilliseconds < dwellTime) ? dwellTime : uiDataGlobal.Scan.stepTimeMilliseconds);
@@ -2460,8 +2471,8 @@ static void scanning(void)
 				if (((nonVolatileSettings.dmrCcTsFilter & DMR_TS_FILTER_PATTERN)
 						&&
 						((slotState != DMR_STATE_IDLE) && ((dmrMonitorCapturedTS != -1) &&
-								(((trxDMRModeRx == DMR_MODE_DMO) && (dmrMonitorCapturedTS == trxGetDMRTimeSlot())) ||
-										(trxDMRModeRx == DMR_MODE_RMO)))))
+								(((currentRadioDevice->trxDMRModeRx == DMR_MODE_DMO) && (dmrMonitorCapturedTS == trxGetDMRTimeSlot())) ||
+										(currentRadioDevice->trxDMRModeRx == DMR_MODE_RMO)))))
 						||
 						// As soon as the HRC6000 get sync, timeCode != -1 or TS ISR is running
 						HRC6000HasGotSync())
@@ -2484,7 +2495,7 @@ static void scanning(void)
 			}
 			else //DMR Scan fast mode signal detect
 			{
-				if(trxCarrierDetected())
+				if(trxCarrierDetected(RADIO_DEVICE_PRIMARY))
 				{
 #if ! defined(PLATFORM_GD77S) // GD77S handle voice prompts on its own
 					// Reload the channel as voice prompts aren't set while scanning
@@ -2513,7 +2524,7 @@ static void scanning(void)
 		}
 		else //Signal Detect for FM channels
 		{
-			if(trxCarrierDetected())
+			if(trxCarrierDetected(RADIO_DEVICE_PRIMARY))
 			{
 #if ! defined(PLATFORM_GD77S) // GD77S handle voice prompts on its own
 				// Reload the channel as voice prompts aren't set while scanning
@@ -2582,6 +2593,8 @@ static void scanning(void)
 	{
 		if (scanNextChannelReady)
 		{
+			hidesChannelDetails();
+
 			scanApplyNextChannel();
 
 			// When less than 2 channel remain in the Zone
@@ -3316,7 +3329,7 @@ static void handleEventForGD77S(uiEvent_t *ev)
 					{
 						if(currentChannelData->sql == 0)			//If we were using default squelch level
 						{
-							currentChannelData->sql = nonVolatileSettings.squelchDefaults[trxCurrentBand[TRX_RX_FREQ_BAND]];			//start the adjustment from that point.
+							currentChannelData->sql = nonVolatileSettings.squelchDefaults[currentRadioDevice->trxCurrentBand[TRX_RX_FREQ_BAND]];			//start the adjustment from that point.
 						}
 
 						if (currentChannelData->sql < CODEPLUG_MAX_VARIABLE_SQUELCH)
@@ -3505,7 +3518,7 @@ static void handleEventForGD77S(uiEvent_t *ev)
 					{
 						if(currentChannelData->sql == 0)			//If we were using default squelch level
 						{
-							currentChannelData->sql = nonVolatileSettings.squelchDefaults[trxCurrentBand[TRX_RX_FREQ_BAND]];			//start the adjustment from that point.
+							currentChannelData->sql = nonVolatileSettings.squelchDefaults[currentRadioDevice->trxCurrentBand[TRX_RX_FREQ_BAND]];			//start the adjustment from that point.
 						}
 
 						if (currentChannelData->sql > CODEPLUG_MIN_VARIABLE_SQUELCH)

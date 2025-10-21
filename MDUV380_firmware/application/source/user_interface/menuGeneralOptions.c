@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -33,7 +33,7 @@
 #include "interfaces/wdog.h"
 #include "utils.h"
 #include "functions/rxPowerSaving.h"
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 #include "interfaces/batteryAndPowerManagement.h"
 #endif
 #if defined(HAS_GPS)
@@ -54,13 +54,16 @@ enum
 #if !defined(PLATFORM_GD77S)
 	GENERAL_OPTIONS_MENU_KEYPAD_AUTOLOCK,
 #endif
+#if defined(PLATFORM_MD2017)
+	GENERAL_OPTIONS_TRACKBALL_ENABLED,
+#endif
 	GENERAL_OPTIONS_MENU_HOTSPOT_TYPE,
 	GENERAL_OPTIONS_MENU_TEMPERATURE_CALIBRATON,
 	GENERAL_OPTIONS_MENU_BATTERY_CALIBRATON,
 #if !defined(PLATFORM_MD9600) && !defined(PLATFORM_MD380)
 	GENERAL_OPTIONS_MENU_ECO_LEVEL,
 #endif
-#if ! (defined(PLATFORM_RD5R) || defined(PLATFORM_GD77S) || defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017))
+#if ! (defined(PLATFORM_RD5R) || defined(PLATFORM_GD77S) || defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017))
 	GENERAL_OPTIONS_MENU_POWEROFF_SUSPEND,
 #endif
 #if ! (defined(PLATFORM_MD9600) || defined(PLATFORM_GD77S))
@@ -134,7 +137,7 @@ static void updateScreen(bool isFirstRun)
 	displayClearBuf();
 	bool settingOption = uiQuickKeysShowChoices(buf, SCREEN_LINE_BUFFER_SIZE, currentLanguage->general_options);
 
-	for(int i = 1 - ((MENU_MAX_DISPLAYED_ENTRIES - 1) / 2) - 1; i <= (MENU_MAX_DISPLAYED_ENTRIES - ((MENU_MAX_DISPLAYED_ENTRIES - 1) / 2) - 1); i++)
+	for (int i = MENU_START_ITERATION_VALUE; i <= MENU_END_ITERATION_VALUE; i++)
 	{
 		if ((settingOption == false) || (i == 0))
 		{
@@ -195,6 +198,13 @@ static void updateScreen(bool isFirstRun)
 					}
 					break;
 #endif
+#if defined(PLATFORM_MD2017)
+				case GENERAL_OPTIONS_TRACKBALL_ENABLED:
+					leftSide = currentLanguage->trackball;
+					rightSideConst = (settingsIsOptionBitSet(BIT_TRACKBALL_ENABLED) ?
+							(settingsIsOptionBitSet(BIT_TRACKBALL_FAST_MOTION) ? currentLanguage->high : currentLanguage->low) : currentLanguage->off);
+					break;
+#endif
 				case GENERAL_OPTIONS_MENU_HOTSPOT_TYPE:
 					leftSide = currentLanguage->hotspot_mode;
 #if defined(PLATFORM_RD5R)
@@ -242,7 +252,7 @@ static void updateScreen(bool isFirstRun)
 					snprintf(rightSideVar, SCREEN_LINE_BUFFER_SIZE, "%d", (nonVolatileSettings.ecoLevel));
 					break;
 #endif
-#if ! (defined(PLATFORM_RD5R) || defined(PLATFORM_GD77S) || defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017))
+#if ! (defined(PLATFORM_RD5R) || defined(PLATFORM_GD77S) || defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017))
 				case GENERAL_OPTIONS_MENU_POWEROFF_SUSPEND:
 					leftSide = currentLanguage->suspend;
 					rightSideConst = (settingsIsOptionBitSet(BIT_POWEROFF_SUSPEND) ? currentLanguage->on : currentLanguage->off);
@@ -472,7 +482,7 @@ static void handleEvent(uiEvent_t *ev)
 	if ((ev->events & (KEY_EVENT | FUNCTION_EVENT)) && (menuDataGlobal.menuOptionsSetQuickkey == 0))
 	{
 		if (KEYCHECK_PRESS(ev->keys, KEY_RIGHT)
-#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 				|| KEYCHECK_SHORTUP(ev->keys, KEY_ROTARY_INCREMENT)
 #endif
 				|| (QUICKKEY_FUNCTIONID(ev->function) == FUNC_RIGHT))
@@ -498,6 +508,22 @@ static void handleEvent(uiEvent_t *ev)
 					if (nonVolatileSettings.autolockTimer < 30)
 					{
 						settingsIncrement(nonVolatileSettings.autolockTimer, 1);
+					}
+					break;
+#endif
+#if defined(PLATFORM_MD2017)
+				case GENERAL_OPTIONS_TRACKBALL_ENABLED:
+					if (settingsIsOptionBitSet(BIT_TRACKBALL_ENABLED) == false)
+					{
+						settingsSetOptionBit(BIT_TRACKBALL_ENABLED, true);
+					}
+					else
+					{
+						if (settingsIsOptionBitSet(BIT_TRACKBALL_FAST_MOTION) == false)
+						{
+							settingsSetOptionBit(BIT_TRACKBALL_FAST_MOTION, true);
+							trackballSetMotion(true);
+						}
 					}
 					break;
 #endif
@@ -532,7 +558,7 @@ static void handleEvent(uiEvent_t *ev)
 					}
 					break;
 #endif
-#if ! (defined(PLATFORM_RD5R) || defined(PLATFORM_GD77S) || defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017))
+#if ! (defined(PLATFORM_RD5R) || defined(PLATFORM_GD77S) || defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017))
 				case GENERAL_OPTIONS_MENU_POWEROFF_SUSPEND:
 					if (settingsIsOptionBitSet(BIT_POWEROFF_SUSPEND) == false)
 					{
@@ -583,7 +609,7 @@ static void handleEvent(uiEvent_t *ev)
 			}
 		}
 		else if (KEYCHECK_PRESS(ev->keys, KEY_LEFT)
-#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 				|| KEYCHECK_SHORTUP(ev->keys, KEY_ROTARY_DECREMENT)
 #endif
 				|| (QUICKKEY_FUNCTIONID(ev->function) == FUNC_LEFT))
@@ -609,6 +635,22 @@ static void handleEvent(uiEvent_t *ev)
 					if (nonVolatileSettings.autolockTimer >= 1)
 					{
 						settingsDecrement(nonVolatileSettings.autolockTimer, 1);
+					}
+					break;
+#endif
+#if defined(PLATFORM_MD2017)
+				case GENERAL_OPTIONS_TRACKBALL_ENABLED:
+					if (settingsIsOptionBitSet(BIT_TRACKBALL_ENABLED))
+					{
+						if (settingsIsOptionBitSet(BIT_TRACKBALL_FAST_MOTION))
+						{
+							settingsSetOptionBit(BIT_TRACKBALL_FAST_MOTION, false);
+							trackballSetMotion(false);
+						}
+						else
+						{
+							settingsSetOptionBit(BIT_TRACKBALL_ENABLED, false);
+						}
 					}
 					break;
 #endif
@@ -643,7 +685,7 @@ static void handleEvent(uiEvent_t *ev)
 					}
 					break;
 #endif
-#if ! (defined(PLATFORM_RD5R) || defined(PLATFORM_GD77S) || defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017))
+#if ! (defined(PLATFORM_RD5R) || defined(PLATFORM_GD77S) || defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017))
 				case GENERAL_OPTIONS_MENU_POWEROFF_SUSPEND:
 					if (settingsIsOptionBitSet(BIT_POWEROFF_SUSPEND))
 					{
@@ -763,6 +805,9 @@ static void exitCallback(void *data)
 		memcpy(&nonVolatileSettings, &originalNonVolatileSettings, sizeof(settingsStruct_t));
 		settingsSaveIfNeeded(true);
 		trxUpdate_PA_DAC_Drive();
+#if defined(PLATFORM_MD2017)
+		trackballSetMotion(settingsIsOptionBitSet(BIT_TRACKBALL_FAST_MOTION));
+#endif
 
 		resetOriginalSettingsData();
 	}

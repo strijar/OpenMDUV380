@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -1106,9 +1106,9 @@ void displayDrawChoice(ucChoice_t choice, bool clearRegion)
 #if defined(PLATFORM_RD5R)
 	const uint8_t TEXT_Y = 40;
 	const uint8_t FILLRECT_Y = 32;
-#elif defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
-	const uint8_t TEXT_Y = 113;
-	const uint8_t FILLRECT_Y = 112;
+#elif defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
+	const uint8_t TEXT_Y = 113 - DISPLAY_Y_OFFSET;
+	const uint8_t FILLRECT_Y = 112 - DISPLAY_Y_OFFSET;
 #else
 	const uint8_t TEXT_Y = 49;
 	const uint8_t FILLRECT_Y = 48;
@@ -1251,7 +1251,11 @@ void displayRenderRows(int16_t startRow, int16_t endRow)
 
 	// Set start and end rows of the transfer
 	{
+#if defined(PLATFORM_VARIANT_DM1701)
+		uint8_t opts[] = { 0x00, startRow + DISPLAY_Y_OFFSET, 0x00, endRow + DISPLAY_Y_OFFSET };
+#else
 		uint8_t opts[] = { 0x00, startRow, 0x00, endRow };
+#endif
 		displayWriteCmds(HX8583_CMD_RASET, sizeof(opts), opts);
 	}
 

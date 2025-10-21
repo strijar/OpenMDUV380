@@ -321,7 +321,7 @@ static void MX_ADC1_Init(void)
   hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_RISING;
   hadc1.Init.ExternalTrigConv = ADC_EXTERNALTRIGCONV_T3_TRGO;
   hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-  hadc1.Init.NbrOfConversion = 4;
+  hadc1.Init.NbrOfConversion = NUM_ADC_CHANNELS;
   hadc1.Init.DMAContinuousRequests = ENABLE;
   hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
   if (HAL_ADC_Init(&hadc1) != HAL_OK)
@@ -947,6 +947,8 @@ static void MX_DMA_Init(void)
 static void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
+/* USER CODE BEGIN MX_GPIO_Init_1 */
+/* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOE_CLK_ENABLE();
@@ -967,13 +969,19 @@ static void MX_GPIO_Init(void)
                           |MICPWR_SW_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, PA_EN_2_Pin|PA_EN_1_Pin|PA_SEL_SW_Pin|BEEP_PWM_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOC, PA_EN_2_Pin|PA_EN_1_Pin|BEEP_PWM_Pin, GPIO_PIN_RESET);
+
+  // Handles MD-UV380 and MD-UV390Plus 10W PA_SEL_SW Pin swapping
+  HAL_GPIO_WritePin(PA_SEL_SW_GPIO_Port, PA_SEL_SW_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, V_SPI_CS_Pin|SPK_MUTE_Pin|AUDIO_AMP_EN_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOD, LCD_BKLIGHT_Pin|KEYPAD_ROW1_Pin|KEYPAD_ROW2_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOD, KEYPAD_ROW1_Pin|KEYPAD_ROW2_Pin, GPIO_PIN_RESET);
+
+  // Handles MD-UV380 and MD-UV390Plus 10W Backlight Pin swapping
+  HAL_GPIO_WritePin(LCD_BKLIGHT_GPIO_Port, LCD_BKLIGHT_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOD, RX_AUDIO_MUX_Pin|SPI_Flash_CS_Pin, GPIO_PIN_SET);
@@ -1012,11 +1020,15 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pins : PA_EN_2_Pin PA_EN_1_Pin PA_SEL_SW_Pin BEEP_PWM_Pin */
-  GPIO_InitStruct.Pin = PA_EN_2_Pin|PA_EN_1_Pin|PA_SEL_SW_Pin|BEEP_PWM_Pin;
+  GPIO_InitStruct.Pin = PA_EN_2_Pin|PA_EN_1_Pin|BEEP_PWM_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+  // ...
+  // Handles MD-UV380 and MD-UV390Plus 10W PA_SEL_SW Pin swapping
+  GPIO_InitStruct.Pin = PA_SEL_SW_Pin;
+  HAL_GPIO_Init(PA_SEL_SW_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : LCD_D4_Pin LCD_D5_Pin LCD_D6_Pin LCD_D7_Pin */
   GPIO_InitStruct.Pin = LCD_D4_Pin|LCD_D5_Pin|LCD_D6_Pin|LCD_D7_Pin;
@@ -1045,12 +1057,16 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pins : LCD_BKLIGHT_Pin RX_AUDIO_MUX_Pin KEYPAD_ROW1_Pin KEYPAD_ROW2_Pin
                            SPI_Flash_CS_Pin */
-  GPIO_InitStruct.Pin = LCD_BKLIGHT_Pin|RX_AUDIO_MUX_Pin|KEYPAD_ROW1_Pin|KEYPAD_ROW2_Pin
+  GPIO_InitStruct.Pin = RX_AUDIO_MUX_Pin|KEYPAD_ROW1_Pin|KEYPAD_ROW2_Pin
                           |SPI_Flash_CS_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+  // ...
+  // Handles MD-UV380 and MD-UV390Plus 10W Backlight Pin swapping
+  GPIO_InitStruct.Pin = LCD_BKLIGHT_Pin;
+  HAL_GPIO_Init(LCD_BKLIGHT_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : LCD_RS_Pin LCD_RST_Pin LCD_RD_Pin LCD_WR_Pin
                            LCD_CS_Pin */
@@ -1086,6 +1102,8 @@ static void MX_GPIO_Init(void)
   HAL_NVIC_SetPriority(EXTI15_10_IRQn, 6, 0);
   HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
+/* USER CODE BEGIN MX_GPIO_Init_2 */
+/* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */

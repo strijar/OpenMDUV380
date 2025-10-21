@@ -28,22 +28,15 @@
 #include "interfaces/dac.h"
 
 
-void dac_init(void)
+void dacInit(void)
 {
 
 }
 
-void dac_Out(int channel , uint16_t value)
+void dacOut(int channel , uint16_t value)
 {
-	if(channel==1)
-	{
-	  HAL_DAC_SetValue(&hdac,DAC_CHANNEL_1,DAC_ALIGN_12B_R,(uint32_t) value);
-	  HAL_DAC_Start(&hdac,DAC_CHANNEL_1);
-	}
-	else
-	{
-	  HAL_DAC_SetValue(&hdac,DAC_CHANNEL_2,DAC_ALIGN_12B_R, (uint32_t) value);
-	  HAL_DAC_Start(&hdac,DAC_CHANNEL_2);
-	}
+	uint32_t dacChannel = ((channel == 1) ? DAC_CHANNEL_1 : DAC_CHANNEL_2);
 
+	HAL_DAC_SetValue(&hdac, dacChannel, DAC_ALIGN_12B_R, (uint32_t) value);
+	HAL_DAC_Start(&hdac, dacChannel);
 }

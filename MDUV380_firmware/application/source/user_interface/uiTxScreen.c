@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -70,6 +70,7 @@ menuStatus_t menuTxScreen(uiEvent_t *ev, bool isFirstRun)
 		aprsPTTBeaconTriggered = false;
 		transmitError = false;
 		uiDataGlobal.Scan.active = false;
+		uiDataGlobal.displayChannelSettings = false;
 		isTransmittingTone = false;
 		isTransmittingDTMF = false;
 		isShowingLastHeard = false;
@@ -455,7 +456,7 @@ static void handleEvent(uiEvent_t *ev)
 #endif
 
 				// Need to wrap this in Task Critical to avoid bus contention on the I2C bus.
-				trxSetRxCSS(currentChannelData->rxTone);
+				trxSetRxCSS(RADIO_DEVICE_PRIMARY, currentChannelData->rxTone);
 				trxActivateRx(true);
 				trxIsTransmitting = false;
 
@@ -495,7 +496,7 @@ static void handleEvent(uiEvent_t *ev)
 #endif
 
 				// If there is a signal, lit the Green LED
-				if ((LedRead(LED_GREEN) == 0) && (trxCarrierDetected() || (getAudioAmpStatus() & AUDIO_AMP_MODE_RF)))
+				if ((LedRead(LED_GREEN) == 0) && (trxCarrierDetected(RADIO_DEVICE_PRIMARY) || (getAudioAmpStatus() & AUDIO_AMP_MODE_RF)))
 				{
 					LedWrite(LED_GREEN, 1);
 				}
@@ -552,7 +553,7 @@ static void handleEvent(uiEvent_t *ev)
 #endif
 		}
 #if defined(PLATFORM_MD9600)
-		else if (keyval == 16)					// A/B key
+		else if ((keyval == 16)	&& (isSatelliteScreen == false)) // A/B key
 		{	//send 1750
 			trxSetTone1(1750);
 			soundSetMelody(MELODY_1750);
@@ -561,7 +562,7 @@ static void handleEvent(uiEvent_t *ev)
 #endif
 		else
 		{	// Send DTMF
-			if (keyval != 99)
+			if ((keyval != 99) && (isSatelliteScreen == false))
 			{
 				trxSetDTMF(keyval);
 				isTransmittingDTMF = true;

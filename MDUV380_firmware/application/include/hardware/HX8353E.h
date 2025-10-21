@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -167,7 +167,13 @@ extern uint16_t themeItems[NIGHT + 1][THEME_ITEM_MAX]; // Theme storage
 #define FONT_SIZE_2_HEIGHT                       8
 #define FONT_SIZE_3_HEIGHT                       16
 #define FONT_SIZE_4_HEIGHT                       32
+#if defined(PLATFORM_VARIANT_DM1701)
+#define DISPLAY_Y_OFFSET						 8
+#define DISPLAY_SIZE_Y                          (128 - DISPLAY_Y_OFFSET)
+#else
+#define DISPLAY_Y_OFFSET						 0
 #define DISPLAY_SIZE_Y                          128
+#endif
 #define DISPLAY_SIZE_X                          160
 #define DISPLAY_NUMBER_OF_ROWS  (DISPLAY_SIZE_Y / 8)
 

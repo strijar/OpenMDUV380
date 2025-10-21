@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -133,7 +133,7 @@ static void updateScreen(bool isFirstRun)
 	displayClearBuf();
 	menuDisplayTitle(currentLanguage->theme_chooser);
 
-	for(int i = 1 - ((MENU_MAX_DISPLAYED_ENTRIES - 1) / 2) - 1; i <= (MENU_MAX_DISPLAYED_ENTRIES - ((MENU_MAX_DISPLAYED_ENTRIES - 1) / 2) - 1); i++)
+	for (int i = MENU_START_ITERATION_VALUE; i <= MENU_END_ITERATION_VALUE; i++)
 	{
 		if (menuDataGlobal.numItems <= (i + 1))
 		{
@@ -343,7 +343,7 @@ static void updateBrowerScreen(bool isFirstRun)
 	displayClearBuf();
 	menuDisplayTitle(currentLanguage->theme_options);
 
-	for(int i = 1 - ((MENU_MAX_DISPLAYED_ENTRIES - 1) / 2) - 1; i <= (MENU_MAX_DISPLAYED_ENTRIES - ((MENU_MAX_DISPLAYED_ENTRIES - 1) / 2) - 1); i++)
+	for (int i = MENU_START_ITERATION_VALUE; i <= MENU_END_ITERATION_VALUE; i++)
 	{
 		mNum = menuGetMenuOffset(THEME_ITEM_MAX, i);
 		if (mNum == MENU_OFFSET_BEFORE_FIRST_ENTRY)
@@ -559,7 +559,7 @@ static void updatePickerScreen(bool isFirstRun)
 	displayClearBuf();
 	menuDisplayTitle(themeEntries[currentThemeEntry]);
 
-	for(int i = 1 - ((MENU_MAX_DISPLAYED_ENTRIES - 1) / 2) - 1; i <= (MENU_MAX_DISPLAYED_ENTRIES - ((MENU_MAX_DISPLAYED_ENTRIES - 1) / 2) - 1); i++)
+	for (int i = MENU_START_ITERATION_VALUE; i <= MENU_END_ITERATION_VALUE; i++)
 	{
 		mNum = menuGetMenuOffset(COLOUR_CHANNEL_MAX, i);
 		if (mNum == MENU_OFFSET_BEFORE_FIRST_ENTRY)
@@ -672,7 +672,7 @@ static void handlePickerEvent(uiEvent_t *ev)
 			return;
 		}
 		else if (KEYCHECK_PRESS(ev->keys, (isInverted ? KEY_LEFT : KEY_RIGHT))
-#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 				|| KEYCHECK_SHORTUP(ev->keys, (isInverted ? KEY_ROTARY_DECREMENT : KEY_ROTARY_INCREMENT))
 #endif
 		)
@@ -686,7 +686,7 @@ static void handlePickerEvent(uiEvent_t *ev)
 			}
 		}
 		else if (KEYCHECK_PRESS(ev->keys, (isInverted ? KEY_RIGHT : KEY_LEFT))
-#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 				|| KEYCHECK_SHORTUP(ev->keys, (isInverted ? KEY_ROTARY_INCREMENT : KEY_ROTARY_DECREMENT))
 #endif
 		)

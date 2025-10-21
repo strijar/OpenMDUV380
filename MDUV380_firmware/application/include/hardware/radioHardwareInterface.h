@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2021-2024 Roger Clark, VK3KYY / G4KYF
  *
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions
@@ -29,12 +29,26 @@
 #define _RADIO_HARDWARE_INTERFACE_H_
 #include "main.h"
 
-typedef int32_t status_t;
+
+typedef enum
+{
+	RADIO_DEVICE_PRIMARY   = 0U,
+#if defined(PLATFORM_MD2017)
+	RADIO_DEVICE_SECONDARY = 1U,
+#endif
+	RADIO_DEVICE_MAX
+} RadioDevice_t;
+
+#define FREQUENCY_UNSET        UINT32_MAX
+#define FREQUENCY_OUT_OF_BAND  UINT32_MAX
+#define POWER_UNSET            UINT8_MAX
 
 void radioPowerOn(void);
-void radioPowerOff(bool invalidateFrequency);
+void radioPowerOff(bool invalidateFrequency, bool includeMic);
 void radioInit(void);
 void radioPostinit(void);
+RadioDevice_t radioSetTRxDevice(RadioDevice_t deviceId);
+RadioDevice_t radioGetTRxDeviceId(void);
 void radioSetBandwidth(bool Is25K);
 void radioSetCalibration(void);
 void radioSetIF(int band, bool wide);
@@ -44,16 +58,13 @@ void radioSetTx(uint8_t band);
 void radioSetRx(uint8_t band);
 void radioReadVoxAndMicStrength(void);
 void radioReadRSSIAndNoiseForBand(uint8_t band);
-void SynthTransfer(bool VHF, uint8_t add, uint16_t reg);
-void IFTransfer(bool VHF, uint16_t data1);
-
-void radioRxCSSOn(uint16_t tone);
-void radioRxCSSOff(void);
-void radioRxDCSOn(uint16_t code, bool inverted);
+void radioRxCSSOff(RadioDevice_t deviceId);
+void radioRxCTCSOn(RadioDevice_t deviceId, uint16_t tone);
+void radioRxDCSOn(RadioDevice_t deviceId, uint16_t code, bool inverted);
 void radioTxCSSOff(void);
-void radioTxCSSOn(uint16_t tone);
-void radioTxDCSOn(uint16_t code);
-bool radioCheckCSS(void);
+void radioTxCTCSOn(uint16_t tone);
+void radioTxDCSOn(uint16_t code, bool inverted);
+bool radioCheckCSS(uint16_t tone, CodeplugCSSTypes_t type);
 void radioSetTone1(int tonefreq);
 void radioSetTone2(int tonefreq);
 void radioSetMicGain(uint8_t gain_tx);
@@ -61,7 +72,32 @@ void radioSetMicGainFM(uint8_t gain);
 void radioAudioAmp(bool on);
 void radioSetAudioPath(bool fromFM);
 void radioFastTx(bool tx);
+void radioSetRxLNAForDevice(RadioDevice_t deviceId);
+void radioSelectVoiceChannel(uint8_t channel, uint8_t *voiceGainTx, uint16_t *deviation);
 
-uint32_t dcsGetBitPatternFromCode(uint16_t dcs);
+extern RadioDevice_t currentRadioDeviceId;
+
+
+typedef struct
+{
+	volatile uint32_t trxDMRModeRx;
+	uint32_t currentRxFrequency;
+	uint32_t currentTxFrequency;
+	uint32_t lastSetTxFrequency;
+	uint32_t trxCurrentBand[2];
+	uint32_t trxDMRModeTx;
+	uint32_t currentMode;
+	volatile uint8_t trxRxSignal;
+	volatile uint8_t trxRxNoise;
+	uint8_t txPowerLevel;
+	uint8_t lastSetTxPowerLevel;
+	bool currentBandWidthIs25kHz;
+	bool analogSignalReceived;
+	bool analogTriggeredAudio;
+	bool digitalSignalReceived;
+} TRXDevice_t;
+
+extern TRXDevice_t *currentRadioDevice;
+extern TRXDevice_t radioDevices[RADIO_DEVICE_MAX];
 
 #endif

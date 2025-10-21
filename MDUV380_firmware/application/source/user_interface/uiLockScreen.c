@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -25,11 +25,10 @@
  * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
+#include "user_interface/uiGlobals.h"
 #include "user_interface/menuSystem.h"
 #include "user_interface/uiLocalisation.h"
 #include "user_interface/uiUtilities.h"
-#include "functions/settings.h"
-#include "functions/ticks.h"
 
 enum LOCK_STATE { LOCK_NONE = 0x00, LOCK_KEYPAD = 0x01, LOCK_PTT = 0x02, LOCK_BOTH = 0x03 };
 
@@ -115,7 +114,7 @@ static void redrawScreen(bool update, bool state)
 		}
 		buf[bufferLen - 1] = 0;
 
-#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 		displayPrintCentered(16, buf, FONT_SIZE_3);
 		displayPrintCentered(32, currentLanguage->locked, FONT_SIZE_3);
 		displayPrintCentered(DISPLAY_SIZE_Y - 48, currentLanguage->press_sk2_plus_star, FONT_SIZE_1);
@@ -272,8 +271,17 @@ static void handleEvent(uiEvent_t *ev)
 	}
 	else if ((nonVolatileSettings.audioPromptMode >= AUDIO_PROMPT_MODE_VOICE_THRESHOLD) && voicePromptsIsPlaying() && (ev->keys.key != 0) && (ev->keys.event & KEY_MOD_UP))
 	{
-		// Cancel the voice on any key event (that hides the lock screen earlier)
-		voicePromptsTerminate();
+#if defined(PLATFORM_MD2017)
+		bool trackballEvent = ((ev->keys.event == (KEY_MOD_UP | KEY_MOD_PRESS)) && (
+				((ev->keys.key == KEY_UP) || (ev->keys.key == KEY_DOWN) ||
+						(ev->keys.key == KEY_LEFT) || (ev->keys.key == KEY_RIGHT))));
+
+		if (trackballEvent == false)
+#endif
+		{
+			// Cancel the voice on any key event (that hides the lock screen earlier), except for the trackball on MD-2017
+			voicePromptsTerminate();
+		}
 	}
 }
 

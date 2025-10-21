@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2019      Kai Ludwig, DG4KLU
  * Copyright (C) 2019-2020 Alex, DL4LEX
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *                         Colin Durbridge, G4EML
  *
@@ -107,28 +107,28 @@ static const struct
 				KEYPAD_ROW0_GPIO_Port,
 				KEYPAD_ROW0_Pin,
 				{
-						{ LCD_D0_GPIO_Port, LCD_D0_Pin, KEY_1     },
-						{ LCD_D1_GPIO_Port, LCD_D1_Pin, KEY_2     },
-						{ LCD_D2_GPIO_Port, LCD_D2_Pin, KEY_3     },
-						{ LCD_D3_GPIO_Port, LCD_D3_Pin, KEY_4     },
-						{ LCD_D4_GPIO_Port, LCD_D4_Pin, KEY_5     },
-						{ LCD_D5_GPIO_Port, LCD_D5_Pin, KEY_6     },
-						{ LCD_D6_GPIO_Port, LCD_D6_Pin, KEY_0     },
-						{ LCD_D7_GPIO_Port, LCD_D7_Pin, KEY_STAR  }
+						{ LCD_D0_GPIO_Port, LCD_D0_Pin, KEY_1    },
+						{ LCD_D1_GPIO_Port, LCD_D1_Pin, KEY_2    },
+						{ LCD_D2_GPIO_Port, LCD_D2_Pin, KEY_3    },
+						{ LCD_D3_GPIO_Port, LCD_D3_Pin, KEY_4    },
+						{ LCD_D4_GPIO_Port, LCD_D4_Pin, KEY_5    },
+						{ LCD_D5_GPIO_Port, LCD_D5_Pin, KEY_6    },
+						{ LCD_D6_GPIO_Port, LCD_D6_Pin, KEY_0    },
+						{ LCD_D7_GPIO_Port, LCD_D7_Pin, KEY_STAR }
 				}
 		},
 		{
 				KEYPAD_ROW1_GPIO_Port,
 				KEYPAD_ROW1_Pin,
 				{
-						{ LCD_D0_GPIO_Port, LCD_D0_Pin, KEY_GREEN },
-						{ LCD_D1_GPIO_Port, LCD_D1_Pin, KEY_FRONT_UP    },
-						{ LCD_D2_GPIO_Port, LCD_D2_Pin, KEY_FRONT_DOWN  },
-						{ LCD_D3_GPIO_Port, LCD_D3_Pin, KEY_7     },
-						{ LCD_D4_GPIO_Port, LCD_D4_Pin, KEY_8     },
-						{ LCD_D5_GPIO_Port, LCD_D5_Pin, KEY_9     },
-						{ LCD_D6_GPIO_Port, LCD_D6_Pin, KEY_HASH  },
-						{ LCD_D7_GPIO_Port, LCD_D7_Pin, KEY_RED   }
+						{ LCD_D0_GPIO_Port, LCD_D0_Pin, KEY_GREEN      },
+						{ LCD_D1_GPIO_Port, LCD_D1_Pin, KEY_FRONT_UP   },
+						{ LCD_D2_GPIO_Port, LCD_D2_Pin, KEY_FRONT_DOWN },
+						{ LCD_D3_GPIO_Port, LCD_D3_Pin, KEY_7          },
+						{ LCD_D4_GPIO_Port, LCD_D4_Pin, KEY_8          },
+						{ LCD_D5_GPIO_Port, LCD_D5_Pin, KEY_9          },
+						{ LCD_D6_GPIO_Port, LCD_D6_Pin, KEY_HASH       },
+						{ LCD_D7_GPIO_Port, LCD_D7_Pin, KEY_RED        }
 				}
 		},
 		{
@@ -136,58 +136,103 @@ static const struct
 				KEYPAD_ROW2_Pin,
 				{
 						{ LCD_D0_GPIO_Port, LCD_D0_Pin, KEY_NONE },
-						{ LCD_D1_GPIO_Port, LCD_D1_Pin, KEY_NONE    },
-						{ LCD_D2_GPIO_Port, LCD_D2_Pin, KEY_NONE  },
-						{ LCD_D3_GPIO_Port, LCD_D3_Pin, KEY_NONE     },
-						{ LCD_D4_GPIO_Port, LCD_D4_Pin, KEY_NONE     },
-						{ LCD_D5_GPIO_Port, LCD_D5_Pin, KEY_NONE     },
-						{ LCD_D6_GPIO_Port, LCD_D6_Pin, KEY_NONE  },
-						{ LCD_D7_GPIO_Port, LCD_D7_Pin, KEY_NONE   }
+						{ LCD_D1_GPIO_Port, LCD_D1_Pin, KEY_NONE },
+						{ LCD_D2_GPIO_Port, LCD_D2_Pin, KEY_NONE },
+						{ LCD_D3_GPIO_Port, LCD_D3_Pin, KEY_NONE },
+						{ LCD_D4_GPIO_Port, LCD_D4_Pin, KEY_NONE },
+						{ LCD_D5_GPIO_Port, LCD_D5_Pin, KEY_NONE },
+						{ LCD_D6_GPIO_Port, LCD_D6_Pin, KEY_NONE },
+						{ LCD_D7_GPIO_Port, LCD_D7_Pin, KEY_NONE }
 				}
 		}
 };
-#elif defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#elif defined(PLATFORM_RT84_DM1701)
 {
 		{
 				KEYPAD_ROW0_GPIO_Port,
 				KEYPAD_ROW0_Pin,
 				{
-						{ LCD_D0_GPIO_Port, LCD_D0_Pin, KEY_1     },
-						{ LCD_D1_GPIO_Port, LCD_D1_Pin, KEY_4     },
-						{ LCD_D2_GPIO_Port, LCD_D2_Pin, KEY_7     },
-						{ LCD_D3_GPIO_Port, LCD_D3_Pin, KEY_STAR    },
-						{ LCD_D4_GPIO_Port, LCD_D4_Pin, KEY_FRONT_UP     },
-						{ LCD_D5_GPIO_Port, LCD_D5_Pin, KEY_RIGHT     },
+						{ LCD_D0_GPIO_Port, LCD_D0_Pin, KEY_1        },
+						{ LCD_D1_GPIO_Port, LCD_D1_Pin, KEY_4        },
+						{ LCD_D2_GPIO_Port, LCD_D2_Pin, KEY_7        },
+						{ LCD_D3_GPIO_Port, LCD_D3_Pin, KEY_STAR     },
+						{ LCD_D4_GPIO_Port, LCD_D4_Pin, KEY_FRONT_UP },
+						{ LCD_D5_GPIO_Port, LCD_D5_Pin, KEY_RIGHT    },
 						{ LCD_D6_GPIO_Port, LCD_D6_Pin, KEY_LEFT     },
-						{ LCD_D7_GPIO_Port, LCD_D7_Pin, KEY_NONE  }
+						{ LCD_D7_GPIO_Port, LCD_D7_Pin, KEY_NONE     }
 				}
 		},
 		{
 				KEYPAD_ROW1_GPIO_Port,
 				KEYPAD_ROW1_Pin,
 				{
-						{ LCD_D0_GPIO_Port, LCD_D0_Pin, KEY_2 },
-						{ LCD_D1_GPIO_Port, LCD_D1_Pin, KEY_5    },
-						{ LCD_D2_GPIO_Port, LCD_D2_Pin, KEY_8  },
-						{ LCD_D3_GPIO_Port, LCD_D3_Pin, KEY_0     },
-						{ LCD_D4_GPIO_Port, LCD_D4_Pin, KEY_FRONT_DOWN     },
-						{ LCD_D5_GPIO_Port, LCD_D5_Pin, KEY_RED     },
-						{ LCD_D6_GPIO_Port, LCD_D6_Pin, KEY_GREEN  },
-						{ LCD_D7_GPIO_Port, LCD_D7_Pin, KEY_NONE   }
+						{ LCD_D0_GPIO_Port, LCD_D0_Pin, KEY_2          },
+						{ LCD_D1_GPIO_Port, LCD_D1_Pin, KEY_5          },
+						{ LCD_D2_GPIO_Port, LCD_D2_Pin, KEY_8          },
+						{ LCD_D3_GPIO_Port, LCD_D3_Pin, KEY_0          },
+						{ LCD_D4_GPIO_Port, LCD_D4_Pin, KEY_FRONT_DOWN },
+						{ LCD_D5_GPIO_Port, LCD_D5_Pin, KEY_RED        },
+						{ LCD_D6_GPIO_Port, LCD_D6_Pin, KEY_GREEN      },
+						{ LCD_D7_GPIO_Port, LCD_D7_Pin, KEY_NONE       }
 				}
 		},
 		{
 				KEYPAD_ROW2_GPIO_Port,
 				KEYPAD_ROW2_Pin,
 				{
-						{ LCD_D0_GPIO_Port, LCD_D0_Pin, KEY_3 },
+						{ LCD_D0_GPIO_Port, LCD_D0_Pin, KEY_3    },
 						{ LCD_D1_GPIO_Port, LCD_D1_Pin, KEY_6    },
-						{ LCD_D2_GPIO_Port, LCD_D2_Pin, KEY_9  },
-						{ LCD_D3_GPIO_Port, LCD_D3_Pin, KEY_HASH     },
-						{ LCD_D4_GPIO_Port, LCD_D4_Pin, KEY_NONE     },
-						{ LCD_D5_GPIO_Port, LCD_D5_Pin, KEY_NONE     },
-						{ LCD_D6_GPIO_Port, LCD_D6_Pin, KEY_NONE  },
-						{ LCD_D7_GPIO_Port, LCD_D7_Pin, KEY_NONE   }
+						{ LCD_D2_GPIO_Port, LCD_D2_Pin, KEY_9    },
+						{ LCD_D3_GPIO_Port, LCD_D3_Pin, KEY_HASH },
+						{ LCD_D4_GPIO_Port, LCD_D4_Pin, KEY_NONE },
+						{ LCD_D5_GPIO_Port, LCD_D5_Pin, KEY_NONE },
+						{ LCD_D6_GPIO_Port, LCD_D6_Pin, KEY_NONE },
+						{ LCD_D7_GPIO_Port, LCD_D7_Pin, KEY_NONE }
+				}
+		}
+};
+#elif defined(PLATFORM_MD2017)
+{
+		{
+				KEYPAD_ROW0_GPIO_Port,
+				KEYPAD_ROW0_Pin,
+				{
+						{ LCD_D0_GPIO_Port, LCD_D0_Pin, KEY_1    },
+						{ LCD_D1_GPIO_Port, LCD_D1_Pin, KEY_2    },
+						{ LCD_D2_GPIO_Port, LCD_D2_Pin, KEY_3    },
+						{ LCD_D3_GPIO_Port, LCD_D3_Pin, KEY_4    },
+						{ LCD_D4_GPIO_Port, LCD_D4_Pin, KEY_5    },
+						{ LCD_D5_GPIO_Port, LCD_D5_Pin, KEY_6    },
+						{ LCD_D6_GPIO_Port, LCD_D6_Pin, KEY_0    },
+						{ LCD_D7_GPIO_Port, LCD_D7_Pin, KEY_STAR }
+				}
+		},
+		{
+				KEYPAD_ROW1_GPIO_Port,
+				KEYPAD_ROW1_Pin,
+				{
+						{ LCD_D0_GPIO_Port, LCD_D0_Pin, KEY_LEFT  },//P1
+						{ LCD_D1_GPIO_Port, LCD_D1_Pin, KEY_GREEN },
+						{ LCD_D2_GPIO_Port, LCD_D2_Pin, KEY_RED   },
+						{ LCD_D3_GPIO_Port, LCD_D3_Pin, KEY_7     },
+						{ LCD_D4_GPIO_Port, LCD_D4_Pin, KEY_8     },
+						{ LCD_D5_GPIO_Port, LCD_D5_Pin, KEY_9     },
+						{ LCD_D6_GPIO_Port, LCD_D6_Pin, KEY_HASH  },
+						{ LCD_D7_GPIO_Port, LCD_D7_Pin, KEY_RIGHT }//P2
+				}
+		},
+		{
+				KEYPAD_ROW2_GPIO_Port,
+				KEYPAD_ROW2_Pin,
+				{
+						{ LCD_D0_GPIO_Port, LCD_D0_Pin, KEY_NONE       },
+						{ LCD_D1_GPIO_Port, LCD_D1_Pin, KEY_NONE       },
+						{ LCD_D2_GPIO_Port, LCD_D2_Pin, KEY_NONE       },
+						{ LCD_D3_GPIO_Port, LCD_D3_Pin, KEY_NONE       },
+						{ LCD_D4_GPIO_Port, LCD_D4_Pin, KEY_FRONT_DOWN },
+						{ LCD_D5_GPIO_Port, LCD_D5_Pin, KEY_NONE       },
+						{ LCD_D6_GPIO_Port, LCD_D6_Pin, KEY_FRONT_UP   },
+						{ LCD_D7_GPIO_Port, LCD_D7_Pin, KEY_NONE       }
 				}
 		}
 };
@@ -219,9 +264,8 @@ void keyboardReset(void)
 
 uint32_t keyboardRead(void)
 {
-	uint32_t result = 0;
-
-	GPIO_InitTypeDef GPIO_InitStruct = {0};
+	uint32_t result = KEY_NONE;
+	GPIO_InitTypeDef GPIO_InitStruct = { 0 };
 
 	GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
 	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -233,10 +277,8 @@ uint32_t keyboardRead(void)
 	GPIO_InitStruct.Pin = LCD_D4_Pin | LCD_D5_Pin | LCD_D6_Pin | LCD_D7_Pin;
 	HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
-
 	for (size_t i = 0; i < (sizeof(KeyboardMatrix) / sizeof(KeyboardMatrix[0])); i++)
 	{
-
 		//Set the Row Pin as Output
 		GPIO_InitStruct.Pin = KeyboardMatrix[i].GPIOCtrlPin;
 		GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
@@ -251,7 +293,8 @@ uint32_t keyboardRead(void)
 
 		for (size_t k = 0; k < KEYBOARD_KEYS_PER_ROW; k++)
 		{
-			if(HAL_GPIO_ReadPin(KeyboardMatrix[i].Rows[k].GPIOPort, KeyboardMatrix[i].Rows[k].GPIOPin) == GPIO_PIN_SET)
+			if((KeyboardMatrix[i].Rows[k].Key != KEY_NONE) &&
+					(HAL_GPIO_ReadPin(KeyboardMatrix[i].Rows[k].GPIOPort, KeyboardMatrix[i].Rows[k].GPIOPin) == GPIO_PIN_SET))
 			{
 				result = KeyboardMatrix[i].Rows[k].Key;
 				break;
@@ -265,9 +308,8 @@ uint32_t keyboardRead(void)
 		GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
 		HAL_GPIO_Init(KeyboardMatrix[i].GPIOCtrlPort, &GPIO_InitStruct);
 
-
 		// Stop on first down key (we don't support multiple key presses).
-		if (result != 0)
+		if (result != KEY_NONE)
 		{
 			break;
 		}

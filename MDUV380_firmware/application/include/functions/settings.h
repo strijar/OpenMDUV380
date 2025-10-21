@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2019      Kai Ludwig, DG4KLU
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -120,6 +120,13 @@ typedef enum
 	BIT_SECONDARY_LANGUAGE          = (1 << 19),
 	BIT_SORT_CHANNEL_DISTANCE       = (1 << 20),
 	BIT_DISPLAY_CHANNEL_DISTANCE    = (1 << 21),
+#if defined(PLATFORM_MD2017)
+	BIT_TRACKBALL_ENABLED           = (1 << 22),
+	BIT_TRACKBALL_FAST_MOTION       = (1 << 23),
+#endif
+#if defined(PLATFORM_MDUV380) && !defined(PLATFORM_VARIANT_UV380_PLUS_10W)
+	BIT_FORCE_10W_RADIO             = (1 << 24),
+#endif
 } bitfieldOptions_t;
 
 #if defined(PLATFORM_MD9600)

@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2019      Kai Ludwig, DG4KLU
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions
@@ -32,7 +32,7 @@
 
 #define PIT_COUNTS_PER_MS  1U
 
-#if !(defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017))
+#if !(defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017))
 extern volatile uint32_t PITCounter; // 1ms granularity
 #endif
 
@@ -48,7 +48,7 @@ static timerCallbackbackStruct_t callbacksArray[MAX_NUM_TIMER_CALLBACKS];// As a
 
 inline uint32_t ticksGetMillis(void)
 {
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 	return uwTick;
 #else
 	return PITCounter;
@@ -61,12 +61,15 @@ void handleTimerCallbacks(void)
 
 	while((callbacksArray[i].funPtr != NULL) && (i < MAX_NUM_TIMER_CALLBACKS))
 	{
+		timerCallback_t cbFunction = NULL;
+
 		if (ticksTimerHasExpired(&callbacksArray[i].PIT_TriggerTimer))
 		{
 			// Does the current menu matches the desired destination menu
 			if ((callbacksArray[i].menuDestination == MENU_ANY) || (callbacksArray[i].menuDestination == menuSystemGetCurrentMenuNumber()))
 			{
-				callbacksArray[i].funPtr(); // call the function
+				// Postpone the call to callback function, as it could add/delete/update a TimerCallback in its code.
+				cbFunction = callbacksArray[i].funPtr;
 			}
 
 			if (i != (MAX_NUM_TIMER_CALLBACKS - 1))
@@ -80,13 +83,19 @@ void handleTimerCallbacks(void)
 		{
 			i++;
 		}
+
+		if (cbFunction != NULL)
+		{
+			cbFunction();
+			i = 0; // Restart from the beginning of the array
+		}
 	}
 }
 
 bool addTimerCallback(timerCallback_t funPtr, uint32_t delayIn_mS, int menuDest, bool updateExistingCallbackTime)
 {
 	uint32_t callBackTime =
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 			delayIn_mS;
 #else
 			(delayIn_mS * PIT_COUNTS_PER_MS);

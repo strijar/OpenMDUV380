@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2021-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -49,7 +49,7 @@ extern ticksTimer_t apoTimer;
 #endif
 
 
-#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 bool powerRotarySwitchIsOn(void);
 #endif
 void showLowBattery(void);
@@ -59,7 +59,7 @@ bool batteryIsLowCriticalVoltage(void);
 bool batteryLastReadingIsCritical(void);
 void batteryChecking(uiEvent_t *ev);
 void batteryUpdate(void);
-void die(bool usbMonitoring, bool maintainRTC, bool forceSuspend);
+void die(bool usbMonitoring, bool maintainRTC, bool forceSuspend, bool safeBoot);
 void wakeFromSleep(void);
 void powerOffFinalStage(bool maintainRTC, bool forceSuspend);
 void powerDown(bool doNotSavePowerOffState);

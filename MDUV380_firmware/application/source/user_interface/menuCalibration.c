@@ -39,25 +39,34 @@ static void handleEvent(uiEvent_t *ev);
 static void setRefOscTemp(int8_t cal);
 static void setDACTemp(uint8_t freqIndex, uint8_t powerIndex);
 static void terminateTransmission(void);
-static void applySettings(bool sk2Down);
+static void applySettings(bool sk2Down, bool sk1Down);
 static void exitCallback(void *data);
 
 
 #define NO_OF_CAL_FREQS 14
 static uint8_t freqIndex = 0;
-static int calFreq[NO_OF_CAL_FREQS] =
+static uint32_t calFreq[NO_OF_CAL_FREQS] =
 {
-		13600000, 14550000, 15500000, 16450000, 17400000,
+		13500000, 14500000, 15500000, 16500000, 17500000,
 		40000000, 41000000, 42000000, 43000000, 44000000,
 		45000000, 46000000, 47000000, 48000000
 };
 
 #define NO_OF_POWER_LEVELS 4
 static uint8_t powerIndex = 0;
+
 #if defined(PLATFORM_MD9600)
 static const uint8_t calPower[NO_OF_POWER_LEVELS] = { 5, 10, 25, 40 };
+#elif defined(PLATFORM_VARIANT_UV380_PLUS_10W)
+static const uint8_t calPower[NO_OF_POWER_LEVELS] = { 250, 1, 5, 10 };
+#elif defined(PLATFORM_MDUV380) && !defined(PLATFORM_VARIANT_UV380_PLUS_10W)
+static const uint8_t calPower[2][NO_OF_POWER_LEVELS] =
+{
+		{ 250, 1, 2, 5 },
+		{ 250, 1, 5, 10}
+};
 #else
-static const uint8_t calPower[NO_OF_POWER_LEVELS] = { 250, 1, 2, 4 };
+static const uint8_t calPower[NO_OF_POWER_LEVELS] = { 250, 1, 2, 5 };
 #endif
 
 static int8_t oscTune[2];						//VHF and UHF oscillator tuning values
@@ -105,6 +114,16 @@ static const int PAGE_ITEMS_OFFSET[] =
 static CalibrationMenuPageList_t pageNumber = CALIBRATION_MENU_PAGE_POWER;
 static int numOptionsOnCurrentPage;
 
+
+static uint8_t getCalPower(uint8_t level)
+{
+#if defined(PLATFORM_MDUV380) && !defined(PLATFORM_VARIANT_UV380_PLUS_10W)
+	return calPower[(settingsIsOptionBitSet(BIT_FORCE_10W_RADIO) ? 1 : 0)][level];
+#else
+	return calPower[level];
+#endif
+}
+
 //#define HAS_DUMPS_CALIBRATION_TABLE 1
 #if defined(HAS_DUMPS_CALIBRATION_TABLE)
 static void dumpCalibrationTable(void)
@@ -120,7 +139,7 @@ static void dumpCalibrationTable(void)
 
 		for (int p = 0; p < NO_OF_POWER_LEVELS; p++)
 		{
-			USB_DEBUG_printf("\t%u%s: %u\n", calPower[p], ((p == 0) ? "mW" : "W"), powerSetting[f][p]);
+			USB_DEBUG_printf("\t%u%s: %u\n", getCalPower(p), ((p == 0) ? "mW" : "W"), powerSetting[f][p]);
 		}
 
 		osDelay(100U);
@@ -265,20 +284,20 @@ static void updateScreen(bool isFirstRun)
 			{
 				case CALIBRATION_MENU_CAL_FREQUENCY:// Calibration Frequency (from cal table)
 					leftSide = currentLanguage->cal_frequency;
-					int val_before_dp = calFreq[freqIndex] / 100000;
-					int val_after_dp = (calFreq[freqIndex] - (val_before_dp * 100000)) / 100;
-					snprintf(rightSideVar, SCREEN_LINE_BUFFER_SIZE, "%d.%03d ", val_before_dp, val_after_dp);
+					uint32_t val_before_dp = calFreq[freqIndex] / 100000;
+					uint32_t val_after_dp = (calFreq[freqIndex] - (val_before_dp * 100000)) / 100;
+					snprintf(rightSideVar, SCREEN_LINE_BUFFER_SIZE, "%u.%03u ", val_before_dp, val_after_dp);
 					rightSideUnitsPrompt = PROMPT_MEGAHERTZ;
 					rightSideUnitsStr = "MHz";
 					break;
 				case CALIBRATION_MENU_POWER_LEVEL:// Power Level
 					leftSide = currentLanguage->cal_pwr;
-					snprintf(rightSideVar, SCREEN_LINE_BUFFER_SIZE, "%d", calPower[powerIndex]);
+					snprintf(rightSideVar, SCREEN_LINE_BUFFER_SIZE, "%d", getCalPower(powerIndex));
 #if defined(PLATFORM_MD9600)
 					rightSideUnitsPrompt = PROMPT_WATTS ;
 					rightSideUnitsStr = "W";
 #else
-					rightSideUnitsPrompt =  powerIndex == 0 ? PROMPT_MILLIWATTS: PROMPT_WATTS ;
+					rightSideUnitsPrompt = powerIndex == 0 ? PROMPT_MILLIWATTS: PROMPT_WATTS ;
 					rightSideUnitsStr = powerIndex == 0 ? "mW" : "W";
 #endif
 					break;
@@ -442,7 +461,7 @@ static void handleEvent(uiEvent_t *ev)
 			menuDataGlobal.menuOptionsTimeout--;
 			if (menuDataGlobal.menuOptionsTimeout == 0)
 			{
-				applySettings(false);
+				applySettings(false, false);
 				menuSystemPopPreviousMenu();
 				return;
 			}
@@ -518,7 +537,7 @@ static void handleEvent(uiEvent_t *ev)
 		}
 		else if (KEYCHECK_SHORTUP(ev->keys, KEY_GREEN))
 		{
-			applySettings((BUTTONCHECK_DOWN(ev, BUTTON_SK2) != 0));
+			applySettings((BUTTONCHECK_DOWN(ev, BUTTON_SK2) != 0), (BUTTONCHECK_DOWN(ev, BUTTON_SK1) != 0));
 			menuSystemPopAllAndDisplayRootMenu();
 			return;
 		}
@@ -696,9 +715,9 @@ static void setDACTemp(uint8_t freqIndex, uint8_t powerIndex)
 	uint16_t cal = powerSetting[freqIndex][powerIndex];
 
 #if defined(PLATFORM_MD9600)
-	dac_Out(2, cal << 4);
+	dacOut(2, cal << 4);
 #else
-	dac_Out(1, cal << 4);
+	dacOut(1, cal << 4);
 #endif
 }
 
@@ -708,7 +727,7 @@ static void terminateTransmission(void)
 	trxTransmissionEnabled = false;
 }
 
-static void applySettings(bool sk2Down)
+static void applySettings(bool sk2Down, bool sk1Down)
 {
 	//copy the new calibration values to calibration table
 
@@ -730,9 +749,7 @@ static void applySettings(bool sk2Down)
 	{
 		if (pageNumber == CALIBRATION_MENU_PAGE_FACTORY_RESET)
 		{
-//					calibrationCheckAndCopyToCommonLocation(true);
-
-			calibrationReadFactory();        //restore the factory values
+			calibrationReadFactory(!sk1Down);//restore the factory values
 			calibrationSaveLocal();	        // save as the local copy
 
 			pageNumber = CALIBRATION_MENU_PAGE_POWER;

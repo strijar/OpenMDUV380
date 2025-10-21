@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -25,14 +25,18 @@
  * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
-#include "functions/ticks.h"
+#include "user_interface/uiGlobals.h"
 #include "user_interface/menuSystem.h"
 #include "user_interface/uiUtilities.h"
 #include "user_interface/uiLocalisation.h"
 
 
-#if defined(PLATFORM_DM1701) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_VARIANT_DM1701)
+static const int DISPLAYED_LINES_MAX = 6;
+#else
 static const int DISPLAYED_LINES_MAX = 7;
+#endif
 #else
 static const int DISPLAYED_LINES_MAX = 3;
 #endif

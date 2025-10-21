@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2019      Kai Ludwig, DG4KLU
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -33,7 +33,7 @@
 #include <FreeRTOS.h>
 #include <task.h>
 #include "main.h"
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380)  || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701)
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380)  || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701)
 #include "usbd_cdc_if.h"
 #else
 #include "virtual_com.h"
@@ -54,7 +54,7 @@ extern volatile int comRecvMMDVMFrameCount;
 extern volatile int com_request;
 extern volatile uint8_t com_requestbuffer[COM_REQUESTBUFFER_SIZE];
 
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380)  || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701)
+#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380)  || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701)
 extern volatile uint8_t usbComSendBuf[COM_BUFFER_SIZE];
 #else
 extern USB_DMA_NONINIT_DATA_ALIGN(USB_DATA_ALIGN_SIZE) uint8_t usbComSendBuf[COM_BUFFER_SIZE];

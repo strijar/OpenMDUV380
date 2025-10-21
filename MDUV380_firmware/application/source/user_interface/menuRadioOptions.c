@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -25,7 +25,7 @@
  * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
-#include "functions/settings.h"
+#include "user_interface/uiGlobals.h"
 #include "user_interface/menuSystem.h"
 #include "user_interface/uiLocalisation.h"
 #include "user_interface/uiUtilities.h"
@@ -57,6 +57,9 @@ enum
 	RADIO_OPTIONS_MENU_PRIVATE_CALLS,
 	RADIO_OPTIONS_MENU_USER_POWER,
 	RADIO_OPTIONS_MENU_DMR_CRC,
+#if defined(PLATFORM_MDUV380) && !defined(PLATFORM_VARIANT_UV380_PLUS_10W)
+	RADIO_OPTIONS_MENU_FORCE_10W,
+#endif
 	NUM_RADIO_OPTIONS_MENU_ITEMS
 };
 
@@ -111,7 +114,7 @@ static void updateScreen(bool isFirstRun)
 	displayClearBuf();
 	bool settingOption = uiQuickKeysShowChoices(buf, SCREEN_LINE_BUFFER_SIZE, currentLanguage->radio_options);
 
-	for(int i = 1 - ((MENU_MAX_DISPLAYED_ENTRIES - 1) / 2) - 1; i <= (MENU_MAX_DISPLAYED_ENTRIES - ((MENU_MAX_DISPLAYED_ENTRIES - 1) / 2) - 1); i++)
+	for (int i = MENU_START_ITERATION_VALUE; i <= MENU_END_ITERATION_VALUE; i++)
 	{
 		if ((settingOption == false) || (i == 0))
 		{
@@ -211,6 +214,14 @@ static void updateScreen(bool isFirstRun)
 					leftSide = currentLanguage->dmr_crc;
 					rightSideConst = (settingsIsOptionBitSet(BIT_DMR_CRC_IGNORED) ? currentLanguage->off : currentLanguage->on);
 					break;
+#if defined(PLATFORM_MDUV380) && !defined(PLATFORM_VARIANT_UV380_PLUS_10W)
+				case RADIO_OPTIONS_MENU_FORCE_10W:
+					leftSide = currentLanguage->mode;
+					snprintf(rightSideVar, SCREEN_LINE_BUFFER_SIZE, "%s", (settingsIsOptionBitSet(BIT_FORCE_10W_RADIO) ? "10" : "5"));
+					rightSideUnitsPrompt = PROMPT_WATTS;
+					rightSideUnitsStr = "W";
+					break;
+#endif
 			}
 
 			snprintf(buf, SCREEN_LINE_BUFFER_SIZE, "%s:%s", leftSide, (rightSideVar[0] ? rightSideVar : (rightSideConst ? rightSideConst : "")));
@@ -361,7 +372,7 @@ static void handleEvent(uiEvent_t *ev)
 	{
 
 		if (KEYCHECK_PRESS(ev->keys, KEY_RIGHT)
-#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 				|| KEYCHECK_SHORTUP(ev->keys, KEY_ROTARY_INCREMENT)
 #endif
 				|| (QUICKKEY_FUNCTIONID(ev->function) == FUNC_RIGHT))
@@ -457,10 +468,18 @@ static void handleEvent(uiEvent_t *ev)
 						settingsSetOptionBit(BIT_DMR_CRC_IGNORED, false);
 					}
 					break;
+#if defined(PLATFORM_MDUV380) && !defined(PLATFORM_VARIANT_UV380_PLUS_10W)
+				case RADIO_OPTIONS_MENU_FORCE_10W:
+					if (settingsIsOptionBitSet(BIT_FORCE_10W_RADIO) == false)
+					{
+						settingsSetOptionBit(BIT_FORCE_10W_RADIO, true);
+					}
+					break;
+#endif
 			}
 		}
 		else if (KEYCHECK_PRESS(ev->keys, KEY_LEFT)
-#if defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 				|| KEYCHECK_SHORTUP(ev->keys, KEY_ROTARY_DECREMENT)
 #endif
 				|| (QUICKKEY_FUNCTIONID(ev->function) == FUNC_LEFT))
@@ -555,6 +574,14 @@ static void handleEvent(uiEvent_t *ev)
 						settingsSetOptionBit(BIT_DMR_CRC_IGNORED, true);
 					}
 					break;
+#if defined(PLATFORM_MDUV380) && !defined(PLATFORM_VARIANT_UV380_PLUS_10W)
+				case RADIO_OPTIONS_MENU_FORCE_10W:
+					if (settingsIsOptionBitSet(BIT_FORCE_10W_RADIO))
+					{
+						settingsSetOptionBit(BIT_FORCE_10W_RADIO, false);
+					}
+					break;
+#endif
 			}
 		}
 		else if ((ev->keys.event & KEY_MOD_PRESS) && (menuDataGlobal.menuOptionsTimeout > 0))

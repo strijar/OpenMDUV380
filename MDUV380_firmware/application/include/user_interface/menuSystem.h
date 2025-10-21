@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -35,11 +35,21 @@
 #include "functions/voicePrompts.h"
 
 
-#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
-#define MENU_MAX_DISPLAYED_ENTRIES 7 // Should be an odd value
+#if defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_VARIANT_DM1701)
+#define MENU_MAX_DISPLAYED_ENTRIES 6
 #else
-#define MENU_MAX_DISPLAYED_ENTRIES 3 // Should be an odd value
+#define MENU_MAX_DISPLAYED_ENTRIES 7
 #endif
+#else
+// Black and white smaller height screeens (MD9600 and GD77 etc)
+#define MENU_MAX_DISPLAYED_ENTRIES 3
+#endif
+
+// These macros are taking care of the odd/even value of MENU_MAX_DISPLAYED_ENTRIES (-x..0..+x)
+#define MENU_START_ITERATION_VALUE ((MENU_MAX_DISPLAYED_ENTRIES & 0x01) ? (1 - ((MENU_MAX_DISPLAYED_ENTRIES - 1) / 2) - 1) : (1 - (MENU_MAX_DISPLAYED_ENTRIES / 2)))
+#define MENU_END_ITERATION_VALUE ((MENU_MAX_DISPLAYED_ENTRIES & 0x01) ? (MENU_MAX_DISPLAYED_ENTRIES - ((MENU_MAX_DISPLAYED_ENTRIES - 1) / 2) - 1) : (MENU_MAX_DISPLAYED_ENTRIES - (MENU_MAX_DISPLAYED_ENTRIES / 2)))
+
 
 // Short press event
 #define BUTTONCHECK_SHORTUP(e, sk) (((e)->keys.key == 0) && ((e)->buttons & sk ## _SHORT_UP))
@@ -164,7 +174,7 @@ void uiChannelModeLoadChannelData(bool useChannelDataInMemory, bool loadVoicePro
 
 void uiChannelModeColdStart(void);
 void uiVFOModeUpdateScreen(int txTimeSecs);
-void uiVFOModeloadChannelData(bool forceAPRSReset);
+void uiVFOModeLoadChannelData(bool forceAPRSReset);
 
 void uiVFOLoadContact(struct_codeplugContact_t *contact);
 bool uiVFOModeIsTXFocused(void);
@@ -249,7 +259,7 @@ void uiNotificationHide(bool immediateRender);
 uiNotificationID_t uiNotificationGetId(void);
 
 
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MD380) || defined(PLATFORM_MDUV380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(HAS_GPS)
 extern const uint8_t MENU_GENERAL_OPTIONS_GPS_ENTRY_NUMBER;
 #endif
 
@@ -280,7 +290,7 @@ enum MENU_SCREENS
 	MENU_DISPLAY,// Display options
 	MENU_SOUND,// Sound options
 	MENU_SATELLITE,
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(HAS_GPS)
 	MENU_GPS,
 #endif
 	MENU_CONTACT_LIST,
@@ -297,7 +307,9 @@ enum MENU_SCREENS
 	UI_VFO_QUICK_MENU,
 	MENU_CHANNEL_DETAILS,
 	MENU_FIRMWARE_INFO,
+#if !defined(PLATFORM_GD77S)
 	MENU_APRS,
+#endif
 	// *** Add new menus to be accessed using quickkey (ID: 0..31) above this line ***
 	UI_MESSAGE_BOX,
 	UI_HOTSPOT_MODE,
@@ -335,7 +347,7 @@ enum CHANNEL_SCREEN_QUICK_MENU_ITEMS
 
 enum VFO_SCREEN_QUICK_MENU_ITEMS
 {
-#if defined(PLATFORM_GD77) || defined(PLATFORM_GD77S) || defined(PLATFORM_RD5R) || defined(PLATFORM_DM1801A) || defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(PLATFORM_GD77) || defined(PLATFORM_GD77S) || defined(PLATFORM_RD5R) || defined(PLATFORM_DM1801A) || defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_RT84_DM1701) || defined(PLATFORM_MD2017)
 	VFO_SCREEN_QUICK_MENU_VFO_A_B = 0,
 	VFO_SCREEN_QUICK_MENU_TX_SWAP_RX,
 #elif defined(PLATFORM_DM1801)
@@ -444,7 +456,7 @@ menuStatus_t menuLanguage(uiEvent_t *event, bool isFirstRun);
 menuStatus_t menuPrivateCall(uiEvent_t *event, bool isFirstRun);
 menuStatus_t uiMessageBox(uiEvent_t *event, bool isFirstRun);
 menuStatus_t menuSatelliteScreen(uiEvent_t *ev, bool isFirstRun);
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+#if defined(HAS_GPS)
 menuStatus_t menuGPS(uiEvent_t *event, bool isFirstRun);
 #endif
 menuStatus_t menuCalibration(uiEvent_t *ev, bool isFirstRun);

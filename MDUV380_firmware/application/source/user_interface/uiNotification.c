@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -25,10 +25,10 @@
  * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
+#include "user_interface/uiGlobals.h"
 #include "user_interface/menuSystem.h"
 #include "user_interface/uiLocalisation.h"
 #include "user_interface/uiUtilities.h"
-#include "functions/ticks.h"
 #include "utils.h"
 
 
@@ -182,11 +182,11 @@ void uiNotificationRefresh(void)
 			case NOTIFICATION_TYPE_POWER:
 			{
 				char buffer[SCREEN_LINE_BUFFER_SIZE];
-				int powerLevel = trxGetPowerLevel();
+				uint8_t powerLevel = trxGetPowerLevel();
 
 				displayThemeApply(THEME_ITEM_FG_DECORATION, THEME_ITEM_BG_NOTIFICATION);
 				displayDrawRoundRectWithDropShadow((DISPLAY_SIZE_X / 4), YBOX, (DISPLAY_SIZE_X / 2), INNERBOX_H, 3, true);
-				sprintf(buffer, "%s%s", POWER_LEVELS[powerLevel], POWER_LEVEL_UNITS[powerLevel]);
+				sprintf(buffer, "%s%s", getPowerLevel(powerLevel), getPowerLevelUnit(powerLevel));
 				displayThemeApply(THEME_ITEM_FG_NOTIFICATION, THEME_ITEM_BG_NOTIFICATION);
 				displayPrintCentered(YTEXT, buffer, FONT_SIZE_3);
 			}
@@ -226,6 +226,8 @@ bool uiNotificationIsVisible(void)
 void uiNotificationHide(bool immediateRender)
 {
 	notificationData.visible = false;
+	uiDataGlobal.displayQSOState = uiDataGlobal.displayQSOStatePrev;
+
 	if (immediateRender)
 	{
 		displayRender();

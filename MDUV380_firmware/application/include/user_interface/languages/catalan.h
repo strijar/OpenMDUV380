@@ -1,6 +1,6 @@
 /* -*- coding: windows-1252-unix; -*- */
 /*
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions
@@ -29,7 +29,7 @@
  * Translators: EA3IGM, EA5SW, EB3AM, EA3BIL
  *
  *
- * Rev: 12.  20230904 EB3AM
+ * Rev: 05Marzo2024 EA3BIL
  */
 #ifndef USER_INTERFACE_LANGUAGES_CATALAN_H_
 #define USER_INTERFACE_LANGUAGES_CATALAN_H_
@@ -55,7 +55,7 @@ const stringsTable_t catalanLanguage=
 .battery				= "Batería",
 .contacts				= "Contactes",
 .last_heard				= "Escoltats",
-.firmware_info			= "Info firmware",
+.firmware_info			= "Info programari",
 .options				= "Opcions",
 .display_options		= "Opcions Pantalla",
 .sound_options			= "Opcions Só", // MaxLen: 16
@@ -64,7 +64,7 @@ const stringsTable_t catalanLanguage=
 .new_contact			= "Nou contacte",
 .dmr_contacts			= "Contactes DMR", // MaxLen: 16
 .contact_details		= "Detall Ctte",
-.hotspot_mode			= "Hotspot",
+.hotspot_mode			= "HotSpot",
 .built					= "Compilat",
 .zones					= "Zones",
 .keypad					= "Teclat",
@@ -89,7 +89,7 @@ const stringsTable_t catalanLanguage=
 .filter					= "Filtre",
 .all_channels			= "Llista total",
 .gotoChannel			= "Anar al canal",
-.scan					= "Scan",
+.scan					= "Escaneig",
 .channelToVfo			= "Canal -> VFO",
 .vfoToChannel			= "VFO -> Canal",
 .vfoToNewChannel		= "VFO -> Nou Canal", // MaxLen: 16
@@ -111,15 +111,15 @@ const stringsTable_t catalanLanguage=
 .stepFreq				= "Salt",
 .tot					= "TOT",
 .off					= "NO",
-.zone_skip				= "Saltar zona",
-.all_skip				= "Saltar tot",
+.zone_skip				= "Saltar Zona",
+.all_skip				= "Saltar Tot",
 .yes					= "Sí",
 .no						= "No",
 .tg_list				= "TG Llista",
 .on						= "Sí",
 .timeout_beep			= "Avís T.O.T.",
 .list_full				= "Llista plena",
-.dmr_cc_scan			= "CC Scan", // MaxLen: 12 (with ':' + settings: .on or .off)
+.dmr_cc_scan			= "Escan CC", // MaxLen: 12 (with ':' + settings: .on or .off)
 .band_limits			= "Límit bandes",
 .beep_volume			= "Volum tons",
 .dmr_mic_gain			= "DMR mic",
@@ -306,7 +306,7 @@ const stringsTable_t catalanLanguage=
 .show_distance				= "Show dist", // MaxLen 16 (with ':' + .on or .off)
 .aprs_options				= "APRS options", // MaxLen 16
 .aprs_smart				= "Smart", // MaxLen 16 (with ':' + .mode)
-.aprs_channel				= "Channel", // MaxLen 16 (with ':' + .location)
+.aprs_channel				= "Canal", // MaxLen 16 (with ':' + .location)
 .aprs_decay				= "Decay", // MaxLen 16 (with ':' + .on or .off)
 .aprs_compress				= "Compress", // MaxLen 16 (with ':' + .on or .off)
 .aprs_interval				= "Interval", // MaxLen 16 (with ':' + 0.2..60 + 'min')
@@ -319,6 +319,8 @@ const stringsTable_t catalanLanguage=
 .aprs_turn_slope			= "T. Slope", // MaxLen 16 (with ':' + 1..255 + '°/v')
 .aprs_turn_time				= "T. Time", // MaxLen 16 (with ':' + 5..180 + 's')
 .auto_lock				= "Auto lock", // MaxLen 16 (with ':' + .off or 0.5..15 (.5 step) + 'min')
+.trackball				= "Trackball", // MaxLen 16 (with ':' + .on or .off)
+.dmr_force_dmo				= "Force DMO", // MaxLen 16 (with ':' + .n_a or .on or .off)
 };
 /********************************************************************
  *

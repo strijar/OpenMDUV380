@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2019      Kai Ludwig, DG4KLU
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions
@@ -120,38 +120,65 @@ int getTemperature(void)
     return (((temperatureLevel - tV25) * 100) / tslope) + 250 + (nonVolatileSettings.temperatureCalibration * 5);
 }
 
-#if defined(PLATFORM_DM1701)
-#define MIN_VOL_ADC_HIGH 37
-#define MIN_VOL_ADC_LOW 32 // 29
+#if defined(PLATFORM_RT84_DM1701)
+#define MIN_VOL_ADC_LOW 34 // 29 + 5
+#define MAX_VOL_ADC_VAL 2070 // 2075 - 5
+#define VOL_POT_ADC_MID_POINT 318
+#define MIN_VOL_LOW_TO_HIGH_OFFSET 5
+#elif defined(PLATFORM_VARIANT_UV380_PLUS_10W)
+#define MIN_VOL_ADC_LOW 24 // 19 + 5
+#define MAX_VOL_ADC_VAL 2049 // 2054 - 5
+#define VOL_POT_ADC_MID_POINT 308
+#define MIN_VOL_LOW_TO_HIGH_OFFSET 5
+#elif defined(PLATFORM_MD2017)
+#define MIN_VOL_ADC_LOW 37 // 32 + 5
+#define MAX_VOL_ADC_VAL 2043 // 2048 - 5
+#define VOL_POT_ADC_MID_POINT 321
+#define MIN_VOL_LOW_TO_HIGH_OFFSET 5
 #else
-#define MIN_VOL_ADC_HIGH 30
-#define MIN_VOL_ADC_LOW 25 // 22
+// COMMENTED: MD-UV380 values
+//#define MIN_VOL_ADC_LOW 25 // 22 + 3
+//#define MAX_VOL_ADC_VAL 2065 // 2070 - 5
+//#define VOL_POT_ADC_MID_POINT 309
+//#define MIN_VOL_LOW_TO_HIGH_OFFSET 5
+// RT3S
+#define MIN_VOL_ADC_LOW 30 // 23 + 7 // RT3S ADC reading is not really stable at lowest level
+#define MAX_VOL_ADC_VAL 2015 // 2020 - 5
+#define VOL_POT_ADC_MID_POINT 317
+#define MIN_VOL_LOW_TO_HIGH_OFFSET 8
 #endif
+
+#define MIN_VOL_ADC_HIGH (MIN_VOL_ADC_LOW + MIN_VOL_LOW_TO_HIGH_OFFSET)
+#define VOL_LOW_SIDE_DIV ((VOL_POT_ADC_MID_POINT - MIN_VOL_ADC_HIGH) / 31)
+#define VOL_HIGH_SIDE_DIV ((MAX_VOL_ADC_VAL - VOL_POT_ADC_MID_POINT) / 31)
+
 static int8_t getVolumeControlRaw(void)
 {
 	// volume control is adc[0]. Max value seems to be:
-	//   - MD-UV380:  2070 min value seems to be 22
-	//   - DM-1701:  2071 min value seems to be 29
+	//   - RT3S:             2020, min value seems to be 23
+	//   - MD-UV380:         2070, min value seems to be 22
+	//   - MD-UV380Plus 10W: 2054, min value seems to be 19
+	//   - DM-1701:          2075, min value seems to be 29
+	//   - MD-2017:          2048, min value seems to be 32
 	// Pot is Log law which needs converting back to linear law
 	// Log Law is approximated by two straight lines with breakpoint at 300
-
 	int vol = potLevel;
 	int pos;
 	static bool minvol;
 
-	if (vol < 310)
+	if (vol < VOL_POT_ADC_MID_POINT)
 	{
-		pos = (vol - 30) / 9;			//convert to 0-31
+		pos = (vol - MIN_VOL_ADC_HIGH) / VOL_LOW_SIDE_DIV; // convert to 0-31
 	}
 	else
 	{
-		pos = 31 + ((vol - 310) / 56);   //convert to 31-62
+		pos = 31 + ((vol - VOL_POT_ADC_MID_POINT) / VOL_HIGH_SIDE_DIV); // convert to 31-62
 	}
 
 	if (minvol ? (vol < MIN_VOL_ADC_HIGH) : (vol < MIN_VOL_ADC_LOW))
 	{
 		minvol = true;
-		return -99;   			//-99 = volume min
+		return -99; // -99 = volume min (muted)
 	}
 
 	minvol = false;

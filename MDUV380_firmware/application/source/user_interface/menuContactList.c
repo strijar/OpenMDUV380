@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -25,9 +25,7 @@
  * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
-#include "functions/codeplug.h"
-#include "main.h"
-#include "functions/settings.h"
+#include "user_interface/uiGlobals.h"
 #include "user_interface/menuSystem.h"
 #include "user_interface/uiUtilities.h"
 #include "user_interface/uiLocalisation.h"
@@ -224,7 +222,7 @@ static void updateScreen(bool isFirstRun)
 			}
 			else
 			{
-				for(int i = 1 - ((MENU_MAX_DISPLAYED_ENTRIES - 1) / 2) - 1; i <= (MENU_MAX_DISPLAYED_ENTRIES - ((MENU_MAX_DISPLAYED_ENTRIES - 1) / 2) - 1); i++)
+				for (int i = MENU_START_ITERATION_VALUE; i <= MENU_END_ITERATION_VALUE; i++)
 				{
 					mNum = menuGetMenuOffset(menuDataGlobal.numItems, i);
 					if (mNum == MENU_OFFSET_BEFORE_FIRST_ENTRY)
@@ -491,7 +489,7 @@ static void updateSubMenuScreen(void)
 	codeplugUtilConvertBufToString((contactListType == MENU_CONTACT_LIST_CONTACT_DIGITAL) ? contactListContactData.name : contactListDTMFContactData.name, buf, 16);
 	menuDisplayTitle(buf);
 
-	for(int i = 1 - ((MENU_MAX_DISPLAYED_ENTRIES - 1) / 2) - 1; i <= (MENU_MAX_DISPLAYED_ENTRIES - ((MENU_MAX_DISPLAYED_ENTRIES - 1) / 2) - 1); i++)
+	for (int i = MENU_START_ITERATION_VALUE; i <= MENU_END_ITERATION_VALUE; i++)
 	{
 		mNum = menuGetMenuOffset(((contactListType == MENU_CONTACT_LIST_CONTACT_DIGITAL) ? NUM_CONTACT_LIST_QUICK_MENU_ITEMS : 1), i);
 		if (mNum == MENU_OFFSET_BEFORE_FIRST_ENTRY)
@@ -558,13 +556,14 @@ static void handleSubMenuEvent(uiEvent_t *ev)
 	}
 
 	// DTMF sequence is playing, stop it.
-	if (uiDataGlobal.DTMFContactList.isKeying && ((ev->keys.key != 0) || BUTTONCHECK_DOWN(ev, BUTTON_PTT)
+	if (dtmfSequenceIsKeying() && ((ev->keys.key != 0) || BUTTONCHECK_DOWN(ev, BUTTON_PTT)
 #if ! defined(PLATFORM_RD5R)
 													|| BUTTONCHECK_DOWN(ev, BUTTON_ORANGE)
 #endif
 	))
 	{
-		uiDataGlobal.DTMFContactList.poLen = 0U;
+		dtmfSequenceStop();
+		keyboardReset();
 		return;
 	}
 

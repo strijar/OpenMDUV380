@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2019      Kai Ludwig, DG4KLU
- * Copyright (C) 2019-2023 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2019-2024 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
  *
  *
@@ -37,6 +37,9 @@
 
 uint8_t displayLCD_Type = 1;
 static bool displayIsInverseVideo = false;
+#if defined(PLATFORM_VARIANT_DM1701)
+static void displayClearScreenBlankLines(bool isInverted);
+#endif
 
 void displayWriteCmd(uint8_t cmd)
 {
@@ -89,7 +92,9 @@ void displaySetInvertedState(bool isInverted)
 		HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_SET);
 
 		*((volatile uint8_t*) LCD_FSMC_ADDR_DATA) = 0;// write 0 to the display pins , to pull them all low, so keyboard reads don't need to
-
+#if defined(PLATFORM_VARIANT_DM1701)
+		displayClearScreenBlankLines(displayIsInverseVideo);
+#endif
 		displaySetInverseVideo(displayIsInverseVideo);
 	}
 }
@@ -369,7 +374,11 @@ void displayInit(bool isInverted, bool SPIFlashAvailable)
 	}
 
 	{
+#if defined(PLATFORM_VARIANT_DM1701)		
+		uint8_t opts[] = { 0x00, 0x00, 0x00, DISPLAY_SIZE_Y + DISPLAY_Y_OFFSET};
+#else
 		uint8_t opts[] = { 0x00, 0x00, 0x00, DISPLAY_SIZE_Y};
+#endif
 		displayWriteCmds(HX8583_CMD_RASET, sizeof(opts), opts);
 	}
 
@@ -389,8 +398,51 @@ void displayInit(bool isInverted, bool SPIFlashAvailable)
 	displayBegin(isInverted, SPIFlashAvailable);
 
 	displayClearBuf();
+
+#if defined(PLATFORM_VARIANT_DM1701)	
+	displayClearScreenBlankLines(isInverted);
+#endif
 	displayRender();
 }
+#if defined(PLATFORM_VARIANT_DM1701)
+static void displayClearScreenBlankLines(bool isInverted)
+{
+	GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+	memset(&GPIO_InitStruct, 0x00, sizeof(GPIO_InitTypeDef));
+
+	// Display shares its pins with the keypad, so the pins need to be put into alternate mode to work with the FSMC
+	GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+	GPIO_InitStruct.Pull = GPIO_NOPULL;
+	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+	GPIO_InitStruct.Alternate = GPIO_AF12_FSMC;
+
+	GPIO_InitStruct.Pin = LCD_D0_Pin | LCD_D1_Pin | LCD_D2_Pin | LCD_D3_Pin;
+	HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+	GPIO_InitStruct.Pin = LCD_D4_Pin | LCD_D5_Pin | LCD_D6_Pin | LCD_D7_Pin;
+	HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+
+	HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_RESET);
+
+	uint8_t opts[] = { 0x00, 0, 0x00, DISPLAY_Y_OFFSET };
+	displayWriteCmds(HX8583_CMD_RASET, sizeof(opts), opts);
+
+	displayWriteCmd(HX8583_CMD_RAMWR);
+
+	uint8_t fillData = isInverted ? 0xFF: 0x00;
+
+	for(int y = 0; y < DISPLAY_Y_OFFSET * DISPLAY_SIZE_X * sizeof(uint16_t); y++)
+	{
+		*((volatile uint8_t*) LCD_FSMC_ADDR_DATA) = fillData;
+	}
+
+	HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_SET);
+
+	*((volatile uint8_t*) LCD_FSMC_ADDR_DATA) = 0;// write 0 to the display pins , to pull them all low, so keyboard reads don't need to
+
+}
+#endif
 
 void displayEnableBacklight(bool enable, int displayBacklightPercentageOff)
 {

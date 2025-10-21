@@ -50,7 +50,7 @@ extern "C" {
 #include "io/rotary_switch.h"
 #include "io/display.h"
 #include "functions/vox.h"
-#include <hardware/HX8353E.h>
+#include "hardware/HX8353E.h"
 #include "hardware/HR-C6000.h"
 #include "interfaces/i2c.h"
 #include "interfaces/hr-c6000_spi.h"
@@ -226,7 +226,21 @@ void SystemClock_Config(void);
 #define LED_GREEN_GPIO_Port GPIOE
 #define LED_RED_Pin GPIO_PIN_1
 #define LED_RED_GPIO_Port GPIOE
+
 /* USER CODE BEGIN Private defines */
+
+// PA_SEL_SW and LCB_BKLIGHT pins are swapped on the MD-UV390Plus 10W radios
+#if defined(PLATFORM_VARIANT_UV380_PLUS_10W)
+#undef PA_SEL_SW_Pin
+#undef PA_SEL_SW_GPIO_Port
+#undef LCD_BKLIGHT_Pin
+#undef LCD_BKLIGHT_GPIO_Port
+
+#define PA_SEL_SW_Pin GPIO_PIN_8
+#define PA_SEL_SW_GPIO_Port GPIOD
+#define LCD_BKLIGHT_Pin GPIO_PIN_6
+#define LCD_BKLIGHT_GPIO_Port GPIOC
+#endif
 
 /* USER CODE END Private defines */
 
