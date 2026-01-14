@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 if [ -d MDUV380_firmware/application/source/linkerdata ]; then
-    if [ -e MDUV380_firmware/tools/codec_cleaner.Linux -a -x MDUV380_firmware/tools/codec_cleaner.Linux ]; then
-	cd MDUV380_firmware/application/source/linkerdata && ../../../tools/codec_cleaner.Linux -C
+    if [ -e tools/codec_cleaner/codec_cleaner -a -x tools/codec_cleaner/codec_cleaner ]; then
+	cd MDUV380_firmware/application/source/linkerdata && ../../../../tools/codec_cleaner/codec_cleaner -C
     else
 	echo "Error: The required tools are not installed in MDUV380_firmware/tools, the process cannot be completed."
 	exit 1
