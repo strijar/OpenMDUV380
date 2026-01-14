@@ -141,9 +141,13 @@ void buttonsRead() {
 	HAL_GPIO_WritePin(KEYPAD_ROW2_GPIO_Port, KEYPAD_ROW2_Pin, GPIO_PIN_SET);
 
 	for (volatile int xx = 0; xx < 100; xx++) {} /* arbitrary settling delay */
-
+#if defined (PLATFORM_MDUV380)
 	check_button(BUTTON_SK1, HAL_GPIO_ReadPin(LCD_D7_GPIO_Port, LCD_D7_Pin) == GPIO_PIN_SET);
 	check_button(BUTTON_SK2, HAL_GPIO_ReadPin(LCD_D6_GPIO_Port, LCD_D6_Pin) == GPIO_PIN_SET);
+#else if
+	check_button(BUTTON_SK1, HAL_GPIO_ReadPin(LCD_D6_GPIO_Port, LCD_D6_Pin) == GPIO_PIN_SET);
+	check_button(BUTTON_SK2, HAL_GPIO_ReadPin(LCD_D5_GPIO_Port, LCD_D5_Pin) == GPIO_PIN_SET);
+#endif
 
 	/* set the row2 pin back to floating. This prevents conflicts between multiple key presses. */
 

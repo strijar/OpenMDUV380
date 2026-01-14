@@ -83,50 +83,90 @@ static const struct {
 	GPIO_TypeDef         *GPIOCtrlPort;
 	uint16_t              GPIOCtrlPin;
 	KeyboardKeySetting_t  Rows[KEYBOARD_KEYS_PER_ROW];
-} KeyboardMatrix[] =
-{
+} KeyboardMatrix[] = {
+#if defined(PLATFORM_MDUV380)
+	{
+		KEYPAD_ROW0_GPIO_Port,
+		KEYPAD_ROW0_Pin,
 		{
-				KEYPAD_ROW0_GPIO_Port,
-				KEYPAD_ROW0_Pin,
-				{
-						{ LCD_D0_GPIO_Port, LCD_D0_Pin, '1'     },
-						{ LCD_D1_GPIO_Port, LCD_D1_Pin, '2'     },
-						{ LCD_D2_GPIO_Port, LCD_D2_Pin, '3'     },
-						{ LCD_D3_GPIO_Port, LCD_D3_Pin, '4'     },
-						{ LCD_D4_GPIO_Port, LCD_D4_Pin, '5'     },
-						{ LCD_D5_GPIO_Port, LCD_D5_Pin, '6'     },
-						{ LCD_D6_GPIO_Port, LCD_D6_Pin, '0'     },
-						{ LCD_D7_GPIO_Port, LCD_D7_Pin, '*'  	}
-				}
-		},
-		{
-				KEYPAD_ROW1_GPIO_Port,
-				KEYPAD_ROW1_Pin,
-				{
-						{ LCD_D0_GPIO_Port, LCD_D0_Pin, LV_KEY_ENTER	},
-						{ LCD_D1_GPIO_Port, LCD_D1_Pin, LV_KEY_UP    	},
-						{ LCD_D2_GPIO_Port, LCD_D2_Pin, LV_KEY_DOWN  	},
-						{ LCD_D3_GPIO_Port, LCD_D3_Pin, '7'     		},
-						{ LCD_D4_GPIO_Port, LCD_D4_Pin, '8'     		},
-						{ LCD_D5_GPIO_Port, LCD_D5_Pin, '9'     		},
-						{ LCD_D6_GPIO_Port, LCD_D6_Pin, '#'  			},
-						{ LCD_D7_GPIO_Port, LCD_D7_Pin, LV_KEY_ESC   	}
-				}
-		},
-		{
-				KEYPAD_ROW2_GPIO_Port,
-				KEYPAD_ROW2_Pin,
-				{
-						{ LCD_D0_GPIO_Port, LCD_D0_Pin, KEY_NONE 	},
-						{ LCD_D1_GPIO_Port, LCD_D1_Pin, KEY_NONE    },
-						{ LCD_D2_GPIO_Port, LCD_D2_Pin, KEY_NONE  	},
-						{ LCD_D3_GPIO_Port, LCD_D3_Pin, KEY_NONE    },
-						{ LCD_D4_GPIO_Port, LCD_D4_Pin, KEY_NONE    },
-						{ LCD_D5_GPIO_Port, LCD_D5_Pin, KEY_NONE    },
-						{ LCD_D6_GPIO_Port, LCD_D6_Pin, KEY_NONE  	},
-						{ LCD_D7_GPIO_Port, LCD_D7_Pin, KEY_NONE   	}
-				}
+			{ LCD_D0_GPIO_Port, LCD_D0_Pin, '1'     		},
+			{ LCD_D1_GPIO_Port, LCD_D1_Pin, '2'     		},
+			{ LCD_D2_GPIO_Port, LCD_D2_Pin, '3'     		},
+			{ LCD_D3_GPIO_Port, LCD_D3_Pin, '4'     		},
+			{ LCD_D4_GPIO_Port, LCD_D4_Pin, '5'     		},
+			{ LCD_D5_GPIO_Port, LCD_D5_Pin, '6'     		},
+			{ LCD_D6_GPIO_Port, LCD_D6_Pin, '0'     		},
+			{ LCD_D7_GPIO_Port, LCD_D7_Pin, '*'  			}
 		}
+	},{
+		KEYPAD_ROW1_GPIO_Port,
+		KEYPAD_ROW1_Pin,
+		{
+			{ LCD_D0_GPIO_Port, LCD_D0_Pin, LV_KEY_ENTER	},
+			{ LCD_D1_GPIO_Port, LCD_D1_Pin, LV_KEY_UP    	},
+			{ LCD_D2_GPIO_Port, LCD_D2_Pin, LV_KEY_DOWN  	},
+			{ LCD_D3_GPIO_Port, LCD_D3_Pin, '7'     		},
+			{ LCD_D4_GPIO_Port, LCD_D4_Pin, '8'     		},
+			{ LCD_D5_GPIO_Port, LCD_D5_Pin, '9'     		},
+			{ LCD_D6_GPIO_Port, LCD_D6_Pin, '#'  			},
+			{ LCD_D7_GPIO_Port, LCD_D7_Pin, LV_KEY_ESC   	}
+		}
+	},{
+		KEYPAD_ROW2_GPIO_Port,
+		KEYPAD_ROW2_Pin,
+		{
+			{ LCD_D0_GPIO_Port, LCD_D0_Pin, KEY_NONE 		},
+			{ LCD_D1_GPIO_Port, LCD_D1_Pin, KEY_NONE    	},
+			{ LCD_D2_GPIO_Port, LCD_D2_Pin, KEY_NONE  		},
+			{ LCD_D3_GPIO_Port, LCD_D3_Pin, KEY_NONE    	},
+			{ LCD_D4_GPIO_Port, LCD_D4_Pin, KEY_NONE    	},
+			{ LCD_D5_GPIO_Port, LCD_D5_Pin, KEY_NONE    	},
+			{ LCD_D6_GPIO_Port, LCD_D6_Pin, KEY_NONE  		},
+			{ LCD_D7_GPIO_Port, LCD_D7_Pin, KEY_NONE   		}
+		}
+	}
+#elif defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
+	{
+		KEYPAD_ROW0_GPIO_Port,
+		KEYPAD_ROW0_Pin,
+		{
+			{ LCD_D0_GPIO_Port, LCD_D0_Pin, '1'     		},
+			{ LCD_D1_GPIO_Port, LCD_D1_Pin, '4'     		},
+			{ LCD_D2_GPIO_Port, LCD_D2_Pin, '7'     		},
+			{ LCD_D3_GPIO_Port, LCD_D3_Pin, '*'    			},
+			{ LCD_D4_GPIO_Port, LCD_D4_Pin, LV_KEY_UP     	},
+			{ LCD_D5_GPIO_Port, LCD_D5_Pin, LV_KEY_RIGHT    },
+			{ LCD_D6_GPIO_Port, LCD_D6_Pin, LV_KEY_LEFT    	},
+			{ LCD_D7_GPIO_Port, LCD_D7_Pin, KEY_NONE  		}
+		}
+	},{
+		KEYPAD_ROW1_GPIO_Port,
+		KEYPAD_ROW1_Pin,
+		{
+			{ LCD_D0_GPIO_Port, LCD_D0_Pin, '2' 			},
+			{ LCD_D1_GPIO_Port, LCD_D1_Pin, '5'   			},
+			{ LCD_D2_GPIO_Port, LCD_D2_Pin, '8'  			},
+			{ LCD_D3_GPIO_Port, LCD_D3_Pin, '0'     		},
+			{ LCD_D4_GPIO_Port, LCD_D4_Pin, LV_KEY_DOWN    	},
+			{ LCD_D5_GPIO_Port, LCD_D5_Pin, LV_KEY_ESC     	},
+			{ LCD_D6_GPIO_Port, LCD_D6_Pin, LV_KEY_ENTER 	},
+			{ LCD_D7_GPIO_Port, LCD_D7_Pin, KEY_NONE   		}
+		}
+	},{
+		KEYPAD_ROW2_GPIO_Port,
+		KEYPAD_ROW2_Pin,
+		{
+			{ LCD_D0_GPIO_Port, LCD_D0_Pin, '3'				},
+			{ LCD_D1_GPIO_Port, LCD_D1_Pin, '6' 			},
+			{ LCD_D2_GPIO_Port, LCD_D2_Pin, '9'  			},
+			{ LCD_D3_GPIO_Port, LCD_D3_Pin, '#'     		},
+			{ LCD_D4_GPIO_Port, LCD_D4_Pin, KEY_NONE		},
+			{ LCD_D5_GPIO_Port, LCD_D5_Pin, KEY_NONE    	},
+			{ LCD_D6_GPIO_Port, LCD_D6_Pin, KEY_NONE  		},
+			{ LCD_D7_GPIO_Port, LCD_D7_Pin, KEY_NONE   		}
+		}
+	}
+#endif
 };
 
 static void keyboard_read_cb(lv_indev_drv_t *drv, lv_indev_data_t *data) {
