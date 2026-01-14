@@ -304,6 +304,7 @@ void applicationMainTask(void) {
 	int				function_event = 0;
 	bool			keyOrButtonChanged = false;
 	bool 			hasSignal = false;
+	int				currentVolume = 0;
 
 	uiEvent_t ev = {
 		.buttons = 0,
@@ -433,12 +434,13 @@ void applicationMainTask(void) {
 			rxPowerSavingTick(&ev, hasSignal);
 		}
 
-		int latestVolume = getVolumeControl();
+		currentVolume = (currentVolume + getVolumeControl()) / 2;
 
-		if (latestVolume != lastVolume) {
-			lastVolume = latestVolume;
-			HRC6000SetDmrRxGain(latestVolume);
-			uiHeaderMeterVol(latestVolume);
+		if (currentVolume != lastVolume) {
+			lastVolume = currentVolume;
+			HRC6000SetDmrRxGain(currentVolume);
+			uiHeaderMeterVol(currentVolume);
+			displayLightTrigger(true);
 		}
 
 		lv_msg_send(UI_MSG_IDLE, NULL);

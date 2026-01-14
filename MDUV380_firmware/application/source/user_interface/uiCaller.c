@@ -33,9 +33,52 @@
 #include "user_interface/styles.h"
 #include "user_interface/uiEvents.h"
 
-static lv_obj_t	*main_obj = NULL;
-static lv_obj_t	*header_obj = NULL;
-static lv_obj_t	*info_obj = NULL;
+static lv_obj_t		*main_obj = NULL;
+static lv_obj_t		*header_obj = NULL;
+static lv_obj_t		*info_obj = NULL;
+
+static lv_timer_t	*caller_timer = NULL;
+static uint32_t		caller_timeout;
+static uint32_t		caller_delay;
+
+static void callerTimerCallback(lv_timer_t *t) {
+	uint32_t now = ticksGetMillis();
+
+	if (caller_delay > now) {
+		if (uiCallerIsShow()) {
+			lastHeardClearLastID();
+			uiCallerDone();
+		}
+		return;
+	}
+
+	if (trxGetMode() != RADIO_MODE_DIGITAL) {
+		return;
+	}
+
+	if (uiCallerIsShow()) {
+		if (uiDataGlobal.displayQSOState == QSO_DISPLAY_CALLER_DATA_UPDATE) {
+			uiCallerUpdate();
+			caller_timeout = now;
+		}
+
+		if (uiDataGlobal.displayQSOState == QSO_DISPLAY_CALLER_DATA || isQSODataAvailableForCurrentTalker()) {
+			if (now - caller_timeout > 100) {
+				uiCallerUpdate();
+				caller_timeout = now;
+			}
+		}
+
+		if (now - caller_timeout > 500) {
+			uiCallerDone();
+		}
+	} else {
+		if (uiDataGlobal.displayQSOState == QSO_DISPLAY_CALLER_DATA || isQSODataAvailableForCurrentTalker()) {
+			uiCallerInit();
+			caller_timeout = now;
+		}
+	}
+}
 
 void uiCallerInit() {
 	if (main_obj == NULL) {
@@ -57,6 +100,20 @@ void uiCallerInit() {
 	}
 
 	uiCallerUpdate();
+}
+
+void uiCallerStart() {
+	caller_delay = 0;
+	caller_timer = lv_timer_create(callerTimerCallback, 20, NULL);
+}
+
+void uiCallerStop() {
+	lv_timer_del(caller_timer);
+	caller_timer = NULL;
+}
+
+void uiCallerDelay() {
+	caller_delay = ticksGetMillis() + 1000;
 }
 
 void uiCallerUpdate() {

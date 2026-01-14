@@ -31,8 +31,11 @@
 #define INCLUDE_USER_INTERFACE_UICALLER_H_
 
 void uiCallerInit();
+void uiCallerStart();
+void uiCallerStop();
 void uiCallerUpdate();
 void uiCallerDone();
 bool uiCallerIsShow();
+void uiCallerDelay();
 
 #endif /* INCLUDE_USER_INTERFACE_UICALLER_H_ */

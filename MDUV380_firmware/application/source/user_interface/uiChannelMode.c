@@ -60,10 +60,6 @@ static lv_obj_t		*channel_obj;
 static lv_obj_t		*channel_shadow_obj;
 static lv_obj_t		*zone_obj;
 
-static lv_timer_t	*caller_timer = NULL;
-static uint32_t		caller_timeout;
-static uint32_t		caller_delay;
-
 static void guiUpdateContact();
 static void guiUpdateChannel();
 static void guiViewChannelSettings(bool settings);
@@ -79,14 +75,10 @@ static void changeTS();
 static void changeBW();
 static void loadChannelData(bool useChannelDataInMemory, bool loadVoicePromptAnnouncement);
 
-static void callerDelay();
-
 void uiChannelInitializeCurrentZone();
 
 static void unloadCallback(lv_event_t * e) {
-	lv_timer_del(caller_timer);
-	caller_timer = NULL;
-
+	uiCallerStop();
 	uiHeaderStop();
 
 	if (uiCallerIsShow()) {
@@ -127,7 +119,7 @@ static void keyCallback(lv_event_t * e) {
 				uiHeaderInfoUpdate();
 			} else {
 				if (mode == RADIO_MODE_DIGITAL) {
-					callerDelay();
+					uiCallerDelay();
 					changeContact(false);
 				} else {
 					changeSquelch(+1);
@@ -142,7 +134,7 @@ static void keyCallback(lv_event_t * e) {
 				uiHeaderInfoUpdate();
 			} else {
 				if (mode == RADIO_MODE_DIGITAL) {
-					callerDelay();
+					uiCallerDelay();
 					changeContact(true);
 				} else {
 					changeSquelch(-1);
@@ -151,7 +143,7 @@ static void keyCallback(lv_event_t * e) {
 			break;
 
 		case LV_KEY_LEFT:
-			callerDelay();
+			uiCallerDelay();
 
 			if (buttonsPressed(BUTTON_SK2)) {
 				changeZone(true);
@@ -161,7 +153,7 @@ static void keyCallback(lv_event_t * e) {
 			break;
 
 		case LV_KEY_RIGHT:
-			callerDelay();
+			uiCallerDelay();
 
 			if (buttonsPressed(BUTTON_SK2)) {
 				changeZone(false);
@@ -175,7 +167,7 @@ static void keyCallback(lv_event_t * e) {
 				changeMode();
 			} else {
 				if (mode == RADIO_MODE_DIGITAL) {
-					callerDelay();
+					uiCallerDelay();
 					changeTS();
 				} else {
 					changeBW();
@@ -217,13 +209,13 @@ static void buttonCallback(lv_event_t * e) {
 		case BUTTON_SK1:
 			switch (event->state) {
 				case BUTTON_PRESS:
-					callerDelay();
+					uiCallerDelay();
 					guiViewChannelSettings(true);
 					break;
 
 				case BUTTON_RELEASE:
 				case BUTTON_LONG_RELEASE:
-					callerDelay();
+					uiCallerDelay();
 					guiViewChannelSettings(false);
 					break;
 
@@ -414,7 +406,7 @@ static void changeSquelch(int dir) {
 
 static void changeMode() {
 	if (trxGetMode() == RADIO_MODE_DIGITAL) {
-		callerDelay();
+		uiCallerDelay();
 		currentChannelData->chMode = RADIO_MODE_ANALOG;
 		trxSetModeAndBandwidth(currentChannelData->chMode, codeplugChannelIsFlagSet(currentChannelData, CHANNEL_FLAG_BW_25K));
 		trxSetRxCSS(currentChannelData->rxTone);
@@ -802,49 +794,6 @@ static void guiUpdateInfoZone() {
 	}
 }
 
-static void callerDelay() {
-	caller_delay = ticksGetMillis() + 1000;
-}
-
-static void callerTimerCallback(lv_timer_t *t) {
-	uint32_t now = ticksGetMillis();
-
-	if (caller_delay > now) {
-		if (uiCallerIsShow()) {
-			lastHeardClearLastID();
-			uiCallerDone();
-		}
-		return;
-	}
-
-	if (trxGetMode() != RADIO_MODE_DIGITAL) {
-		return;
-	}
-
-	if (uiCallerIsShow()) {
-		if (uiDataGlobal.displayQSOState == QSO_DISPLAY_CALLER_DATA_UPDATE) {
-			uiCallerUpdate();
-			caller_timeout = now;
-		}
-
-		if (uiDataGlobal.displayQSOState == QSO_DISPLAY_CALLER_DATA || isQSODataAvailableForCurrentTalker()) {
-			if (now - caller_timeout > 100) {
-				uiCallerUpdate();
-				caller_timeout = now;
-			}
-		}
-
-		if (now - caller_timeout > 500) {
-			uiCallerDone();
-		}
-	} else {
-		if (uiDataGlobal.displayQSOState == QSO_DISPLAY_CALLER_DATA || isQSODataAvailableForCurrentTalker()) {
-			uiCallerInit();
-			caller_timeout = now;
-		}
-	}
-}
-
 void uiChannelMode() {
 	dataInit();
 	guiInit();
@@ -854,7 +803,5 @@ void uiChannelMode() {
 	guiUpdateInfoZone();
 
 	uiHeaderInfoUpdate();
-
-	caller_delay = 0;
-	caller_timer = lv_timer_create(callerTimerCallback, 20, NULL);
+	uiCallerStart();
 }
