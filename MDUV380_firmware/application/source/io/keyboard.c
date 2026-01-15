@@ -135,8 +135,8 @@ static const struct {
 			{ LCD_D2_GPIO_Port, LCD_D2_Pin, '7'     		},
 			{ LCD_D3_GPIO_Port, LCD_D3_Pin, '*'    			},
 			{ LCD_D4_GPIO_Port, LCD_D4_Pin, LV_KEY_UP     	},
-			{ LCD_D5_GPIO_Port, LCD_D5_Pin, LV_KEY_RIGHT    },
-			{ LCD_D6_GPIO_Port, LCD_D6_Pin, LV_KEY_LEFT    	},
+			{ LCD_D5_GPIO_Port, LCD_D5_Pin, LV_KEY_NEXT     },
+			{ LCD_D6_GPIO_Port, LCD_D6_Pin, LV_KEY_PREV    	},
 			{ LCD_D7_GPIO_Port, LCD_D7_Pin, KEY_NONE  		}
 		}
 	},{

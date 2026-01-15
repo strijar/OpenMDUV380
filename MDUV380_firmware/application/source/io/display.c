@@ -195,7 +195,7 @@ void displayInit() {
 	HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_RESET);
 
 	// Init
-    if((displayLCD_Type == 2) || (displayLCD_Type == 3))
+    if((DISPLAYLCD_GET_TYPE(displayLCD_Type == 2)) || (DISPLAYLCD_GET_TYPE(displayLCD_Type) == 3))
     {
         displayWriteCmd(0xfe);
         displayWriteCmd(0xef);
@@ -212,7 +212,7 @@ void displayInit() {
 
 
         {
-        	uint8_t opts[] = { ((displayLCD_Type == 3) ? 0x40 : 0x4f) };
+        	uint8_t opts[] = { ((DISPLAYLCD_GET_TYPE(displayLCD_Type) == 3) ? 0x40 : 0x4f) };
         	displayWriteCmds(0xfd, 1, opts);
         }
 
@@ -405,8 +405,8 @@ void displayInit() {
 
     {
     	uint8_t opts[] = {
-    			(displayLCD_Type == 1) ? 0x60 :
-    					(displayLCD_Type == 2) ? 0xE0 :
+    			(DISPLAYLCD_GET_TYPE(displayLCD_Type) == 1) ? 0x60 :
+    					(DISPLAYLCD_GET_TYPE(displayLCD_Type) == 2) ? 0xE0 :
     							0xA0
     	};
     	displayWriteCmds(HX8583_CMD_MADCTL, 1, opts);

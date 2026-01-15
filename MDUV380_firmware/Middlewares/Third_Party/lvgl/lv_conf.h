@@ -23,6 +23,10 @@
    COLOR SETTINGS
  *====================*/
 
+#if defined(PLATFORM_DM1701)
+#define LV_COLOR_BGR 1
+#endif
+
 /*Color depth: 1 (1 byte per pixel), 8 (RGB332), 16 (RGB565), 32 (ARGB8888)*/
 #define LV_COLOR_DEPTH 16
 

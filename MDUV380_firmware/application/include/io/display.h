@@ -36,6 +36,10 @@
 
 #define BACKLIGHT_MIN_USABLE_VALUE 1
 
+#define DIPLAYLCD_TYPE_RGB         (1 << 7)
+#define DISPLAYLCD_GET_TYPE(x)     (x & ~DIPLAYLCD_TYPE_RGB)
+#define DISPLAYLCD_TYPE_IS_RGB(x)  (x & DIPLAYLCD_TYPE_RGB)
+
 extern SemaphoreHandle_t displayMutex;
 
 extern uint8_t displayLCD_Type;

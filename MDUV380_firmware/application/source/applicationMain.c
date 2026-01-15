@@ -326,6 +326,30 @@ void applicationMainTask(void) {
 	displayLCD_Type = SPI_Flash_readSingleSecurityRegister(0x301D);
 	displayLCD_Type &= 0x03;
 
+#if defined(PLATFORM_DM1701)
+	/* DM-1701
+	 * 		displayLCD_Type:
+	 * 			- 0: "Normal" mode
+	 * 			- 1: 180° rotation
+	 * 			- 2: Vertically flipped
+	 * 			- 3: "Normal" mode (BGR)
+	 */
+
+	if (displayLCD_Type == 2) { /* Normal 3 + RGB */
+		displayLCD_Type = (3 | DIPLAYLCD_TYPE_RGB);
+	}
+#elif defined(PLATFORM_MDUV380)
+	/* MD-UV380
+	 * 		displayLCD_Type
+	 * 			- 0: 180° rotation
+	 * 			- 1: "Normal" mode
+	 * 			- 2: Horizontally flipped
+	 * 			- 3: 180° rotation
+	 */
+
+	displayLCD_Type |= DIPLAYLCD_TYPE_RGB;
+#endif
+
 	lv_init();
 
 	displayInit();
