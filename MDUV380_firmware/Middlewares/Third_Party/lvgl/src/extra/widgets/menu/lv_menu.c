@@ -518,8 +518,8 @@ static void lv_menu_constructor(const lv_obj_class_t * class_p, lv_obj_t * obj)
     lv_obj_set_flex_flow(main_header_back_btn, LV_FLEX_FLOW_ROW);
     menu->main_header_back_btn = main_header_back_btn;
 
-    lv_obj_t * main_header_back_icon = lv_img_create(menu->main_header_back_btn);
-    lv_img_set_src(main_header_back_icon, LV_SYMBOL_LEFT);
+    lv_obj_t * main_header_back_label = lv_label_create(menu->main_header_back_btn);
+    lv_label_set_text(main_header_back_label, "<");
 
     lv_obj_t * main_header_title = lv_label_create(menu->main_header);
     lv_obj_add_flag(main_header_title, LV_OBJ_FLAG_HIDDEN);

@@ -130,6 +130,7 @@ void keyboardInit(void);
 bool keyboardKeyIsDTMFKey(char key);
 void keyboardCheckKeyEvent(keyboardCode_t *keys, int *event);
 bool keyboardScanKey(uint32_t scancode, char *keycode);
+void keyboardAlt(bool on);
 
 void rotaryEncoderISR(void);
 void keyboardRotaryDebounceCallback(void);

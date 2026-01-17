@@ -1748,6 +1748,7 @@ void processUSBDataQueue(void)
 			if (status == kStatus_USB_Success)
 #endif
 			{
+
 				usbComSendBufReadPosition += len;
 
 				if (usbComSendBufReadPosition >= (COM_BUFFER_SIZE - 1)) // reaching the end of the buffer

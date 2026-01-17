@@ -32,8 +32,8 @@
 #define INCLUDE_USER_INTERFACE_UILOCKSCREEN_H_
 
 #include <stdbool.h>
+#include <stdint.h>
 
-extern bool lockDisplay;
-extern bool lockPTT;
+bool uiLockCheck(uint32_t key);
 
 #endif /* INCLUDE_USER_INTERFACE_UILOCKSCREEN_H_ */

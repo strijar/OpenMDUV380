@@ -35,6 +35,7 @@
 extern const lv_img_dsc_t	wallpaper;
 
 extern const lv_style_t		main_style;
+extern const lv_style_t		focused_style;
 extern const lv_style_t		bordered_style;
 
 extern const lv_style_t		bottom_item_style;
@@ -64,5 +65,11 @@ extern const lv_style_t		channel_settings_shadow_style;
 extern const lv_style_t		caller_style;
 extern const lv_style_t		caller_header_style;
 extern const lv_style_t		caller_info_style;
+
+extern const lv_style_t		switch_style;
+extern const lv_style_t		switch_indicator_style;
+extern const lv_style_t		switch_indicator_checked_style;
+extern const lv_style_t		switch_knob_style;
+extern const lv_style_t		switch_knob_checked_style;
 
 #endif /* INCLUDE_USER_INTERFACE_STYLES_H_ */

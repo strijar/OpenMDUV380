@@ -75,6 +75,7 @@ static lv_indev_drv_t	keyboard_indev_drv;
 static lv_indev_t		*keyboard_indev;
 static lv_group_t		*keyboard_group;
 static uint16_t			keyboard_prev_keycode = 0;
+static bool				alt_mode = false;
 
 static lv_indev_drv_t	rotary_indev_drv;
 static lv_indev_t		*rotary_indev;
@@ -206,6 +207,22 @@ static void keyboard_read_cb(lv_indev_drv_t *drv, lv_indev_data_t *data) {
 		for (size_t k = 0; k < KEYBOARD_KEYS_PER_ROW; k++) {
 			if (HAL_GPIO_ReadPin(KeyboardMatrix[i].Rows[k].GPIOPort, KeyboardMatrix[i].Rows[k].GPIOPin) == GPIO_PIN_SET) {
 				keycode = KeyboardMatrix[i].Rows[k].Key;
+
+				if (alt_mode) {
+					switch (keycode) {
+						case LV_KEY_UP:
+							keycode = LV_KEY_PREV;
+							break;
+
+						case LV_KEY_DOWN:
+							keycode = LV_KEY_NEXT;
+							break;
+
+						default:
+							break;
+					}
+				}
+
 				break;
 			}
 		}
@@ -281,6 +298,10 @@ void keyboardInit(void) {
 
 	rotary_indev = lv_indev_drv_register(&rotary_indev_drv);
 	lv_indev_set_group(rotary_indev, keyboard_group);
+}
+
+void keyboardAlt(bool on) {
+    alt_mode = on;
 }
 
 bool keyboardKeyIsDTMFKey(char key)

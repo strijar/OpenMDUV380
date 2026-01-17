@@ -29,6 +29,5 @@
 #define INCLUDE_USER_INTERFACE_UIMENU_H_
 
 void uiMenu();
-bool uiMenuWasOpened();
 
 #endif /* INCLUDE_USER_INTERFACE_UIMENU_H_ */

@@ -27,104 +27,75 @@
 
 #include <lvgl.h>
 #include "user_interface/styles.h"
+#include "io/keyboard.h"
 
-static bool			was_opened = false;
+static lv_obj_t *createText(lv_obj_t *parent, const char *txt);
+static lv_obj_t *createSwitch(lv_obj_t *parent, const char *txt, uint8_t *chk);
 
-static lv_obj_t 	*menu;
+static void backEventHandler(lv_event_t *e) {
+    lv_obj_t * obj = lv_event_get_target(e);
+    lv_obj_t * menu = lv_event_get_user_data(e);
 
-static lv_obj_t *createText(lv_obj_t *parent, const char *icon, const char *txt);
-
-static void backEventCallback(lv_event_t *e) {
-	lv_obj_t *obj = lv_event_get_target(e);
-	lv_obj_t *menu = lv_event_get_user_data(e);
-
-	if (lv_menu_back_btn_is_root(menu, obj)) {
-    	lv_obj_del(menu);
-    	lv_group_add_obj(lv_group_get_default(), lv_scr_act());
+    if (lv_menu_back_btn_is_root(menu, obj)) {
+    	keyboardAlt(false);
+		lv_obj_del(menu);
+		lv_group_add_obj(lv_group_get_default(), lv_scr_act());
     }
 }
 
-static void keyCallback(lv_event_t *e) {
-	uint32_t key = lv_event_get_key(e);
+static void makeSettingsPage(lv_obj_t *menu, lv_obj_t *root_section) {
+    lv_obj_t 	*cont;
+    lv_obj_t 	*sub_page = lv_menu_page_create(menu, "Settings");
+    lv_obj_t	*section = lv_menu_section_create(sub_page);
 
-	switch (key) {
-		case LV_KEY_ESC:
-			lv_event_send(lv_menu_get_main_header_back_btn(menu), LV_EVENT_CLICKED, NULL);
-			break;
+    lv_obj_add_style(section, &main_style, LV_PART_MAIN);
 
-		case LV_KEY_UP:
-			lv_group_focus_prev(lv_group_get_default());
-			break;
+    createSwitch(section, "HotSpot", &nonVolatileSettings.hotspotType);
 
-		case LV_KEY_DOWN:
-			lv_group_focus_next(lv_group_get_default());
-			break;
+    /* * */
 
-		default:
-			break;
-	}
+	cont = createText(root_section, "Settings");
+
+    lv_menu_set_load_page_event(menu, cont, sub_page);
 }
 
 void uiMenu() {
-	was_opened = true;
+	keyboardAlt(true);
 	lv_group_remove_obj(lv_scr_act());
 
-	menu = lv_menu_create(lv_scr_act());
+	lv_obj_t *menu = lv_menu_create(lv_scr_act());
 	lv_obj_set_style_pad_all(menu, 0, 0);
-
-	lv_obj_add_event_cb(menu, backEventCallback, LV_EVENT_CLICKED, menu);
 
 	lv_obj_add_style(lv_menu_get_main_header(menu), &header_style, 0);
 	lv_obj_set_style_bg_img_src(menu, &wallpaper, LV_PART_MAIN);
 	lv_obj_set_pos(menu, 0, 0);
     lv_obj_set_size(menu, 160, 128);
 
-    lv_obj_t	*root_page;
-    lv_obj_t 	*cont;
-    lv_obj_t 	*section;
+    lv_obj_t *back_btn = lv_menu_get_main_header_back_btn(menu);
 
-    root_page = lv_menu_page_create(menu, "Menu");
+	lv_obj_add_style(back_btn, (lv_style_t *) &main_style, LV_PART_MAIN);
+	lv_obj_add_style(back_btn, (lv_style_t *) &bottom_item_style, LV_PART_MAIN);
+	lv_obj_add_style(back_btn, (lv_style_t *) &focused_style, LV_PART_MAIN | LV_STATE_FOCUS_KEY);
 
-    section = lv_menu_section_create(root_page);
+    lv_menu_set_mode_root_back_btn(menu, LV_MENU_ROOT_BACK_BTN_ENABLED);
+    lv_obj_add_event_cb(menu, backEventHandler, LV_EVENT_CLICKED, menu);
 
-	lv_obj_add_event_cb(section, keyCallback, LV_EVENT_KEY, NULL);
-	lv_obj_add_style(section, &main_style, LV_PART_MAIN);
+    /* * */
 
-    cont = createText(section, NULL, "Zone");
-    lv_group_focus_obj(cont);
+    lv_obj_t *root_page = lv_menu_page_create(menu, "Menu");
+    lv_obj_t *root_section = lv_menu_section_create(root_page);
 
-    cont = createText(section, NULL, "Contacts");
+    lv_obj_add_style(root_section, &main_style, LV_PART_MAIN);
 
-    cont = createText(section, NULL, "Channel details");
+	makeSettingsPage(menu, root_section);
 
-    cont = createText(section, NULL, "RSSI");
-
-    cont = createText(section, NULL, "Firmware info");
-
-    cont = createText(section, NULL, "Options");
-
-    cont = createText(section, NULL, "Last heard");
-
-    cont = createText(section, NULL, "Radio info");
-
-    cont = createText(section, NULL, "Satellite");
-
-    cont = createText(section, NULL, "GPS");
-
-    lv_menu_set_page(menu, root_page);
+	lv_menu_set_page(menu, root_page);
 }
 
-bool uiMenuWasOpened() {
-	if (was_opened) {
-		was_opened = false;
-		return true;
-	}
-
-	return false;
-}
-
-static lv_obj_t * createText(lv_obj_t *parent, const char *icon, const char *txt) {
+static lv_obj_t * createText(lv_obj_t *parent, const char *txt) {
     lv_obj_t *obj = lv_menu_cont_create(parent);
+    lv_obj_t *img = NULL;
+    lv_obj_t *label = NULL;
 
     lv_obj_set_style_pad_all(obj, 0, 0);
 
@@ -133,20 +104,48 @@ static lv_obj_t * createText(lv_obj_t *parent, const char *icon, const char *txt
 
     lv_group_add_obj(lv_group_get_default(), obj);
 
-    if (icon) {
-        lv_obj_t *img = lv_img_create(obj);
-
-        lv_img_set_src(img, icon);
-    }
-
     if (txt) {
-        lv_obj_t *label = lv_label_create(obj);
+        label = lv_label_create(obj);
 
         lv_label_set_text(label, txt);
         lv_label_set_long_mode(label, LV_LABEL_LONG_SCROLL_CIRCULAR);
         lv_obj_set_style_text_line_space(label, 0, 0);
         lv_obj_set_flex_grow(label, 1);
     }
+
+    return obj;
+}
+
+static void switchEventCallback(lv_event_t *e) {
+	lv_obj_t 	*sw = lv_event_get_user_data(e);
+	uint8_t		*chk = lv_obj_get_user_data(sw);
+
+	*chk = *chk ? 0 : 1;
+
+	if (*chk) {
+		lv_obj_add_state(sw, LV_STATE_CHECKED);
+	} else {
+		lv_obj_clear_state(sw, LV_STATE_CHECKED);
+	}
+}
+
+static lv_obj_t * createSwitch(lv_obj_t *parent, const char *txt, uint8_t *chk) {
+    lv_obj_t	*obj = createText(parent, txt);
+    lv_obj_t 	*sw = lv_switch_create(obj);
+
+    lv_obj_add_style(sw, &switch_style, LV_PART_MAIN);
+    lv_obj_add_style(sw, &switch_indicator_style, LV_PART_INDICATOR);
+    lv_obj_add_style(sw, &switch_knob_style, LV_PART_KNOB);
+    lv_obj_add_style(sw, &switch_indicator_checked_style, LV_PART_INDICATOR | LV_STATE_CHECKED);
+    lv_obj_add_style(sw, &switch_knob_checked_style, LV_PART_KNOB | LV_STATE_CHECKED);
+    lv_obj_set_user_data(sw, chk);
+
+    if (*chk) {
+    	lv_obj_add_state(sw, LV_STATE_CHECKED);
+    }
+
+	lv_obj_add_event_cb(obj, switchEventCallback, LV_EVENT_CLICKED, sw);
+    lv_group_remove_obj(sw);
 
     return obj;
 }

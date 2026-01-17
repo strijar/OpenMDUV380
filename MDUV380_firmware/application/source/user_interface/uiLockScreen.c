@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
+ *                         Oleg Belousov, R1CBU
  *
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions
@@ -27,6 +28,24 @@
  */
 
 #include "user_interface/uiLockScreen.h"
+#include "functions/sound.h"
+#include "io/buttons.h"
 
-bool lockDisplay = false;
-bool lockPTT = false;
+static bool lockDisplay = false;
+static bool lockPTT = false;
+
+bool uiLockCheck(uint32_t key) {
+	if (key == '*' && buttonsPressed(BUTTON_SK2)) {
+		lockDisplay = !lockDisplay;
+		soundSetMelody(MELODY_KEY_LONG_BEEP);
+
+		return true;
+	}
+
+	if (lockDisplay) {
+		soundSetMelody(MELODY_ERROR_BEEP);
+		return true;
+	}
+
+	return false;
+}

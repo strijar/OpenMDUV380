@@ -265,6 +265,7 @@ static void updateContactLine(uint8_t y)
 
 void uiHotspotUpdateScreen(uint8_t rxCommandState)
 {
+	/*
 	int val_before_dp;
 	int val_after_dp;
 	char buffer[22]; // set to 22 due to FW info
@@ -428,6 +429,7 @@ void uiHotspotUpdateScreen(uint8_t rxCommandState)
 	{
 		displayLightTrigger(false);
 	}
+	*/
 }
 
 static bool handleEvent(uiEvent_t *ev)

@@ -67,14 +67,17 @@ static void keyCallback(lv_event_t * e) {
 	uint32_t 	key = lv_event_get_key(e);
 	int			mode = trxGetMode();
 
+	if (uiLockCheck(key)) {
+		return;
+	}
+
 	switch (key) {
 		case LV_KEY_ESC:
-			if (!uiMenuWasOpened()) {
-				uiChannelMode();
-			}
+			uiChannelMode();
 			break;
 
 		case LV_KEY_ENTER:
+			lv_indev_wait_release(lv_indev_get_act());
 			uiMenu();
 			break;
 
@@ -102,7 +105,7 @@ static void keyCallback(lv_event_t * e) {
 			}
 			break;
 
-		case '*':
+		case '#':
 			if (buttonsPressed(BUTTON_SK2)) {
 				changeMode();
 			} else {

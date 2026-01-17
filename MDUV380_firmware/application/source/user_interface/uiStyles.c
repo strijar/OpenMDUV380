@@ -43,13 +43,23 @@ const lv_style_const_prop_t main_props[] = {
    LV_STYLE_CONST_PAD_TOP(0),
    LV_STYLE_CONST_PAD_BOTTOM(0),
 
+   LV_STYLE_CONST_OUTLINE_WIDTH(0),
+
    LV_STYLE_PROP_INV,
+};
+
+const lv_style_const_prop_t focused_props[] = {
+    LV_STYLE_CONST_BG_COLOR(LV_COLOR_MAKE16(0x00, 0xFF, 0xFF)),
+	LV_STYLE_CONST_BG_OPA(128),
+    LV_STYLE_CONST_OUTLINE_WIDTH(0),
+    LV_STYLE_PROP_INV,
 };
 
 const lv_style_const_prop_t bordered_props[] = {
    LV_STYLE_CONST_BORDER_WIDTH(1),
    LV_STYLE_CONST_BORDER_COLOR(LV_COLOR_MAKE16(0xFF, 0xFF, 0xFF)),
    LV_STYLE_CONST_BORDER_OPA(96),
+   LV_STYLE_CONST_OUTLINE_WIDTH(0),
 
    LV_STYLE_CONST_RADIUS(4),
 
@@ -60,6 +70,7 @@ const lv_style_const_prop_t bottom_item_props[] = {
    LV_STYLE_CONST_TEXT_FONT(&lv_font_18),
    LV_STYLE_CONST_TEXT_ALIGN(LV_TEXT_ALIGN_CENTER),
    LV_STYLE_CONST_PAD_TOP(2),
+   LV_STYLE_CONST_OUTLINE_WIDTH(0),
 
    LV_STYLE_PROP_INV,
 };
@@ -233,7 +244,35 @@ const lv_style_const_prop_t caller_info_props[] = {
    LV_STYLE_PROP_INV,
 };
 
+const lv_style_const_prop_t switch_props[] = {
+   LV_STYLE_CONST_MAX_HEIGHT(14),
+   LV_STYLE_CONST_MAX_WIDTH(14 * 2),
+   LV_STYLE_CONST_PAD_BOTTOM(1),
+   LV_STYLE_CONST_PAD_TOP(1),
+   LV_STYLE_CONST_PAD_LEFT(1),
+   LV_STYLE_CONST_PAD_RIGHT(1),
+   LV_STYLE_CONST_BG_OPA(96),
+   LV_STYLE_PROP_INV,
+};
+
+const lv_style_const_prop_t switch_indicator_props[] = {
+	LV_STYLE_PROP_INV,
+};
+
+const lv_style_const_prop_t switch_indicator_checked_props[] = {
+    LV_STYLE_PROP_INV,
+};
+
+const lv_style_const_prop_t switch_knob_props[] = {
+    LV_STYLE_PROP_INV,
+};
+
+const lv_style_const_prop_t switch_knob_checked_props[] = {
+    LV_STYLE_PROP_INV,
+};
+
 LV_STYLE_CONST_INIT(main_style, main_props);
+LV_STYLE_CONST_INIT(focused_style, focused_props);
 LV_STYLE_CONST_INIT(bordered_style, bordered_props);
 
 LV_STYLE_CONST_INIT(bottom_item_style, bottom_item_props);
@@ -263,3 +302,9 @@ LV_STYLE_CONST_INIT(channel_settings_shadow_style, channel_settings_shadow_props
 LV_STYLE_CONST_INIT(caller_style, caller_props);
 LV_STYLE_CONST_INIT(caller_header_style, caller_header_props);
 LV_STYLE_CONST_INIT(caller_info_style, caller_info_props);
+
+LV_STYLE_CONST_INIT(switch_style, switch_props);
+LV_STYLE_CONST_INIT(switch_indicator_style, switch_indicator_props);
+LV_STYLE_CONST_INIT(switch_indicator_checked_style, switch_indicator_props);
+LV_STYLE_CONST_INIT(switch_knob_style, switch_knob_props);
+LV_STYLE_CONST_INIT(switch_knob_checked_style, switch_knob_checked_props);
