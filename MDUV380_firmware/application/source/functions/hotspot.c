@@ -195,14 +195,13 @@ static uint8_t lastRxState = HOTSPOT_RX_IDLE;
 static const int TX_BUFFERING_TIMEOUT = 360;
 static const int RX_NET_FRAME_TIMEOUT = 360;
 static int timeoutCounter;
-static uint32_t mmdvmHostLastActiveTime = 0; // store last activity time (ms)
-static const uint32_t MMDVMHOST_TIMEOUT = 20000; // 20s timeout (MMDVMHost mode only, there is no timeout for BlueDV)
+static uint32_t mmdvmHostLastActiveTime = 0;
+static const uint32_t MMDVMHOST_TIMEOUT = 2000;
 static volatile HOTSPOT_STATE hotspotState = HOTSPOT_STATE_NOT_CONNECTED;
 static uint8_t rf_power = 255;
 static int txStopDelay = 0;
 static int netRXDataTimer = 0;
 static bool rxLCFrameSent = false;
-
 
 typedef enum
 {
@@ -1717,7 +1716,6 @@ void enqueueUSBData(uint8_t *data, uint8_t length)
 	{
 		// Blah
 	}
-
 }
 
 void processUSBDataQueue(void)
@@ -2264,7 +2262,7 @@ void hotspotStateMachine(void)
 				{
 					wavbuffer_count = 0;
 
-					hotspotExit();
+					uiHotspotDone();
 					break;
 				}
 			}
@@ -2311,7 +2309,7 @@ void hotspotStateMachine(void)
 					rfFrameBufCount = 0;
 					wavbuffer_count = 0;
 
-					hotspotExit();
+					uiHotspotDone();
 					break;
 				}
 			}

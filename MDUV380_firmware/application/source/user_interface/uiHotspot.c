@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
+ *                         Oleg Belousov, R1CBU
  *
  * Using information from the MMDVM_HS source code by Andy CA6JAU
  *
@@ -28,22 +29,24 @@
  *
  */
 
+#include <lvgl.h>
+
+#include "hardware/HR-C6000.h"
+
 #include "functions/calibration.h"
 #include "functions/hotspot.h"
-#include "user_interface/menuSystem.h"
-#include "user_interface/uiUtilities.h"
-#include "user_interface/uiLocalisation.h"
-#include "hardware/HR-C6000.h"
 #include "functions/settings.h"
 #include "functions/sound.h"
 #include "functions/ticks.h"
 #include "functions/trx.h"
-#include "usb/usb_com.h"
 #include "functions/rxPowerSaving.h"
-#include "user_interface/uiHotspot.h"
 
-// Uncomment the following to enable demo screen, access it with function events
-//#define DEMO_SCREEN
+#include "usb/usb_com.h"
+#include "user_interface/uiEvents.h"
+#include "user_interface/uiHotspot.h"
+#include "user_interface/styles.h"
+#include "user_interface/uiUtilities.h"
+
 
 /*
                                 Problems with MD-390 on the same frequency
@@ -79,107 +82,83 @@ M: 2020-01-07 09:52:15.246 DMR Slot 2, received network end of voice transmissio
 
  */
 
+static uint8_t	savedDMRDestinationFilter = 0xFF; 	/* 0xFF value means unset */
+static uint8_t	savedDMRCcTsFilter = 0xFF; 			/* 0xFF value means unset */
+static uint32_t	savedTGorPC;
+static uint8_t	savedLibreDMR_Power;
 
-static uint8_t savedDMRDestinationFilter = 0xFF; // 0xFF value means unset
-static uint8_t savedDMRCcTsFilter = 0xFF; // 0xFF value means unset
-static bool displayFWVersion;
-static uint32_t savedTGorPC;
-static uint8_t savedLibreDMR_Power;
-static uint32_t batteryUpdateTimeout;
-static uint16_t batteryAverageMillivolts;
+static lv_obj_t *main_obj = NULL;
+static lv_obj_t *msg[3];
 
-static bool handleEvent(uiEvent_t *ev);
-static uint16_t getBatteryAverageInMillivolts(void);
+static void uiInit() {
+	lv_event_send(lv_scr_act(), EVENT_MAIN_HIDE, NULL);
 
-#if defined(DEMO_SCREEN)
-bool demoScreen = false;
-#endif
+	main_obj = lv_obj_create(lv_scr_act());
 
-menuStatus_t menuHotspotMode(uiEvent_t *ev, bool isFirstRun)
-{
-	if (isFirstRun)
-	{
-		rxPowerSavingSetLevel(0);// disable power saving
+	lv_obj_add_style(main_obj, &main_style, 0);
+	lv_obj_add_style(main_obj, &bordered_style, 0);
+	lv_obj_add_style(main_obj, &caller_style, 0);
 
-		// DMR filter level isn't saved yet (cycling power OFF/ON quickly can corrupt
-		// this value otherwise, as menuHotspotMode(true) could be called twice.
-		if (savedDMRDestinationFilter == 0xFF)
-		{
-			// Override DMR filtering
-			savedDMRDestinationFilter = nonVolatileSettings.dmrDestinationFilter;
-			savedDMRCcTsFilter = nonVolatileSettings.dmrCcTsFilter;
+	for (uint8_t i = 0; i < 3; i++) {
+		msg[i] = lv_label_create(main_obj);
 
-			nonVolatileSettings.dmrDestinationFilter = DMR_DESTINATION_FILTER_NONE;
-			nonVolatileSettings.dmrCcTsFilter = DMR_CCTS_FILTER_CC_TS;
-		}
-
-		// Do not user per channel power settings
-		savedLibreDMR_Power = currentChannelData->libreDMR_Power;
-		currentChannelData->libreDMR_Power = 0;
-
-		savedTGorPC = trxTalkGroupOrPcId;// Save the current TG or PC
-
-		displayFWVersion = false;
-
-		displayClearBuf();
-		displayPrintCentered(0, "Hotspot", FONT_SIZE_3);
-		displayPrintCentered(32, "Waiting for", FONT_SIZE_3);
-		displayPrintCentered(48, "Pi-Star", FONT_SIZE_3);
-		displayRender();
-
-		hotspotInit();
-
-		displayLightTrigger(false);
-	}
-	else
-	{
-
-		if (ev->hasEvent)
-		{
-			if (handleEvent(ev) == false)
-			{
-				return MENU_STATUS_SUCCESS;
-			}
+		if (i == 0) {
+			lv_label_set_text(msg[i], "Hot spot");
+			lv_obj_add_style(msg[i], &caller_header_style, 0);
+		} else {
+			lv_label_set_text(msg[i], "");
+			lv_obj_set_style_width(msg[i], 150, 0);
+			lv_obj_set_style_height(msg[i], 20, 0);
+			lv_obj_set_style_x(msg[i], 2, 0);
+			lv_obj_set_style_y(msg[i], 25 + (i - 1) * 20, 0);
 		}
 	}
-
-#if defined(DEMO_SCREEN)
-	if (! demoScreen)
-	{
-#endif
-		processUSBDataQueue();
-		if (comRecvMMDVMFrameCount > 0)
-		{
-			handleHotspotRequest();
-		}
-		hotspotStateMachine();
-
-		// CW beaconing
-		if (hotspotCwKeying)
-		{
-			if (hotspotCwpoLen > 0)
-			{
-				cwProcess();
-			}
-		}
-#if defined(DEMO_SCREEN)
-	}
-#endif
-
-	// Battery level has changed in the last 5 minutes, but screen wasn't redrawn yet
-	if ((batteryAverageMillivolts != getBatteryAverageInMillivolts()) &&
-			((ticksGetMillis() - batteryUpdateTimeout) > 300000U))
-	{
-		uiHotspotUpdateScreen(hotspotCurrentRxCommandState);
-	}
-
-	return MENU_STATUS_SUCCESS;
 }
 
-void menuHotspotRestoreSettings(void)
-{
-	if (savedDMRDestinationFilter != 0xFF)
-	{
+void uiHotspotInit() {
+	rxPowerSavingSetLevel(0);
+
+	// DMR filter level isn't saved yet (cycling power OFF/ON quickly can corrupt
+	// this value otherwise, as menuHotspotMode(true) could be called twice.
+
+	if (savedDMRDestinationFilter == 0xFF) {
+		// Override DMR filtering
+		savedDMRDestinationFilter = nonVolatileSettings.dmrDestinationFilter;
+		savedDMRCcTsFilter = nonVolatileSettings.dmrCcTsFilter;
+
+		nonVolatileSettings.dmrDestinationFilter = DMR_DESTINATION_FILTER_NONE;
+		nonVolatileSettings.dmrCcTsFilter = DMR_CCTS_FILTER_CC_TS;
+	}
+
+	// Do not user per channel power settings
+
+	savedLibreDMR_Power = currentChannelData->libreDMR_Power;
+	currentChannelData->libreDMR_Power = 0;
+
+	savedTGorPC = trxTalkGroupOrPcId;// Save the current TG or PC
+
+	hotspotInit();
+	displayLightTrigger(false);
+}
+
+void uiHotspotTick() {
+	processUSBDataQueue();
+
+	if (comRecvMMDVMFrameCount > 0) {
+		handleHotspotRequest();
+	}
+
+	hotspotStateMachine();
+
+	if (hotspotCwKeying) {
+		if (hotspotCwpoLen > 0) {
+			cwProcess();
+		}
+	}
+}
+
+void uiHotspotRestoreSettings() {
+	if (savedDMRDestinationFilter != 0xFF) {
 		nonVolatileSettings.dmrDestinationFilter = savedDMRDestinationFilter;
 		savedDMRDestinationFilter = 0xFF; // Unset saved DMR destination filter level
 
@@ -263,8 +242,41 @@ static void updateContactLine(uint8_t y)
 	}
 }
 
-void uiHotspotUpdateScreen(uint8_t rxCommandState)
-{
+void uiHotspotUpdateScreen(uint8_t rxCommandState) {
+	if (main_obj == NULL) {
+		uiInit();
+	}
+
+	if (trxTransmissionEnabled) {
+		lv_label_set_text(msg[1], "TX");
+		lv_label_set_text(msg[2], "");
+
+	} else {
+		dmrIdDataStruct_t currentRec;
+
+		switch (rxCommandState) {
+			case HOTSPOT_RX_START:
+			case HOTSPOT_RX_START_LATE:
+				if (dmrIDLookup(hotspotRxedDMR_LC.srcId, &currentRec)) {
+					lv_label_set_text(msg[1], currentRec.text);
+				} else {
+					lv_label_set_text_fmt(msg[1], "ID: %u", hotspotRxedDMR_LC.srcId);
+				}
+
+				if (hotspotRxedDMR_LC.FLCO == 0) {
+					lv_label_set_text_fmt(msg[2], "TG: %u", hotspotRxedDMR_LC.dstId);
+				} else {
+					lv_label_set_text_fmt(msg[2], "PC: %u", hotspotRxedDMR_LC.dstId);
+				}
+				break;
+
+			default:
+				lv_label_set_text(msg[1], "");
+				lv_label_set_text(msg[2], "Wait");
+				break;
+		}
+	}
+
 	/*
 	int val_before_dp;
 	int val_after_dp;
@@ -432,96 +444,22 @@ void uiHotspotUpdateScreen(uint8_t rxCommandState)
 	*/
 }
 
-static bool handleEvent(uiEvent_t *ev)
-{
-	displayLightTrigger(ev->hasEvent);
-
-#if defined(DEMO_SCREEN)
-	if (ev->events & FUNCTION_EVENT)
-	{
-		demoScreen = ((ev->function >= 90) && (ev->function < 100));
-
-		switch (ev->function)
-		{
-			case 90:
-				sprintf(hotspotMmdvmQSOInfoIP, "%s", "192.168.100.10");
-				settingsUsbMode = USB_MODE_CPS;
-				break;
-			case 91:
-				trxTalkGroupOrPcId = 98977;
-				LinkHead->talkGroupOrPcId = 0;
-				sprintf(LinkHead->contact, "%s", "VK3KYY");
-				trxTransmissionEnabled = true;
-				uiHotspotUpdateScreen(HOTSPOT_STATE_TX_START_BUFFERING);
-				break;
-			case 92:
-				hotspotRxedDMR_LC.FLCO = 0;
-				hotspotRxedDMR_LC.srcId = 5053238;
-				hotspotRxedDMR_LC.dstId = 91;
-				trxTransmissionEnabled = false;
-				uiHotspotUpdateScreen(HOTSPOT_RX_START);
-				break;
-			case 93:
-				hotspotModemState = STATE_POCSAG;
-				trxTransmissionEnabled = false;
-				uiHotspotUpdateScreen(HOTSPOT_RX_IDLE);
-				break;
-		}
-	}
-#endif
-
-	if (KEYCHECK_SHORTUP(ev->keys, KEY_RED)
-#if defined(PLATFORM_GD77S)
-			// There is no RED key on the GD-77S, use Orange button to exit the hotspot mode
-			|| ((ev->events & BUTTON_EVENT) && (ev->buttons & BUTTON_ORANGE))
-#endif
-	)
-	{
-		// Do not permit to leave HS in MMDVMHost mode, otherwise that will mess up the communication
-		// and MMDVMHost won't recover from that, sometimes.
-		// Anyway, in MMDVMHost mode, there is a timeout after MMDVMHost stop responding (or went to shutdown).
-		if (nonVolatileSettings.hotspotType == HOTSPOT_TYPE_BLUEDV)
-		{
-			hotspotExit();
-			return false;
-		}
+void uiHotspotDone() {
+	if (main_obj) {
+		lv_obj_del(main_obj);
+		main_obj = NULL;
+		lv_event_send(lv_scr_act(), EVENT_MAIN_SHOW, NULL);
 	}
 
-	if (ev->events & BUTTON_EVENT)
-	{
-		// Display HS FW version
-		if ((displayFWVersion == false) && (ev->buttons == BUTTON_SK1_OLD))
-		{
-			uint8_t prevRxCmd = hotspotCurrentRxCommandState;
-
-			displayFWVersion = true;
-			uiHotspotUpdateScreen(hotspotCurrentRxCommandState);
-			hotspotCurrentRxCommandState = prevRxCmd;
-			return true;
-		}
-		else if (displayFWVersion && ((ev->buttons & BUTTON_SK1_OLD) == 0))
-		{
-			displayFWVersion = false;
-			uiHotspotUpdateScreen(hotspotCurrentRxCommandState);
-			return true;
-		}
-	}
-
-	return true;
-}
-
-void hotspotExit(void)
-{
 	trxDisableTransmission();
-	if (trxTransmissionEnabled)
-	{
+
+	if (trxTransmissionEnabled) {
 		trxTransmissionEnabled = false;
 		//trxSetRX();
 
 		LedWrite(LED_GREEN, 0);
 
-		if (hotspotCwKeying)
-		{
+		if (hotspotCwKeying) {
 			cwReset();
 			hotspotCwKeying = false;
 		}
@@ -529,9 +467,9 @@ void hotspotExit(void)
 
 	currentChannelData->libreDMR_Power = savedLibreDMR_Power;
 
-	trxTalkGroupOrPcId = savedTGorPC;// restore the current TG or PC
-	if (hotspotSavedPowerLevel != -1)
-	{
+	trxTalkGroupOrPcId = savedTGorPC; /* restore the current TG or PC */
+
+	if (hotspotSavedPowerLevel != -1) {
 		trxSetPowerFromLevel(hotspotSavedPowerLevel);
 	}
 
@@ -541,14 +479,5 @@ void hotspotExit(void)
 
 	rxPowerSavingSetLevel(nonVolatileSettings.ecoLevel);
 
-	menuHotspotRestoreSettings();
-	menuSystemPopAllAndDisplayRootMenu();
-}
-
-static uint16_t getBatteryAverageInMillivolts(void)
-{
-	int volts, mvolts;
-
-	getBatteryVoltage(&volts, &mvolts);
-	return ((volts * 1000) + (mvolts * 100));
+	uiHotspotRestoreSettings();
 }

@@ -29,8 +29,12 @@
 #include "user_interface/styles.h"
 #include "io/keyboard.h"
 
+typedef enum {
+	SWITCH_HOTSPOT = 0,
+} switches_t;
+
 static lv_obj_t *createText(lv_obj_t *parent, const char *txt);
-static lv_obj_t *createSwitch(lv_obj_t *parent, const char *txt, uint8_t *chk);
+static lv_obj_t *createSwitch(lv_obj_t *parent, const char *txt, switches_t id);
 
 static void backEventHandler(lv_event_t *e) {
     lv_obj_t * obj = lv_event_get_target(e);
@@ -50,7 +54,7 @@ static void makeSettingsPage(lv_obj_t *menu, lv_obj_t *root_section) {
 
     lv_obj_add_style(section, &main_style, LV_PART_MAIN);
 
-    createSwitch(section, "HotSpot", &nonVolatileSettings.hotspotType);
+    createSwitch(section, "HotSpot", SWITCH_HOTSPOT);
 
     /* * */
 
@@ -118,18 +122,33 @@ static lv_obj_t * createText(lv_obj_t *parent, const char *txt) {
 
 static void switchEventCallback(lv_event_t *e) {
 	lv_obj_t 	*sw = lv_event_get_user_data(e);
-	uint8_t		*chk = lv_obj_get_user_data(sw);
+	switches_t	id = (switches_t) lv_obj_get_user_data(sw);
+	bool		on = false;
 
-	*chk = *chk ? 0 : 1;
+	switch (id) {
+		case SWITCH_HOTSPOT:
+			on = !nonVolatileSettings.hotspotType;
+			nonVolatileSettings.hotspotType = on;
 
-	if (*chk) {
+			if (on) {
+				uiHotspotInit();
+			} else {
+				uiHotspotDone();
+			}
+			break;
+
+		default:
+			break;
+	}
+
+	if (on) {
 		lv_obj_add_state(sw, LV_STATE_CHECKED);
 	} else {
 		lv_obj_clear_state(sw, LV_STATE_CHECKED);
 	}
 }
 
-static lv_obj_t * createSwitch(lv_obj_t *parent, const char *txt, uint8_t *chk) {
+static lv_obj_t * createSwitch(lv_obj_t *parent, const char *txt, switches_t id) {
     lv_obj_t	*obj = createText(parent, txt);
     lv_obj_t 	*sw = lv_switch_create(obj);
 
@@ -138,9 +157,20 @@ static lv_obj_t * createSwitch(lv_obj_t *parent, const char *txt, uint8_t *chk) 
     lv_obj_add_style(sw, &switch_knob_style, LV_PART_KNOB);
     lv_obj_add_style(sw, &switch_indicator_checked_style, LV_PART_INDICATOR | LV_STATE_CHECKED);
     lv_obj_add_style(sw, &switch_knob_checked_style, LV_PART_KNOB | LV_STATE_CHECKED);
-    lv_obj_set_user_data(sw, chk);
+    lv_obj_set_user_data(sw, (void *) id);
 
-    if (*chk) {
+    bool val;
+
+    switch (id) {
+    	case SWITCH_HOTSPOT:
+    		val = nonVolatileSettings.hotspotType;
+    		break;
+
+    	default:
+    		break;
+    }
+
+    if (val) {
     	lv_obj_add_state(sw, LV_STATE_CHECKED);
     }
 

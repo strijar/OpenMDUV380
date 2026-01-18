@@ -463,7 +463,7 @@ void powerOffFinalStage(bool maintainRTC, bool forceSuspend)
 		settingsSet(nonVolatileSettings.overrideTG, uiDataGlobal.tgBeforePcMode);
 	}
 
-	menuHotspotRestoreSettings();
+	uiHotspotRestoreSettings();
 
 	settingsSaveForPowerOff();
 

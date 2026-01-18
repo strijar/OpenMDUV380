@@ -402,6 +402,10 @@ void applicationMainTask(void) {
 	lv_timer_t *timer = lv_timer_create(start_timeout, 50, NULL);
 	lv_timer_set_repeat_count(timer, 1);
 
+	if (nonVolatileSettings.hotspotType != HOTSPOT_TYPE_OFF) {
+		uiHotspotInit();
+	}
+
 	while (true) {
 		uint32_t now = ticksGetMillis();
 
@@ -453,6 +457,10 @@ void applicationMainTask(void) {
 		voxTick();
 		gpsTick();
 		settingsSaveIfNeeded(false);
+
+		if (nonVolatileSettings.hotspotType != HOTSPOT_TYPE_OFF) {
+			uiHotspotTick();
+		}
 
 		if (!trxTransmissionEnabled && !trxIsTransmitting) {
 			rxPowerSavingTick(&ev, hasSignal);

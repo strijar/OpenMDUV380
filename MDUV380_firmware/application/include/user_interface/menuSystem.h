@@ -188,8 +188,6 @@ void menuLastHeardHandleEvent(uiEvent_t *ev); // Only used in uiTXScreen
 void menuPrivateCallClear(void);
 void menuPrivateCallDismiss(void);
 
-void menuHotspotRestoreSettings(void);
-
 bool menuTxScreenDisplaysLastHeard(void);
 void menuTxScreenHandleTxTermination(uiEvent_t *ev, txTerminationReason_t reason);
 

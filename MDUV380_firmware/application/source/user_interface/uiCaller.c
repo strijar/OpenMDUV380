@@ -32,6 +32,7 @@
 #include "user_interface/uiCaller.h"
 #include "user_interface/styles.h"
 #include "user_interface/uiEvents.h"
+#include "functions/hotspot.h"
 
 static lv_obj_t		*main_obj = NULL;
 static lv_obj_t		*header_obj = NULL;
@@ -73,6 +74,10 @@ static void callerTimerCallback(lv_timer_t *t) {
 			uiCallerDone();
 		}
 	} else {
+		if (hotspotMmdvmHostIsConnected) {
+			return;
+		}
+
 		if (uiDataGlobal.displayQSOState == QSO_DISPLAY_CALLER_DATA || isQSODataAvailableForCurrentTalker()) {
 			uiCallerInit();
 			caller_timeout = now;
@@ -119,7 +124,7 @@ void uiCallerDelay() {
 void uiCallerUpdate() {
 	uiDataGlobal.receivedPcId = 0x00;
 
-	if (main_obj == NULL || LinkHead == NULL) {
+	if (main_obj == NULL || LinkHead == NULL || hotspotMmdvmHostIsConnected) {
 		return;
 	}
 

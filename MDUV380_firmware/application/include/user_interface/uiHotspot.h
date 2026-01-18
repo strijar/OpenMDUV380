@@ -25,5 +25,10 @@
  * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
-void hotspotExit(void);
+
+void uiHotspotInit();
+void uiHotspotTick();
+void uiHotspotDone();
+
+void uiHotspotRestoreSettings();
 void uiHotspotUpdateScreen(uint8_t rxCommandState);
