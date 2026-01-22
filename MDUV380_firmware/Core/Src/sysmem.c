@@ -25,6 +25,9 @@
 #include <errno.h>
 #include <stdio.h>
 
+/* Type definitions for newlib compatibility (GCC 13.2+) */
+typedef char *caddr_t;
+
 /* Variables */
 extern int errno;
 register char * stack_ptr asm("sp");
