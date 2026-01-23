@@ -14,12 +14,18 @@ ENV PATH="/opt/arm-gnu-toolchain-13.2.Rel1-x86_64-arm-none-eabi/bin:${PATH}"
 WORKDIR /src
 COPY . .
 
+# Platform: DM1701 or MDUV380
+ARG PLATFORM=DM1701
+
 # Build with CMake + Ninja
 RUN cmake -B build -G Ninja \
     -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi.cmake \
     -DCMAKE_BUILD_TYPE=Release \
-    && cmake --build build -j$(nproc)
+    -DPLATFORM=${PLATFORM} \
+    && cmake --build build -j$(nproc) \
+    && mv build/MDUV380_firmware.bin build/Open${PLATFORM}.bin
 
 # Export stage - only the binary
 FROM scratch AS export
-COPY --from=builder /src/build/MDUV380_firmware.bin /OpenDM1701.bin
+ARG PLATFORM=DM1701
+COPY --from=builder /src/build/Open${PLATFORM}.bin /

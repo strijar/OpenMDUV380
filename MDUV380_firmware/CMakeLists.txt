@@ -1,13 +1,24 @@
 cmake_minimum_required(VERSION 3.20)
 
-# Project
-project(OpenDM1701 C ASM)
+# Platform selection: DM1701, MDUV380
+set(PLATFORM "DM1701" CACHE STRING "Target platform (DM1701, MDUV380)")
+set_property(CACHE PLATFORM PROPERTY STRINGS DM1701 MDUV380)
+
+# Validate platform
+if(NOT PLATFORM MATCHES "^(DM1701|MDUV380)$")
+    message(FATAL_ERROR "Invalid PLATFORM: ${PLATFORM}. Use DM1701 or MDUV380")
+endif()
+
+# Project name based on platform
+project(Open${PLATFORM} C ASM)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
 # Target executable
 set(TARGET MDUV380_firmware)
+
+message(STATUS "Building for platform: ${PLATFORM}")
 
 ######################################
 # Sources
@@ -102,7 +113,7 @@ set(INCLUDES
 set(DEFINES
     USE_HAL_DRIVER
     STM32F405xx
-    PLATFORM_DM1701
+    PLATFORM_${PLATFORM}
     NDEBUG
 )
 
