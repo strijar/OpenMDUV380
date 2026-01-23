@@ -16,26 +16,21 @@ This functionality is provided by the official firmware which is merged with the
 ```bash
 cd MDUV380_firmware
 
-# Build for DM-1701 (default, Docker)
-make
+# Configure (DM-1701 or MD-UV380)
+cmake --preset dm1701
+cmake --preset mduv380
 
-# Build for MD-UV380
-make PLATFORM=MDUV380
+# Build locally
+cmake --build build
 
-# Build locally (without Docker)
-make local
+# Build via Docker
+cmake --build build --target docker
 
 # Flash to radio
-make flash
+cmake --build build --target flash
 ```
 
 Output: `build/OpenDM1701.bin` or `build/OpenMDUV380.bin`
-
-## Install dependencies
-
-```bash
-make deps
-```
 
 
 # User guide

@@ -1,0 +1,37 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "dm1701",
+      "displayName": "DM-1701",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build",
+      "toolchainFile": "${sourceDir}/cmake/arm-none-eabi.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "PLATFORM": "DM1701"
+      }
+    },
+    {
+      "name": "mduv380",
+      "displayName": "MD-UV380",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build",
+      "toolchainFile": "${sourceDir}/cmake/arm-none-eabi.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "PLATFORM": "MDUV380"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "dm1701",
+      "configurePreset": "dm1701"
+    },
+    {
+      "name": "mduv380",
+      "configurePreset": "mduv380"
+    }
+  ]
+}

@@ -154,15 +154,34 @@ add_executable(${TARGET}.elf ${C_SOURCES} ${ASM_SOURCES})
 target_include_directories(${TARGET}.elf PRIVATE ${INCLUDES})
 target_compile_definitions(${TARGET}.elf PRIVATE ${DEFINES})
 
+# Output binary name
+set(OUTPUT_BIN Open${PLATFORM}.bin)
+
 # Generate .bin file
 add_custom_command(TARGET ${TARGET}.elf POST_BUILD
-    COMMAND ${CMAKE_OBJCOPY} -O binary -S ${TARGET}.elf ${TARGET}.bin
+    COMMAND ${CMAKE_OBJCOPY} -O binary -S ${TARGET}.elf ${OUTPUT_BIN}
     COMMAND ${CMAKE_SIZE} ${TARGET}.elf
-    COMMENT "Building ${TARGET}.bin"
+    COMMENT "Building ${OUTPUT_BIN}"
 )
 
-# Print size after build
-add_custom_target(size ALL
-    COMMAND ${CMAKE_SIZE} ${TARGET}.elf
-    DEPENDS ${TARGET}.elf
+# Flash target
+set(DONOR_DEFAULT "${CMAKE_SOURCE_DIR}/../blobs/MD9600-CSV-2571V5-V26.45.bin")
+set(DONOR "${DONOR_DEFAULT}" CACHE FILEPATH "Donor firmware")
+if(PLATFORM STREQUAL "DM1701")
+    set(MODEL "DM-1701")
+else()
+    set(MODEL "MD-UV380")
+endif()
+
+add_custom_target(flash
+    COMMAND python3 "${CMAKE_SOURCE_DIR}/../tools/loader.py" -s "${DONOR}" -f "${OUTPUT_BIN}" -m "${MODEL}"
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMENT "Flashing ${OUTPUT_BIN} to ${MODEL}"
+)
+
+# Docker build target
+add_custom_target(docker
+    COMMAND docker build --build-arg PLATFORM=${PLATFORM} --target export --output type=local,dest=${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Building ${OUTPUT_BIN} via Docker"
 )

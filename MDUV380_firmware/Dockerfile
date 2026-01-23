@@ -22,8 +22,7 @@ RUN cmake -B build -G Ninja \
     -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi.cmake \
     -DCMAKE_BUILD_TYPE=Release \
     -DPLATFORM=${PLATFORM} \
-    && cmake --build build -j$(nproc) \
-    && mv build/MDUV380_firmware.bin build/Open${PLATFORM}.bin
+    && cmake --build build -j$(nproc)
 
 # Export stage - only the binary
 FROM scratch AS export
