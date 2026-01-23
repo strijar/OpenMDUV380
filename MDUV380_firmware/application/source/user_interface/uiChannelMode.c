@@ -634,16 +634,6 @@ static void loadChannelData(bool useChannelDataInMemory, bool loadVoicePromptAnn
 			trxTalkGroupOrPcId = nonVolatileSettings.overrideTG;
 		}
 	}
-
-	int nextMenu = menuSystemGetPreviouslyPushedMenuNumber(); /* used to determine if this screen has just been loaded after Tx ended (in loadChannelData())) */
-
-	if (((uiDataGlobal.VoicePrompts.inhibitInitial == false) || loadVoicePromptAnnouncement) &&
-			((uiDataGlobal.Scan.active == false) ||
-					(uiDataGlobal.Scan.active && ((uiDataGlobal.Scan.state = SCAN_SHORT_PAUSED) || (uiDataGlobal.Scan.state = SCAN_PAUSED)))))
-	{
-		announceItem((wasLoadingZone ? PROMPT_SEQUENCE_ZONE_NAME_CHANNEL_NAME_AND_CONTACT_OR_VFO_FREQ_AND_MODE : PROMPT_SEQUENCE_CHANNEL_NAME_AND_CONTACT_OR_VFO_FREQ_AND_MODE),
-				((nextMenu == UI_TX_SCREEN) || (nextMenu == UI_PRIVATE_CALL) || uiDataGlobal.Scan.active) ? PROMPT_THRESHOLD_NEVER_PLAY_IMMEDIATELY : PROMPT_THRESHOLD_2);
-	}
 }
 
 void uiChannelInitializeCurrentZone(void) {

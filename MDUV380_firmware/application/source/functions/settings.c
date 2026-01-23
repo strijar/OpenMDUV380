@@ -134,7 +134,7 @@ bool settingsLoadSettings(void)
 
 	// Force Hotspot mode to off for existing RD-5R users.
 #if defined(PLATFORM_RD5R)
-	nonVolatileSettings.hotspotType = HOTSPOT_TYPE_OFF;
+	nonVolatileSettings.hotspot = HOTSPOT_OFF;
 #endif
 
 	codeplugGetVFO_ChannelData(&settingsVFOChannel[CHANNEL_VFO_A], CHANNEL_VFO_A);
@@ -294,7 +294,7 @@ bool settingsRestoreDefaultSettings(void) {
 	nonVolatileSettings.squelchDefaults[RADIO_BAND_VHF]		= 10U;// 1 - 21 = 0 - 100% , same as from the CPS variable squelch
 	nonVolatileSettings.squelchDefaults[RADIO_BAND_220MHz]	= 10U;// 1 - 21 = 0 - 100% , same as from the CPS variable squelch
 	nonVolatileSettings.squelchDefaults[RADIO_BAND_UHF]		= 10U;// 1 - 21 = 0 - 100% , same as from the CPS variable squelch
-	nonVolatileSettings.hotspotType = HOTSPOT_TYPE_OFF;
+	nonVolatileSettings.hotspot = HOTSPOT_OFF;
 	nonVolatileSettings.privateCalls = ALLOW_PRIVATE_CALLS_ON;
 
     /* Set all these value to zero to force the operator to set their own limits. */

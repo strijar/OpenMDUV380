@@ -74,7 +74,7 @@ static void callerTimerCallback(lv_timer_t *t) {
 			uiCallerDone();
 		}
 	} else {
-		if (hotspotMmdvmHostIsConnected) {
+		if (hotspotConnected) {
 			return;
 		}
 
@@ -124,7 +124,7 @@ void uiCallerDelay() {
 void uiCallerUpdate() {
 	uiDataGlobal.receivedPcId = 0x00;
 
-	if (main_obj == NULL || LinkHead == NULL || hotspotMmdvmHostIsConnected) {
+	if (main_obj == NULL || LinkHead == NULL || hotspotConnected) {
 		return;
 	}
 

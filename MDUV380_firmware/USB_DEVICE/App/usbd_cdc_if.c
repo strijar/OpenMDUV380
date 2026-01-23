@@ -411,7 +411,7 @@ static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
 						else
 						{
 							if ((Buf[0] == MMDVM_FRAME_START) &&
-									(nonVolatileSettings.hotspotType != HOTSPOT_TYPE_OFF))
+									(nonVolatileSettings.hotspot != HOTSPOT_OFF))
 							{
 								if (recvSize >= 3) // The shortest MMDVMHost frame length is 3U
 								{

@@ -102,7 +102,6 @@ static void uiInit() {
 }
 
 void uiCPSInit() {
-	menuDataGlobal.numItems = 0;
 	rxPowerSavingSetState(ECOPHASE_POWERSAVE_INACTIVE);
 	radio_mode = trxGetMode();
 	radio_bw = trxGetBandwidthIs25kHz();

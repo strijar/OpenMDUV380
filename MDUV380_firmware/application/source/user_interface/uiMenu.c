@@ -127,8 +127,8 @@ static void switchEventCallback(lv_event_t *e) {
 
 	switch (id) {
 		case SWITCH_HOTSPOT:
-			on = !nonVolatileSettings.hotspotType;
-			nonVolatileSettings.hotspotType = on;
+			on = !nonVolatileSettings.hotspot;
+			nonVolatileSettings.hotspot = on;
 
 			if (on) {
 				uiHotspotInit();
@@ -163,7 +163,7 @@ static lv_obj_t * createSwitch(lv_obj_t *parent, const char *txt, switches_t id)
 
     switch (id) {
     	case SWITCH_HOTSPOT:
-    		val = nonVolatileSettings.hotspotType;
+    		val = nonVolatileSettings.hotspot;
     		break;
 
     	default:

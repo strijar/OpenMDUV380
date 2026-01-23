@@ -128,15 +128,11 @@ void tick_com_request(void)
 			{
 				com_request = 0;
 
-				if ((nonVolatileSettings.hotspotType != HOTSPOT_TYPE_OFF) &&
+				if ((nonVolatileSettings.hotspot != HOTSPOT_OFF) &&
 						((comRecvMMDVMFrameCount >= 1) && (com_requestbuffer[1] == MMDVM_FRAME_START)) &&
 						(uiDataGlobal.dmrDisabled == false)) // DMR (digital) is disabled.
 				{
 
-					if (menuSystemGetCurrentMenuNumber() != UI_HOTSPOT_MODE)
-					{
-						menuSystemPushNewMenu(UI_HOTSPOT_MODE);
-					}
 				}
 			}
 			break;

@@ -60,13 +60,13 @@ menuDataGlobal_t menuDataGlobal =
 		 */
 		.data 					=
 		{
-				&menuDataMainMenu,
-				&menuDataContact,
+				NULL,
+				NULL,
 				NULL,// zone
 				NULL,// RadioInfos
 				NULL,// RSSI
 				NULL,// LastHeard
-				&menuDataOptions,// Options
+				NULL,// Options
 				NULL,// General options
 				NULL,// Radio options
 				NULL,// Display options
@@ -101,39 +101,6 @@ menuDataGlobal_t menuDataGlobal =
 		}
 };
 
-static void menuSystemCheckForFirstEntryAudible(menuStatus_t status)
-{
-}
-
-static void menuSystemPushMenuFirstRun(void)
-{
-}
-
-int menuSystemGetLastItemIndex(int stackPos)
-{
-	return -1;
-}
-
-void menuSystemPushNewMenu(int menuNumber)
-{
-}
-
-void menuSystemPopPreviousMenu(void)
-{
-}
-
-void menuSystemPopAllAndDisplayRootMenu(void)
-{
-}
-
-void menuSystemPopAllAndDisplaySpecificRootMenu(int newRootMenu, bool resetKeyboard)
-{
-}
-
-void menuSystemSetCurrentMenu(int menuNumber)
-{
-}
-
 int menuSystemGetCurrentMenuNumber(void)
 {
 }
@@ -152,124 +119,3 @@ int menuSystemGetRootMenuNumber(void)
 {
 }
 
-#define KEY_MAPPING_TYPE_2
-
-static void menuSystemPreProcessEvent(uiEvent_t *ev)
-{
-}
-
-static void menuSystemPostProcessEvent(uiEvent_t *ev)
-{
-}
-
-void menuSystemCallCurrentMenuTick(uiEvent_t *ev)
-{
-}
-
-
-// use -1 to force LED on all the time
-void displayLightOverrideTimeout(int timeout)
-{
-}
-
-void menuSystemInit(void)
-{
-}
-
-void menuSystemLanguageHasChanged(void)
-{
-}
-
-const menuItemNewData_t mainMenuItems[] =
-{
-	{   3, MENU_ZONE_LIST       },
-	{   6, MENU_CONTACTS_MENU   },
-	{  12, MENU_CHANNEL_DETAILS },
-	{   4, MENU_RSSI_SCREEN     },
-	{   8, MENU_FIRMWARE_INFO   },
-	{   9, MENU_OPTIONS         },
-	{   7, MENU_LAST_HEARD      },
-	{ 150, MENU_RADIO_INFOS     },
-	{ 173, MENU_SATELLITE       },
-	{ 195, MENU_GPS		        },
-};
-
-const menuItemsList_t menuDataMainMenu =
-{
-	.numItems = (sizeof(mainMenuItems) / sizeof(mainMenuItems[0])),
-	.items = mainMenuItems
-};
-
-static const menuItemNewData_t contactMenuItems[] =
-{
-	{ 15,  MENU_CONTACT_LIST      },
-	{ 139, MENU_DTMF_CONTACT_LIST },
-	{ 14,  MENU_CONTACT_NEW       },
-};
-
-const menuItemsList_t menuDataContact =
-{
-	.numItems = (sizeof(contactMenuItems) / sizeof(contactMenuItems[0])),
-	.items = contactMenuItems
-};
-
-static const menuItemNewData_t optionsMenuItems[] =
-{
-	{ 190, MENU_GENERAL },
-	{ 191, MENU_RADIO },
-	{  10, MENU_DISPLAY },
-	{  11, MENU_SOUND   },
-	{  206, MENU_CALIBRATION},
-	{  13, MENU_LANGUAGE        },
-};
-
-const menuItemsList_t menuDataOptions =
-{
-	.numItems = (sizeof(optionsMenuItems) / sizeof(optionsMenuItems[0])),
-	.items = optionsMenuItems
-};
-
-void menuDisplayTitle(const char *title)
-{
-}
-
-void menuDisplayEntry(int loopOffset, int focusedItem, const char *entryText)
-{
-}
-
-// Returns menu offset, -1 if the line is before the first menu item, -2 if the line is after the last menu item
-int menuGetMenuOffset(int maxMenuItems, int loopOffset)
-{
-}
-
-/*
- * Returns 99 if key is unknown, or not numerical when digitsOnly is true
- */
-int menuGetKeypadKeyValue(uiEvent_t *ev, bool digitsOnly)
-{
-}
-
-void menuUpdateCursor(int pos, bool moved, bool render)
-{
-}
-
-void moveCursorLeftInString(char *str, int *pos, bool delete)
-{
-}
-
-void moveCursorRightInString(char *str, int *pos, int max, bool insert)
-{
-}
-
-void menuSystemMenuIncrement(int32_t *currentItem, int32_t numItems)
-{
-}
-
-void menuSystemMenuDecrement(int32_t *currentItem, int32_t numItems)
-{
-}
-
-// For QuickKeys
-void menuDisplaySettingOption(const char *entryText, const char *valueText)
-{
-}

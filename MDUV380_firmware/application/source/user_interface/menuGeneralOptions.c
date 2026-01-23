@@ -160,13 +160,13 @@ static void updateScreen(bool isFirstRun)
 					else
 					{
 						const char *hsTypes[] = {"MMDVM", "BlueDV" };
-						if (nonVolatileSettings.hotspotType == 0)
+						if (nonVolatileSettings.hotspot == 0)
 						{
 							rightSideConst = (char * const *)&currentLanguage->off;
 						}
 						else
 						{
-							snprintf(rightSideVar, SCREEN_LINE_BUFFER_SIZE, "%s", hsTypes[nonVolatileSettings.hotspotType - 1]);
+							snprintf(rightSideVar, SCREEN_LINE_BUFFER_SIZE, "%s", hsTypes[nonVolatileSettings.hotspot - 1]);
 						}
 					}
 #endif
@@ -440,14 +440,6 @@ static void handleEvent(uiEvent_t *ev)
 						settingsIncrement(nonVolatileSettings.keypadTimerRepeat, 1);
 					}
 					break;
-				case GENERAL_OPTIONS_MENU_HOTSPOT_TYPE:
-#if !defined(PLATFORM_RD5R)
-					if ((uiDataGlobal.dmrDisabled == false) && (nonVolatileSettings.hotspotType < HOTSPOT_TYPE_BLUEDV))
-					{
-						settingsIncrement(nonVolatileSettings.hotspotType, 1);
-					}
-#endif
-					break;
 				case GENERAL_OPTIONS_MENU_TEMPERATURE_CALIBRATON:
 					if (nonVolatileSettings.temperatureCalibration < 20)
 					{
@@ -540,9 +532,9 @@ static void handleEvent(uiEvent_t *ev)
 					break;
 				case GENERAL_OPTIONS_MENU_HOTSPOT_TYPE:
 #if !defined(PLATFORM_RD5R)
-					if ((uiDataGlobal.dmrDisabled == false) && (nonVolatileSettings.hotspotType > HOTSPOT_TYPE_OFF))
+					if ((uiDataGlobal.dmrDisabled == false) && (nonVolatileSettings.hotspot > HOTSPOT_OFF))
 					{
-						settingsDecrement(nonVolatileSettings.hotspotType, 1);
+						settingsDecrement(nonVolatileSettings.hotspot, 1);
 					}
 #endif
 					break;

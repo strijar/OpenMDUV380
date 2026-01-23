@@ -173,5 +173,5 @@ extern uint32_t hotspotFreqRx;
 extern uint32_t hotspotFreqTx;
 extern volatile MMDVM_STATE hotspotModemState;
 extern int hotspotPowerLevel;
-extern bool hotspotMmdvmHostIsConnected;
+extern bool hotspotConnected;
 #endif

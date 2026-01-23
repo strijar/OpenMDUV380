@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2019-2022 Roger Clark, VK3KYY / G4KYF
  *                         Daniel Caujolle-Bert, F1RMB
+ *                         Oleg Belousov, R1CBU
  *
  * Low level DMR stream implementation informed by code written by
  *                         DSD Author (anonymous)
@@ -58,7 +59,6 @@
 #define WRITE_BIT1(p,i,b) p[(i)>>3] = (b) ? (p[(i)>>3] | BIT_MASK_TABLE[(i)&7]) : (p[(i)>>3] & ~BIT_MASK_TABLE[(i)&7])
 #define READ_BIT1(p,i)    (p[(i)>>3] & BIT_MASK_TABLE[(i)&7])
 
-
 static void ReedSolomonDMREncode(const uint8_t *inputData, uint8_t *outputData);
 static uint8_t LUT_Mult(uint8_t a, uint8_t b);
 static void BPTCglobalsInit(void);
@@ -88,7 +88,6 @@ static void embeddedDataSetLC(const DMRLC_t *lc);
 static bool hasTXOverflow(void);
 static bool hasRXOverflow(void);
 
-
 extern LinkItem_t *LinkHead;
 
 static const uint8_t PROTOCOL_VERSION = 1;
@@ -97,31 +96,39 @@ static const char HARDWARE[] = concat(HOTSPOT_VERSION_STRING, XSTRINGIFY(GITVERS
 #else
 static const char HARDWARE[] = concat(HOTSPOT_VERSION_STRING, GITVERSION);
 #endif
-static const uint8_t MS_SOURCED_AUDIO_SYNC[]   = { 0x07, 0xF7, 0xD5, 0xDD, 0x57, 0xDF, 0xD0 };
-static const uint8_t SYNC_MASK[]               = { 0x0F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xF0 };
+
 static const uint8_t MMDVM_VOICE_SYNC_PATTERN = 0x20;
 static const int EMBEDDED_DATA_OFFSET = 13;
 static const int TX_BUFFER_MIN_BEFORE_TRANSMISSION = 4;
-static const uint8_t START_FRAME_PATTERN[]  = { 0xFF,0x57,0xD7,0x5D,0xF5,0xD9 };
-static const uint8_t END_FRAME_PATTERN[]    = { 0x5D,0x7F,0x77,0xFD,0x75,0x79 };
-static const uint8_t VOICE_LC_SYNC_FULL[]       = { 0x04, 0x6D, 0x5D, 0x7F, 0x77, 0xFD, 0x75, 0x7E, 0x30 };
-static const uint8_t TERMINATOR_LC_SYNC_FULL[]  = { 0x04, 0xAD, 0x5D, 0x7F, 0x77, 0xFD, 0x75, 0x79, 0x60 };
-static const uint8_t LC_SYNC_MASK_FULL[]        = { 0x0F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xF0 };
 
-static const uint8_t DMR_AUDIO_SEQ_SYNC[6][7]   = {
-		{ 0x07, 0xF0, 0x00, 0x00, 0x00, 0x0F, 0xD0 },  // seq 0 NOT USED AS THIS IS THE SYNC
-		{ 0x01, 0x30, 0x00, 0x00, 0x00, 0x09, 0x10 },  // seq 1
-		{ 0x01, 0x70, 0x00, 0x00, 0x00, 0x07, 0x40 },  // seq 2
-		{ 0x01, 0x70, 0x00, 0x00, 0x00, 0x07, 0x40 },  // seq 3
-		{ 0x01, 0x50, 0x00, 0x00, 0x00, 0x00, 0x70 },  // seq 4
-		{ 0x01, 0x10, 0x00, 0x00, 0x00, 0x0E, 0x20 }   // seq 5
-};
+static const uint8_t MS_SOURCED_AUDIO_SYNC[]   	= { 0x07, 0xF7, 0xD5, 0xDD, 0x57, 0xDF, 0xD0 };
+static const uint8_t SYNC_MASK[]               	= { 0x0F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xF0 };
+static const uint8_t START_FRAME_PATTERN[]  	= { 0xFF, 0x57, 0xD7, 0x5D, 0xF5, 0xD9 };
+static const uint8_t END_FRAME_PATTERN[]    	= { 0x5D, 0x7F, 0x77, 0xFD, 0x75, 0x79 };
+static const uint8_t VOICE_LC_SYNC_FULL[]       = { 0x04, 0x6D, 0x5D, 0x7F, 0x77, 0xFD, 0x75, 0x7E, 0x30 };
+static const uint8_t TERMINATOR_LC_SYNC_FULL[]	= { 0x04, 0xAD, 0x5D, 0x7F, 0x77, 0xFD, 0x75, 0x79, 0x60 };
+static const uint8_t LC_SYNC_MASK_FULL[]        = { 0x0F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xF0 };
 
 static const uint8_t DMR_AUDIO_SEQ_MASK[]       = { 0x0F, 0xF0, 0x00, 0x00, 0x00, 0x0F, 0xF0 };
 static const uint8_t DMR_EMBED_SEQ_MASK[]       = { 0x00, 0x0F, 0xFF, 0xFF, 0xFF, 0xF0, 0x00 };
-static const uint8_t BIT_MASK_TABLE[] = { 0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01 };
-static const struct
-{
+static const uint8_t BIT_MASK_TABLE[] 			= { 0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01 };
+
+static const uint8_t DMR_AUDIO_SEQ_SYNC[6][7]   = {
+	{ 0x07, 0xF0, 0x00, 0x00, 0x00, 0x0F, 0xD0 },  // seq 0 NOT USED AS THIS IS THE SYNC
+	{ 0x01, 0x30, 0x00, 0x00, 0x00, 0x09, 0x10 },  // seq 1
+	{ 0x01, 0x70, 0x00, 0x00, 0x00, 0x07, 0x40 },  // seq 2
+	{ 0x01, 0x70, 0x00, 0x00, 0x00, 0x07, 0x40 },  // seq 3
+	{ 0x01, 0x50, 0x00, 0x00, 0x00, 0x00, 0x70 },  // seq 4
+	{ 0x01, 0x10, 0x00, 0x00, 0x00, 0x0E, 0x20 }   // seq 5
+};
+
+static const uint8_t VOICE_LC_HEADER_CRC_MASK[]    	= {0x96, 0x96, 0x96};
+static const uint8_t TERMINATOR_WITH_LC_CRC_MASK[] 	= {0x99, 0x99, 0x99};
+
+static const int BPTC19696CopyRanges[][2] 			= {{4,11}, {16,26}, {31,41}, {46,56}, {61,71}, {76,86}, {91,101}, {106,116}, {121,131}};
+static const int embedddataCopyRanges[][2] 			= {{0,10}, {16,26}, {32,41}, {48,57}, {64,73}, {80,89}, {96,105}};
+
+static const struct {
 	uint8_t  c;
 	uint32_t pattern;
 	uint8_t  length;
@@ -172,76 +179,71 @@ static const struct
 		{0,   0x00000000, 0}
 };
 
-static const uint8_t VOICE_LC_HEADER_CRC_MASK[]    = {0x96, 0x96, 0x96};
-static const uint8_t TERMINATOR_WITH_LC_CRC_MASK[] = {0x99, 0x99, 0x99};
+static uint8_t 					hotspotTxLC[9];
+static bool 					startedEmbeddedSearch = false;
 
-static const int BPTC19696CopyRanges[][2] = {{4,11},{16,26},{31,41},{46,56},{61,71},{76,86},{91,101},{106,116},{121,131}};
-static const int embedddataCopyRanges[][2] = {{0,10},{16,26},{32,41},{48,57},{64,73},{80,89},{96,105}};
+/* USB TX read/write positions and count */
 
-static uint8_t hotspotTxLC[9];
-static bool startedEmbeddedSearch = false;
+static volatile uint16_t 		usbComSendBufWritePosition = 0;
+static volatile uint16_t 		usbComSendBufReadPosition = 0;
+static volatile uint16_t 		usbComSendBufCount = 0;
 
-// USB TX read/write positions and count
-static volatile uint16_t usbComSendBufWritePosition = 0;
-static volatile uint16_t usbComSendBufReadPosition = 0;
-static volatile uint16_t usbComSendBufCount = 0;
+/* RF data read/write positions and count */
 
-// RF data read/write positions and count
-static volatile uint32_t rfFrameBufReadIdx = 0;
-static volatile uint32_t rfFrameBufWriteIdx = 0;
-static volatile uint32_t rfFrameBufCount = 0;
+static volatile uint32_t 		rfFrameBufReadIdx = 0;
+static volatile uint32_t 		rfFrameBufWriteIdx = 0;
+static volatile uint32_t 		rfFrameBufCount = 0;
+static volatile HOTSPOT_STATE	hotspotState = HOTSPOT_STATE_NOT_CONNECTED;
 
-static uint8_t lastRxState = HOTSPOT_RX_IDLE;
-static const int TX_BUFFERING_TIMEOUT = 360;
-static const int RX_NET_FRAME_TIMEOUT = 360;
-static int timeoutCounter;
-static uint32_t mmdvmHostLastActiveTime = 0;
-static const uint32_t MMDVMHOST_TIMEOUT = 2000;
-static volatile HOTSPOT_STATE hotspotState = HOTSPOT_STATE_NOT_CONNECTED;
-static uint8_t rf_power = 255;
-static int txStopDelay = 0;
-static int netRXDataTimer = 0;
-static bool rxLCFrameSent = false;
+static uint8_t 			lastRxState = HOTSPOT_RX_IDLE;
+static const int 		TX_BUFFERING_TIMEOUT = 360;
+static const int 		RX_NET_FRAME_TIMEOUT = 360;
+static int 				timeoutCounter;
+static uint32_t 		mmdvmHostLastActiveTime = 0;
+static const uint32_t 	MMDVMHOST_TIMEOUT = 2000;
+static uint8_t 			rf_power = 255;
+static int 				txStopDelay = 0;
+static int 				netRXDataTimer = 0;
+static bool 			rxLCFrameSent = false;
 
-typedef enum
-{
+typedef enum {
 	LCS_0,
 	LCS_1,
 	LCS_2,
 	LCS_3
 } LC_STATE_t;
 
+static uint8_t 			colorCode = 1;
+static char 			overriddenLCTA[2 * 9] = {0}; // 2 LC frame only (enough to store callsign)
+static bool 			overriddenLCAvailable = false;
+static uint32_t 		hotspotTxDelay = 0;
+static uint8_t 			overriddenBlocksTA = 0x00;
+static LC_STATE_t 		embeddedDataSequenceState;
+static bool				embeddedDataRaw[128];
+static bool				embeddedDataProcessed[72];
+static int				embeddedDataFLCO;
+static bool				embeddedDataIsValid;
 
-static uint8_t colorCode = 1;
-static char overriddenLCTA[2 * 9] = {0}; // 2 LC frame only (enough to store callsign)
-static bool overriddenLCAvailable = false;
-static uint32_t hotspotTxDelay = 0;
-static uint8_t overriddenBlocksTA = 0x00;
-static LC_STATE_t embeddedDataSequenceState;
-static bool	embeddedDataRaw[128];
-static bool	embeddedDataProcessed[72];
-static int	embeddedDataFLCO;
-static bool	embeddedDataIsValid;
-__attribute__((section(".ccmram"))) static bool BPTCRaw[196];
+static const uint32_t 	cwDOTDuration = 60; // 60ms per DOT
+static ticksTimer_t 	cwNextPeriodTimer = { 0, 0 };
+static uint8_t 			cwBuffer[64];
+static uint16_t 		cwpoPtr;
+
+bool					hotspotCwKeying = false;
+uint16_t				hotspotCwpoLen;
+uint8_t					hotspotCurrentRxCommandState;
+uint32_t				hotspotFreqRx = 0;
+uint32_t				hotspotFreqTx = 0;
+char					hotspotMmdvmQSOInfoIP[22] = {0}; // use 6x8 font; 21 char long
+DMRLC_t					hotspotRxedDMR_LC; // used to stored LC info from RXed frames
+int						hotspotSavedPowerLevel = -1;// no power level saved yet
+bool					hotspotConnected = false;
+int						hotspotPowerLevel = 0;// no power level saved yet
+volatile MMDVM_STATE	hotspotModemState = STATE_IDLE;
+
+static volatile MMDVMHOST_RX_STATE 				MMDVMHostRxState;
+__attribute__((section(".ccmram"))) static bool	BPTCRaw[196];
 __attribute__((section(".ccmram"))) static bool BPTCDeInterleaved[196];
-static const uint32_t cwDOTDuration = 60; // 60ms per DOT
-static ticksTimer_t cwNextPeriodTimer = { 0, 0 };
-static uint8_t cwBuffer[64];
-static uint16_t cwpoPtr;
-
-bool hotspotCwKeying = false;
-uint16_t hotspotCwpoLen;
-uint8_t hotspotCurrentRxCommandState;
-uint32_t hotspotFreqRx = 0;
-uint32_t hotspotFreqTx = 0;
-char hotspotMmdvmQSOInfoIP[22] = {0}; // use 6x8 font; 21 char long
-DMRLC_t hotspotRxedDMR_LC; // used to stored LC info from RXed frames
-int hotspotSavedPowerLevel = -1;// no power level saved yet
-bool hotspotMmdvmHostIsConnected = false;
-int hotspotPowerLevel = 0;// no power level saved yet
-volatile MMDVM_STATE hotspotModemState = STATE_IDLE;
-
-static volatile MMDVMHOST_RX_STATE MMDVMHostRxState;
 
 static bool voiceLCHeaderDecode(const uint8_t *data, uint8_t type, DMRLC_t *lc)
 {
@@ -1085,10 +1087,10 @@ static void getStatus(void)
 	buf[11] = 0; // no NXDN space
 	buf[12] = 1; // virtual space for POCSAG
 
-	if (!hotspotMmdvmHostIsConnected)
+	if (!hotspotConnected)
 	{
 		hotspotState = HOTSPOT_STATE_INITIALISE;
-		hotspotMmdvmHostIsConnected = true;
+		hotspotConnected = true;
 		uiHotspotUpdateScreen(HOTSPOT_RX_IDLE);
 	}
 
@@ -1148,9 +1150,9 @@ static uint8_t setConfig(const uint8_t *data, uint8_t length)
 	{
 		hotspotState = HOTSPOT_STATE_INITIALISE;
 
-		if (!hotspotMmdvmHostIsConnected)
+		if (!hotspotConnected)
 		{
-			hotspotMmdvmHostIsConnected = true;
+			hotspotConnected = true;
 			uiHotspotUpdateScreen(HOTSPOT_RX_IDLE);
 		}
 	}
@@ -1208,10 +1210,10 @@ static uint8_t setMode(const uint8_t *data, uint8_t length)
 	}
 #endif
 
-	if (!hotspotMmdvmHostIsConnected)
+	if (!hotspotConnected)
 	{
 		hotspotState = HOTSPOT_STATE_INITIALISE;
-		hotspotMmdvmHostIsConnected = true;
+		hotspotConnected = true;
 		uiHotspotUpdateScreen(HOTSPOT_RX_IDLE);
 	}
 
@@ -1253,7 +1255,7 @@ static void getVersion(void)
 #else
 			"Unknown"
 #endif
-			,(nonVolatileSettings.hotspotType == HOTSPOT_TYPE_MMDVM ? "MMDVM" : "BlueDV"));
+			,"MMDVM");
 
 	for (uint8_t i = 0; buffer[i] != 0x00; i++, count++)
 	{
@@ -1262,10 +1264,10 @@ static void getVersion(void)
 
 	buf[1] = count;
 
-	if (!hotspotMmdvmHostIsConnected)
+	if (!hotspotConnected)
 	{
 		hotspotState = HOTSPOT_STATE_INITIALISE;
-		hotspotMmdvmHostIsConnected = true;
+		hotspotConnected = true;
 		uiHotspotUpdateScreen(HOTSPOT_RX_IDLE);
 	}
 
@@ -1277,10 +1279,10 @@ static uint8_t handleDMRShortLC(const uint8_t *data, uint8_t length)
 	////	uint8_t LCBuf[5];
 	////	DMRShortLC_decode((uint8_t *) com_requestbuffer + 3,LCBuf);
 
-	if (!hotspotMmdvmHostIsConnected)
+	if (!hotspotConnected)
 	{
 		hotspotState = HOTSPOT_STATE_INITIALISE;
-		hotspotMmdvmHostIsConnected = true;
+		hotspotConnected = true;
 		uiHotspotUpdateScreen(HOTSPOT_RX_IDLE);
 	}
 
@@ -1545,14 +1547,6 @@ void handleHotspotRequest(void)
 				break;
 
 			case MMDVM_DMR_DATA2:
-				// It seems BlueDV under Windows forget to set correct mode
-				// when it connect a TG with an already running QSO. So we force
-				// the modemState and init the HS.
-				if ((nonVolatileSettings.hotspotType == HOTSPOT_TYPE_BLUEDV) && (hotspotModemState == STATE_IDLE))
-				{
-					hotspotModemState = STATE_DMR;
-				}
-
 				err = hotspotModeReceiveNetFrame(currentFrame, 2);
 				if (err == 0)
 				{
@@ -2007,7 +2001,7 @@ static void storeNetFrame(volatile const uint8_t *comBuffer)
 
 	foundEmbedded = getEmbeddedData(comBuffer);
 
-	if ((foundEmbedded || (nonVolatileSettings.hotspotType == HOTSPOT_TYPE_BLUEDV)) &&
+	if (foundEmbedded &&
 			(hotspotTxLC[0] == TG_CALL_FLAG || hotspotTxLC[0] == PC_CALL_FLAG) &&
 			(hotspotState != HOTSPOT_STATE_TX_START_BUFFERING && hotspotState != HOTSPOT_STATE_TRANSMITTING))
 	{
@@ -2040,10 +2034,10 @@ static uint8_t hotspotModeReceiveNetFrame(const uint8_t *comBuffer, uint8_t time
 {
 	DMRLC_t lc;
 
-	if (!hotspotMmdvmHostIsConnected)
+	if (!hotspotConnected)
 	{
 		hotspotState = HOTSPOT_STATE_INITIALISE;
-		hotspotMmdvmHostIsConnected = true;
+		hotspotConnected = true;
 		uiHotspotUpdateScreen(HOTSPOT_RX_IDLE);
 	}
 
@@ -2251,20 +2245,9 @@ void hotspotStateMachine(void)
 			}
 
 			rfFrameBufCount = 0;
-			if (hotspotMmdvmHostIsConnected)
+			if (hotspotConnected)
 			{
 				hotspotState = HOTSPOT_STATE_INITIALISE;
-			}
-			else
-			{
-				if ((nonVolatileSettings.hotspotType == HOTSPOT_TYPE_MMDVM) &&
-						((ticksGetMillis() - mmdvmHostLastActiveTime) > MMDVMHOST_TIMEOUT))
-				{
-					wavbuffer_count = 0;
-
-					uiHotspotDone();
-					break;
-				}
 			}
 			break;
 
@@ -2298,13 +2281,12 @@ void hotspotStateMachine(void)
 			break;
 
 		case HOTSPOT_STATE_RX_PROCESS:
-			if (hotspotMmdvmHostIsConnected)
+			if (hotspotConnected)
 			{
 				// No activity from MMDVMHost
-				if ((nonVolatileSettings.hotspotType == HOTSPOT_TYPE_MMDVM) &&
-						((ticksGetMillis() - mmdvmHostLastActiveTime) > MMDVMHOST_TIMEOUT))
+				if ((ticksGetMillis() - mmdvmHostLastActiveTime) > MMDVMHOST_TIMEOUT)
 				{
-					hotspotMmdvmHostIsConnected = false;
+					hotspotConnected = false;
 					hotspotState = HOTSPOT_STATE_NOT_CONNECTED;
 					rfFrameBufCount = 0;
 					wavbuffer_count = 0;
@@ -2451,7 +2433,7 @@ void hotspotStateMachine(void)
 				rfFrameBufCount = 0;
 				lastRxState = HOTSPOT_RX_IDLE;
 				hotspotState = HOTSPOT_STATE_TX_SHUTDOWN;
-				hotspotMmdvmHostIsConnected = false;
+				hotspotConnected = false;
 				trxTransmissionEnabled = false;
 				trxDisableTransmission();
 				uiHotspotUpdateScreen(HOTSPOT_RX_IDLE);
@@ -2537,9 +2519,9 @@ static uint8_t setFreq(const uint8_t *data, uint8_t length)
 
 	hotspotState = HOTSPOT_STATE_INITIALISE;
 
-	if (!hotspotMmdvmHostIsConnected)
+	if (!hotspotConnected)
 	{
-		hotspotMmdvmHostIsConnected = true;
+		hotspotConnected = true;
 		uiHotspotUpdateScreen(HOTSPOT_RX_IDLE);
 	}
 
@@ -2606,7 +2588,7 @@ static bool hasTXOverflow(void)
 
 void hotspotInit(void)
 {
-	hotspotMmdvmHostIsConnected = false;
+	hotspotConnected = false;
 	trxTalkGroupOrPcId = 0;
 	hotspotCurrentRxCommandState = HOTSPOT_RX_UNKNOWN;
 	hotspotState = HOTSPOT_STATE_NOT_CONNECTED;

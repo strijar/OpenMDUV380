@@ -402,7 +402,7 @@ void applicationMainTask(void) {
 	lv_timer_t *timer = lv_timer_create(start_timeout, 50, NULL);
 	lv_timer_set_repeat_count(timer, 1);
 
-	if (nonVolatileSettings.hotspotType != HOTSPOT_TYPE_OFF) {
+	if (nonVolatileSettings.hotspot != HOTSPOT_OFF) {
 		uiHotspotInit();
 	}
 
@@ -458,7 +458,7 @@ void applicationMainTask(void) {
 		gpsTick();
 		settingsSaveIfNeeded(false);
 
-		if (nonVolatileSettings.hotspotType != HOTSPOT_TYPE_OFF) {
+		if (nonVolatileSettings.hotspot != HOTSPOT_OFF) {
 			uiHotspotTick();
 		}
 
@@ -477,7 +477,7 @@ void applicationMainTask(void) {
 
 		lv_msg_send(UI_MSG_IDLE, NULL);
 
-		osDelay(pdMS_TO_TICKS(5));
+		osDelay(1);
 		lv_tick_inc(ticksGetMillis() - now);
 	}
 }

@@ -475,7 +475,7 @@ void uiHotspotDone() {
 
 	setTxDMRID(codeplugGetUserDMRID());
 	settingsUsbMode = USB_MODE_CPS;
-	hotspotMmdvmHostIsConnected = false;
+	hotspotConnected = false;
 
 	rxPowerSavingSetLevel(nonVolatileSettings.ecoLevel);
 
