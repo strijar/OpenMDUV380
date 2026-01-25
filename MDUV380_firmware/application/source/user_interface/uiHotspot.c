@@ -138,7 +138,6 @@ void uiHotspotInit() {
 	savedTGorPC = trxTalkGroupOrPcId;// Save the current TG or PC
 
 	hotspotInit();
-	displayLightTrigger(false);
 }
 
 void uiHotspotTick() {
@@ -169,94 +168,31 @@ void uiHotspotRestoreSettings() {
 	}
 }
 
-static void displayContactInfo(uint8_t y, char *text, size_t maxLen)
-{
-	// Max for TalkerAlias is 37: TA 27 (in 7bit format) + ' [' + 6 (Maidenhead)  + ']' + NULL
-	// Max for DMRID Database is MAX_DMR_ID_CONTACT_TEXT_LENGTH (50 + NULL)
-	char buffer[MAX_DMR_ID_CONTACT_TEXT_LENGTH];
-
-	if (strlen(text) >= 5)
-	{
-		int32_t  cpos;
-
-		if ((cpos = getFirstSpacePos(text)) != -1)
-		{
-			// Callsign found
-			memcpy(buffer, text, cpos);
-			buffer[cpos] = 0;
-			displayPrintCentered(y, chomp(buffer), FONT_SIZE_3);
-		}
-		else
-		{
-			// No space found, use a chainsaw
-			memcpy(buffer, text, 16);
-			buffer[16] = 0;
-
-			displayPrintCentered(y, chomp(buffer), FONT_SIZE_3);
-		}
-	}
-	else
-	{
-		memcpy(buffer, text, strlen(text));
-		buffer[strlen(text)] = 0;
-		displayPrintCentered(y, chomp(buffer), FONT_SIZE_3);
-	}
-}
-
-static void updateContactLine(uint8_t y)
-{
-	if ((LinkHead->talkGroupOrPcId >> 24) == PC_CALL_FLAG) // Its a Private call
-	{
-		displayPrintCentered(y, LinkHead->contact, FONT_SIZE_3);
-	}
-	else // Group call
-	{
-		switch (nonVolatileSettings.contactDisplayPriority)
-		{
-			case CONTACT_DISPLAY_PRIO_CC_DB_TA:
-			case CONTACT_DISPLAY_PRIO_DB_CC_TA:
-				// No contact found is codeplug and DMRIDs, use TA as fallback, if any.
-				if ((strncmp(LinkHead->contact, "ID:", 3) == 0) && (LinkHead->talkerAlias[0] != 0x00))
-				{
-					displayContactInfo(y, LinkHead->talkerAlias, sizeof(LinkHead->talkerAlias));
-				}
-				else
-				{
-					displayContactInfo(y, LinkHead->contact, sizeof(LinkHead->contact));
-				}
-				break;
-
-			case CONTACT_DISPLAY_PRIO_TA_CC_DB:
-			case CONTACT_DISPLAY_PRIO_TA_DB_CC:
-				// Talker Alias have the priority here
-				if (LinkHead->talkerAlias[0] != 0x00)
-				{
-					displayContactInfo(y, LinkHead->talkerAlias, sizeof(LinkHead->talkerAlias));
-				}
-				else // No TA, then use the one extracted from Codeplug or DMRIdDB
-				{
-					displayContactInfo(y, LinkHead->contact, sizeof(LinkHead->contact));
-				}
-				break;
-		}
-	}
-}
-
 void uiHotspotUpdateScreen(uint8_t rxCommandState) {
 	if (main_obj == NULL) {
 		uiInit();
+		displayLightTrigger(false);
 	}
 
 	if (trxTransmissionEnabled) {
+		displayLightTrigger(false);
 		lv_label_set_text(msg[1], "TX");
-		lv_label_set_text(msg[2], "");
 
+		uint32_t id = (trxTalkGroupOrPcId & 0x00FFFFFF);
+
+		if ((trxTalkGroupOrPcId >> 24) == PC_CALL_FLAG) {
+			lv_label_set_text_fmt(msg[2], "PC: %u", id);
+		} else {
+			lv_label_set_text_fmt(msg[2], "TG: %u", id);
+		}
 	} else {
 		dmrIdDataStruct_t currentRec;
 
 		switch (rxCommandState) {
 			case HOTSPOT_RX_START:
 			case HOTSPOT_RX_START_LATE:
+				displayLightTrigger(false);
+
 				if (dmrIDLookup(hotspotRxedDMR_LC.srcId, &currentRec)) {
 					lv_label_set_text(msg[1], currentRec.text);
 				} else {
@@ -276,172 +212,6 @@ void uiHotspotUpdateScreen(uint8_t rxCommandState) {
 				break;
 		}
 	}
-
-	/*
-	int val_before_dp;
-	int val_after_dp;
-	char buffer[22]; // set to 22 due to FW info
-
-	hotspotCurrentRxCommandState = rxCommandState;
-
-	displayClearBuf();
-	displayPrintAt(4, 4, "DMR", FONT_SIZE_1);
-	displayPrintCentered(0, "Hotspot", FONT_SIZE_3);
-
-	// Display battery percentage/voltage
-	if (nonVolatileSettings.bitfieldOptions & BIT_BATTERY_VOLTAGE_IN_HEADER)
-	{
-		int volts, mvolts;
-		int16_t xV = (DISPLAY_SIZE_X - ((4 * 6) + 6));
-
-		getBatteryVoltage(&volts, &mvolts);
-
-		snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%2d", volts);
-		displayPrintCore(xV, 4, buffer, FONT_SIZE_1, TEXT_ALIGN_LEFT, false);
-
-		displayDrawRect(xV + (6 * 2), 4 + 5, 2, 2, true);
-
-		snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%1dV", mvolts);
-		displayPrintCore(xV + (6 * 2) + 3, 4, buffer, FONT_SIZE_1, TEXT_ALIGN_LEFT, false);
-	}
-	else
-	{
-		snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%d%%", getBatteryPercentage());
-		displayPrintAt(DISPLAY_SIZE_X - (strlen(buffer) * 6) - 4, 4, buffer, FONT_SIZE_1);
-	}
-
-	batteryUpdateTimeout = ticksGetMillis();
-	batteryAverageMillivolts = getBatteryAverageInMillivolts();
-
-	if (trxTransmissionEnabled)
-	{
-		if (displayFWVersion)
-		{
-			snprintf(buffer, 22, "%s", &HOTSPOT_VERSION_STRING[12]);
-			displayPrintCentered(16 + 4, buffer, FONT_SIZE_1);
-		}
-		else
-		{
-			if (hotspotCwKeying)
-			{
-				sprintf(buffer, "%s", "<Tx CW ID>");
-				displayPrintCentered(16, buffer, FONT_SIZE_3);
-			}
-			else
-			{
-				updateContactLine(16);
-			}
-		}
-
-		if (hotspotCwKeying)
-		{
-			buffer[0] = 0;
-		}
-		else
-		{
-			if ((trxTalkGroupOrPcId >> 24) == PC_CALL_FLAG)
-			{
-				snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%s %u", currentLanguage->pc, trxTalkGroupOrPcId & 0x00FFFFFF);
-			}
-			else
-			{
-				uint32_t id = (trxTalkGroupOrPcId & 0x00FFFFFF);
-
-				if (id == 0)
-				{
-					buffer[0] = 0; // Do not display "TG 0"
-				}
-				else
-				{
-					snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%s %u", currentLanguage->tg, id);
-				}
-			}
-		}
-
-		displayPrintCentered(32, buffer, FONT_SIZE_3);
-
-		val_before_dp = hotspotFreqTx / 100000;
-		val_after_dp = hotspotFreqTx - val_before_dp * 100000;
-		sprintf(buffer, "T %d.%05d MHz", val_before_dp, val_after_dp);
-	}
-	else
-	{
-		if (rxCommandState == HOTSPOT_RX_START  || rxCommandState == HOTSPOT_RX_START_LATE)
-		{
-			dmrIdDataStruct_t currentRec;
-
-			if (displayFWVersion)
-			{
-				snprintf(buffer, 22, "%s", &HOTSPOT_VERSION_STRING[12]);
-			}
-			else
-			{
-				if (dmrIDLookup(hotspotRxedDMR_LC.srcId, &currentRec) == true)
-				{
-					snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%s", currentRec.text);
-				}
-				else
-				{
-					snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "ID: %u", hotspotRxedDMR_LC.srcId);
-				}
-			}
-
-			displayPrintCentered(16 + (displayFWVersion ? 4 : 0), buffer, (displayFWVersion ? FONT_SIZE_1 : FONT_SIZE_3));
-
-			if (hotspotRxedDMR_LC.FLCO == 0)
-			{
-				snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%s %u", currentLanguage->tg, hotspotRxedDMR_LC.dstId);
-			}
-			else
-			{
-				snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "%s %u", currentLanguage->pc, hotspotRxedDMR_LC.dstId);
-			}
-
-			displayPrintCentered(32, buffer, FONT_SIZE_3);
-		}
-		else
-		{
-
-			if (displayFWVersion)
-			{
-				snprintf(buffer, 22, "%s", &HOTSPOT_VERSION_STRING[12]);
-				displayPrintCentered(16 + 4, buffer, FONT_SIZE_1);
-			}
-			else
-			{
-				if (hotspotModemState == STATE_POCSAG)
-				{
-					displayPrintCentered(16, "<POCSAG>", FONT_SIZE_3);
-				}
-				else
-				{
-					if (strlen(hotspotMmdvmQSOInfoIP))
-					{
-						displayPrintCentered(16 + 4, hotspotMmdvmQSOInfoIP, FONT_SIZE_1);
-					}
-				}
-			}
-
-			snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "CC:%u", trxGetDMRColourCode());//, trxGetDMRTimeSlot()+1) ;
-
-			displayPrintCore(0, 32, buffer, FONT_SIZE_3, TEXT_ALIGN_LEFT, false);
-
-			sprintf(buffer,"%s%s",POWER_LEVELS[hotspotPowerLevel],POWER_LEVEL_UNITS[hotspotPowerLevel]);
-			displayPrintCore(0, 32, buffer, FONT_SIZE_3, TEXT_ALIGN_RIGHT, false);
-		}
-		val_before_dp = hotspotFreqRx / 100000;
-		val_after_dp = hotspotFreqRx - val_before_dp * 100000;
-		snprintf(buffer, SCREEN_LINE_BUFFER_SIZE, "R %d.%05d MHz", val_before_dp, val_after_dp);
-	}
-
-	displayPrintCentered(48, buffer, FONT_SIZE_3);
-	displayRender();
-
-	if (trxTransmissionEnabled || ((rxCommandState == HOTSPOT_RX_START) || (rxCommandState == HOTSPOT_RX_START_LATE)))
-	{
-		displayLightTrigger(false);
-	}
-	*/
 }
 
 void uiHotspotDone() {

@@ -1049,9 +1049,6 @@ static uint8_t handleCWID(const uint8_t *data, uint8_t length)
 	return 0;
 }
 
-
-
-
 static void getStatus(void)
 {
 	uint8_t buf[16];
