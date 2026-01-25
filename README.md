@@ -13,24 +13,67 @@ This functionality is provided by the official firmware which is merged with the
 
 # Build
 
+## Docker Build (Recommended)
+
+**No dependencies required on host** - all tools (ARM toolchain, Python, pyusb) run inside Docker.
+
+```bash
+# Build firmware
+make build PLATFORM=dm1701
+make build PLATFORM=mduv380
+
+# Flash to radio (via Docker, no pyusb install needed)
+make flash PLATFORM=dm1701
+
+# Build and flash in one command
+make build-and-flash PLATFORM=dm1701
+
+# Clean build artifacts
+make clean PLATFORM=dm1701
+make clean-all  # Clean all platforms
+```
+
+Output: `MDUV380_firmware/build-dm1701/OpenDM1701.bin` or `MDUV380_firmware/build-mduv380/OpenMDUV380.bin`
+
+**Note:** Flash requires USB access:
+- **Linux**: Runs via Docker with `--privileged` flag (no host dependencies needed)
+- **macOS**: Runs locally with system Python (Docker USB passthrough not supported)
+  - **Option 1 (recommended)**: Install uv for isolated environments: `curl -LsSf https://astral.sh/uv/install.sh | sh`
+  - **Option 2**: Install dependencies globally: `pip3 install pyusb pyserial`
+
+**Warning:** If you build with Docker and then want to build locally (or vice versa), you must clean first:
+```bash
+make clean PLATFORM=dm1701
+# or: rm -rf MDUV380_firmware/build-dm1701
+```
+This is because Docker and local builds use different paths in CMake cache.
+
+## Local Build (Requires ARM Toolchain)
+
 ```bash
 cd MDUV380_firmware
 
-# Configure (DM-1701 or MD-UV380)
+# Configure project (required first time or after clean)
 cmake --preset dm1701
-cmake --preset mduv380
 
-# Build locally
-cmake --build build
-
-# Build via Docker
-cmake --build build --target docker
+# Build firmware
+cmake --build --preset dm1701
 
 # Flash to radio
-cmake --build build --target flash
+cmake --build --preset dm1701 --target flash
+
+# Build and flash in one command
+cmake --build --preset dm1701 --target build-and-flash
+
+# Clean build artifacts
+cmake --build --preset dm1701 --target clean
+
+# Remove entire build directory
+cmake --build --preset dm1701 --target distclean
+# or: rm -rf build-dm1701
 ```
 
-Output: `build/OpenDM1701.bin` or `build/OpenMDUV380.bin`
+**Note:** After running `distclean` or manually deleting the build directory, you must run `cmake --preset dm1701` again to reconfigure the project.
 
 
 # User guide

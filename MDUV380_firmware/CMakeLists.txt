@@ -156,12 +156,48 @@ target_compile_definitions(${TARGET}.elf PRIVATE ${DEFINES})
 
 # Output binary name
 set(OUTPUT_BIN Open${PLATFORM}.bin)
+set(RAW_BIN ${TARGET}.bin)
 
-# Generate .bin file
+# Codec cleaner tool
+find_program(CODEC_CLEANER NAMES codec_cleaner)
+
+if(NOT CODEC_CLEANER)
+    # Not in PATH, build it
+    set(CODEC_CLEANER_SRC ${CMAKE_SOURCE_DIR}/../tools/codec_cleaner/codec_cleaner.c)
+    set(CODEC_CLEANER ${CMAKE_SOURCE_DIR}/../tools/codec_cleaner/codec_cleaner${CMAKE_EXECUTABLE_SUFFIX})
+
+    find_program(HOST_CC NAMES gcc cc clang)
+    if(NOT HOST_CC)
+        message(FATAL_ERROR "Host C compiler not found (needed to build codec_cleaner)")
+    endif()
+
+    if(NOT EXISTS ${CODEC_CLEANER})
+        message(STATUS "Building codec_cleaner with host compiler: ${HOST_CC}")
+        execute_process(
+            COMMAND ${HOST_CC} -Wall -O2 -s ${CODEC_CLEANER_SRC} -o ${CODEC_CLEANER}
+            RESULT_VARIABLE CODEC_BUILD_RESULT
+        )
+        if(NOT CODEC_BUILD_RESULT EQUAL 0)
+            message(FATAL_ERROR "Failed to build codec_cleaner")
+        endif()
+    endif()
+endif()
+
+message(STATUS "Using codec_cleaner: ${CODEC_CLEANER}")
+
+# Generate .bin file and clean codec regions
 add_custom_command(TARGET ${TARGET}.elf POST_BUILD
-    COMMAND ${CMAKE_OBJCOPY} -O binary -S ${TARGET}.elf ${OUTPUT_BIN}
+    COMMAND ${CMAKE_OBJCOPY} -O binary -S ${TARGET}.elf ${RAW_BIN}
+    COMMAND ${CODEC_CLEANER} -i ${RAW_BIN} -o ${OUTPUT_BIN}
     COMMAND ${CMAKE_SIZE} ${TARGET}.elf
     COMMENT "Building ${OUTPUT_BIN}"
+)
+
+# Add binary files to clean target
+set_property(TARGET ${TARGET}.elf APPEND PROPERTY ADDITIONAL_CLEAN_FILES
+    "${CMAKE_BINARY_DIR}/${RAW_BIN}"
+    "${CMAKE_BINARY_DIR}/${OUTPUT_BIN}"
+    "${CMAKE_BINARY_DIR}/${TARGET}.map"
 )
 
 # Flash target
@@ -173,15 +209,24 @@ else()
     set(MODEL "MD-UV380")
 endif()
 
+# Flash firmware to device (independent, no rebuild)
 add_custom_target(flash
-    COMMAND python3 "${CMAKE_SOURCE_DIR}/../tools/loader.py" -s "${DONOR}" -f "${OUTPUT_BIN}" -m "${MODEL}"
-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMAND python3 "${CMAKE_SOURCE_DIR}/../tools/loader.py" -s "${DONOR}" -f "${CMAKE_BINARY_DIR}/${OUTPUT_BIN}" -m "${MODEL}"
+    USES_TERMINAL
     COMMENT "Flashing ${OUTPUT_BIN} to ${MODEL}"
 )
 
-# Docker build target
-add_custom_target(docker
-    COMMAND docker build --build-arg PLATFORM=${PLATFORM} --target export --output type=local,dest=${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    COMMENT "Building ${OUTPUT_BIN} via Docker"
+# Build and flash in one command
+add_custom_target(build-and-flash
+    COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
+    COMMAND python3 "${CMAKE_SOURCE_DIR}/../tools/loader.py" -s "${DONOR}" -f "${CMAKE_BINARY_DIR}/${OUTPUT_BIN}" -m "${MODEL}"
+    USES_TERMINAL
+    COMMENT "Building and flashing ${OUTPUT_BIN} to ${MODEL}"
 )
+
+# Distclean - remove entire build directory
+add_custom_target(distclean
+    COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}
+    COMMENT "Removing entire build directory"
+)
+

@@ -1,11 +1,11 @@
 {
-  "version": 6,
+  "version": 3,
   "configurePresets": [
     {
       "name": "dm1701",
       "displayName": "DM-1701",
       "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build",
+      "binaryDir": "${sourceDir}/build-dm1701",
       "toolchainFile": "${sourceDir}/cmake/arm-none-eabi.cmake",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
@@ -16,7 +16,7 @@
       "name": "mduv380",
       "displayName": "MD-UV380",
       "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build",
+      "binaryDir": "${sourceDir}/build-mduv380",
       "toolchainFile": "${sourceDir}/cmake/arm-none-eabi.cmake",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
