@@ -1,0 +1,8 @@
+build/
+Debug/
+Release/
+*.elf
+*.bin
+*.map
+*.lst
+.settings/
