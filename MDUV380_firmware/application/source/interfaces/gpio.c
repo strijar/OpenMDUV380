@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020-2022 Roger Clark, VK3KYY / G4KYF
+ * Copyright (C) 2020-2024 Roger Clark, VK3KYY / G4KYF
  *
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions
@@ -29,34 +29,91 @@
 #include "interfaces/gpio.h"
 #include <stdint.h>
 
-#define dimingTableSize  101
+// use 100 + 1 elements so that we can achieve 100% by putting the reset pattern beyond the end of the DMA loop range
+#define dimingTableSize  101U
+uint32_t dimingPattern[dimingTableSize];
 
-static uint8_t 	currentDisplayPercentage = 0;
-static uint32_t	dimingPattern[dimingTableSize];
+static uint8_t currentDisplayPercentage = 0;
 
-void gpioInitDisplay() {
-	HAL_DMA_Start(&hdma_tim1_ch1,  (uint32_t)dimingPattern, (uint32_t)&(GPIOD->BSRR), dimingTableSize-1);
+#if 0
+void gpioInitButtons(void)
+{
+}
+
+void gpioInitCommon(void)
+{
+}
+#endif
+
+void gpioInitDisplay()
+{
 	HAL_TIM_Base_Start(&htim1);
 	HAL_TIM_OC_Start(&htim1, TIM_CHANNEL_1);
 	__HAL_TIM_ENABLE_DMA(&htim1, TIM_DMA_CC1);
 }
 
-void gpioSetDisplayBacklightIntensityPercentage(uint8_t intensityPercentage) {
-	if (intensityPercentage > 100) {
-		intensityPercentage = 100;
+void gpioSetDisplayBacklightIntensityPercentage(uint8_t intensityPercentage)
+{
+	if (intensityPercentage > 100U)
+	{
+		intensityPercentage = 100U;
 	}
 
-	if (intensityPercentage == currentDisplayPercentage) {
+	if (intensityPercentage == currentDisplayPercentage)
+	{
 		return;
 	}
 
-	dimingPattern[currentDisplayPercentage] = 0;
+	// Switching from dimmed to 100% or 0% value. Stop the DMA
+	if ((intensityPercentage == 100U) || (intensityPercentage == 0U))
+	{
+		HAL_DMA_Abort(&hdma_tim1_ch1); // kill the DMA
 
-	dimingPattern[0] = LCD_BKLIGHT_Pin;
-	dimingPattern[intensityPercentage] = LCD_BKLIGHT_Pin << 16U;
+		HAL_GPIO_WritePin(LCD_BKLIGHT_GPIO_Port, LCD_BKLIGHT_Pin, ((intensityPercentage == 100U) ? GPIO_PIN_SET : GPIO_PIN_RESET));
+	}
+	else
+	{
+		// Changing from 100% or 0% to dimmed value. So run the DMA
+		if ((currentDisplayPercentage == 100U) || (currentDisplayPercentage == 0U))
+		{
+			HAL_DMA_Start(&hdma_tim1_ch1, (uint32_t)dimingPattern, (uint32_t)&(LCD_BKLIGHT_GPIO_Port->BSRR), 100U);// 100 steps
+		}
+		//HAL_GPIO_WritePin(LCD_BKLIGHT_GPIO_Port, LCD_BKLIGHT_Pin, GPIO_PIN_RESET);
+	}
+
+	dimingPattern[currentDisplayPercentage] = 0U;// remove the previous pin reset pattern
+
+	dimingPattern[0U] = LCD_BKLIGHT_Pin;// turn on the backlight at the start of the array
+	dimingPattern[intensityPercentage] = (uint32_t)LCD_BKLIGHT_Pin << 16U;// Turn off the pin at the appropriate position in the array
 	currentDisplayPercentage = intensityPercentage;
 }
 
-uint8_t gpioGetDisplayBacklightIntensityPercentage(void) {
+uint8_t gpioGetDisplayBacklightIntensityPercentage(void)
+{
 	return currentDisplayPercentage;
 }
+
+#if 0
+void gpioInitFlash(void)
+{
+}
+#endif
+
+void gpioInitKeyboard(void)
+{
+}
+
+void gpioInitLEDs(void)
+{
+}
+
+void gpioInitRotarySwitch(void)
+{
+// config is via the STM32Cube config tool
+}
+
+#if 0
+void gpioInitC6000Interface(void)
+{
+}
+#endif

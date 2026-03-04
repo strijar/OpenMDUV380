@@ -70,6 +70,8 @@
 
 #if defined(PLATFORM_MDUV380)
 #define USBD_PRODUCT_STRING_FS     "OpenMDUV380 Transceiver"
+#elif defined(PLATFORM_MDUV390_PLUS)
+#define USBD_PRODUCT_STRING_FS     "OpenMDUV390+ Transceiver"
 #elif defined(PLATFORM_MD9600)
 #define USBD_PRODUCT_STRING_FS     "OpenMD9600 Transceiver"
 #elif defined(PLATFORM_DM1701)
