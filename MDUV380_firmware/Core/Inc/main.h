@@ -170,8 +170,6 @@ void SystemClock_Config(void);
 #define SPI2_MISO_GPIO_Port GPIOB
 #define SPI2_MOSI_Pin GPIO_PIN_15
 #define SPI2_MOSI_GPIO_Port GPIOB
-#define LCD_BKLIGHT_Pin GPIO_PIN_8
-#define LCD_BKLIGHT_GPIO_Port GPIOD
 #define RX_AUDIO_MUX_Pin GPIO_PIN_9
 #define RX_AUDIO_MUX_GPIO_Port GPIOD
 #define LCD_RS_Pin GPIO_PIN_12
@@ -182,8 +180,6 @@ void SystemClock_Config(void);
 #define LCD_D0_GPIO_Port GPIOD
 #define LCD_D1_Pin GPIO_PIN_15
 #define LCD_D1_GPIO_Port GPIOD
-#define PA_SEL_SW_Pin GPIO_PIN_6
-#define PA_SEL_SW_GPIO_Port GPIOC
 #define CTC_DCS_PWM_Pin GPIO_PIN_7
 #define CTC_DCS_PWM_GPIO_Port GPIOC
 #define BEEP_PWM_Pin GPIO_PIN_8
@@ -226,17 +222,16 @@ void SystemClock_Config(void);
 #define LED_RED_GPIO_Port GPIOE
 /* USER CODE BEGIN Private defines */
 
-// PA_SEL_SW and LCB_BKLIGHT pins are swapped on the MD-UV390Plus 10W radios
 #if defined(VARIANT_PLUS)
-#undef PA_SEL_SW_Pin
-#undef PA_SEL_SW_GPIO_Port
-#undef LCD_BKLIGHT_Pin
-#undef LCD_BKLIGHT_GPIO_Port
-
-#define PA_SEL_SW_Pin GPIO_PIN_8
-#define PA_SEL_SW_GPIO_Port GPIOD
-#define LCD_BKLIGHT_Pin GPIO_PIN_6
-#define LCD_BKLIGHT_GPIO_Port GPIOC
+#define PA_SEL_SW_Pin           GPIO_PIN_8
+#define PA_SEL_SW_GPIO_Port     GPIOD
+#define LCD_BKLIGHT_Pin         GPIO_PIN_6
+#define LCD_BKLIGHT_GPIO_Port   GPIOC
+#else
+#define PA_SEL_SW_Pin           GPIO_PIN_6
+#define PA_SEL_SW_GPIO_Port     GPIOC
+#define LCD_BKLIGHT_Pin         GPIO_PIN_8
+#define LCD_BKLIGHT_GPIO_Port   GPIOD
 #endif
 
 /* USER CODE END Private defines */

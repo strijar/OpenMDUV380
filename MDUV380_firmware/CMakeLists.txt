@@ -9,6 +9,8 @@ if(NOT PLATFORM MATCHES "^(DM1701|MDUV380)$")
     message(FATAL_ERROR "Invalid PLATFORM: ${PLATFORM}. Use DM1701 or MDUV380")
 endif()
 
+set(VARIANT_PLUS OFF CACHE BOOL "Variant platform (DM380+)")
+
 # Project name based on platform
 project(Open${PLATFORM} C ASM)
 
@@ -117,6 +119,7 @@ set(DEFINES
     NDEBUG
 )
 
+
 ######################################
 # Compiler flags
 ######################################
@@ -154,8 +157,13 @@ add_executable(${TARGET}.elf ${C_SOURCES} ${ASM_SOURCES})
 target_include_directories(${TARGET}.elf PRIVATE ${INCLUDES})
 target_compile_definitions(${TARGET}.elf PRIVATE ${DEFINES})
 
-# Output binary name
-set(OUTPUT_BIN Open${PLATFORM}.bin)
+if(VARIANT_PLUS)
+    target_compile_definitions(${TARGET}.elf PRIVATE "VARIANT_PLUS")
+    set(OUTPUT_BIN OpenMDUV390+.bin)
+else()
+    set(OUTPUT_BIN Open${PLATFORM}.bin)
+endif()
+
 set(RAW_BIN ${TARGET}.bin)
 
 # Codec cleaner tool
