@@ -1,8 +1,9 @@
 # OpenGD77
+
 Firmware for DMR transceivers using the STM32F405VGT MCU, AT1846S RF chip and HR-C6000 DMR chipset.  
 Including the Radioddiy TYT MD-380UV / Retevis RT-3S and Baofeng DM-1701 / Retevis RT-84
 
-# Project status
+## Project status
 
 The firmware is relatively stable and provides DMR and FM audio transmission and reception, as well as a DMR hotspot mode.  
 However it does not support some core functionality that the official firmware supports, including sending and receiving of text / SMS messages
@@ -10,10 +11,13 @@ However it does not support some core functionality that the official firmware s
 The firmware source code does not contain a AMBE codec required for DMR operation.
 This functionality is provided by the official firmware which is merged with the OpenGD77 by the OpenGD77CPS or firmware loader
 
+## DFU mode
 
-# Build
+Turn device off, then simultaneously press and hold the PTT button and the SK1 button (above the PTT), and turn on the radio; the LED will flash red and green.
 
-## Docker Build (Recommended)
+## Build
+
+### Docker Build (Recommended)
 
 **No dependencies required on host** - all tools (ARM toolchain, Python, pyusb) run inside Docker.
 
@@ -21,7 +25,11 @@ This functionality is provided by the official firmware which is merged with the
 # Build firmware
 make build PLATFORM=dm1701
 make build PLATFORM=mduv380
+```
 
+**First - [boot to DFU](#dfu-mode)**
+
+```bash
 # Flash to radio (via Docker, no pyusb install needed)
 make flash PLATFORM=dm1701
 
@@ -36,19 +44,22 @@ make clean-all  # Clean all platforms
 Output: `MDUV380_firmware/build-dm1701/OpenDM1701.bin` or `MDUV380_firmware/build-mduv380/OpenMDUV380.bin`
 
 **Note:** Flash requires USB access:
+
 - **Linux**: Runs via Docker with `--privileged` flag (no host dependencies needed)
 - **macOS**: Runs locally with system Python (Docker USB passthrough not supported)
   - **Option 1 (recommended)**: Install uv for isolated environments: `curl -LsSf https://astral.sh/uv/install.sh | sh`
   - **Option 2**: Install dependencies globally: `pip3 install pyusb pyserial`
 
 **Warning:** If you build with Docker and then want to build locally (or vice versa), you must clean first:
+
 ```bash
 make clean PLATFORM=dm1701
 # or: rm -rf MDUV380_firmware/build-dm1701
 ```
+
 This is because Docker and local builds use different paths in CMake cache.
 
-## Local Build (Requires ARM Toolchain)
+### Local Build (Requires ARM Toolchain)
 
 ```bash
 cd MDUV380_firmware
@@ -58,7 +69,11 @@ cmake --preset dm1701
 
 # Build firmware
 cmake --build --preset dm1701
+```
 
+**First - [boot to DFU](#dfu-mode)**
+
+```bash
 # Flash to radio
 cmake --build --preset dm1701 --target flash
 
@@ -75,32 +90,31 @@ cmake --build --preset dm1701 --target distclean
 
 **Note:** After running `distclean` or manually deleting the build directory, you must run `cmake --preset dm1701` again to reconfigure the project.
 
+## User guide
 
-# User guide
+See <https://github.com/LibreDMR/OpenGD77_UserGuide>
 
-See https://github.com/LibreDMR/OpenGD77_UserGuide
+## Credits
 
-
-# Credits
 Originally conceived by Kai DG4KLU.  
 Further development by Roger VK3KYY, latterly assisted by Daniel F1RMB, Alex DL4LEX, Colin G4EML and others.
 
 Current lead developer and source code gatekeeper is Roger VK3KYY
 
-
-# Copyright
+## Copyright
 
  The firmware is copyright of the OpenGD77 developers. See individual source files for copyright information.
 
-## MCU SDK and API code:   
+## MCU SDK and API code
+
    See license files in sub-folders
-	
+
 ## FreeRTOS
+
    Copyright (C) 2020 Amazon.com, Inc. or its affiliates.  
    All Rights Reserved.
 
-
-# License
+## License
 
 Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions
 are met:
@@ -123,14 +137,13 @@ LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR P
 ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-# Special thanks
+## Special thanks
 
 Thanks to those who have assisted the project including :
 
 BD4VOW
 CT1HSN
-CT4TX 
+CT4TX
 DG3GSP
 DG4KLU
 DJ0HF
