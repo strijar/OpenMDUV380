@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y \
     gcc \
     curl \
     ca-certificates \
+    usbutils \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv for Python management
