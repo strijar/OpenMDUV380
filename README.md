@@ -36,12 +36,24 @@ make flash PLATFORM=dm1701
 # Build and flash in one command
 make build-and-flash PLATFORM=dm1701
 
+# Collect the codec-cleaned binary into a versioned artifact
+make artifacts PLATFORM=dm1701
+
 # Clean build artifacts
 make clean PLATFORM=dm1701
-make clean-all  # Clean all platforms
+make clean-all  # Clean all platforms and collected artifacts
 ```
 
-Output: `MDUV380_firmware/build-dm1701/OpenDM1701.bin` or `MDUV380_firmware/build-mduv380/OpenMDUV380.bin`
+Output:
+
+- `MDUV380_firmware/build-dm1701/OpenDM1701.bin` (or `build-mduv380/OpenMDUV380.bin`) — raw build output.
+- `artifacts/OpenDM1701-<gitrev>.bin` — versioned copy collected on every `make build`, stamped with the git revision (also shown on the firmware info screen) for handoff to the flasher.
+
+To flash a specific file instead of the latest build, pass `FIRMWARE`:
+
+```bash
+make flash PLATFORM=dm1701 FIRMWARE=artifacts/OpenDM1701-abc1234.bin
+```
 
 **Note:** Flash requires USB access:
 
@@ -89,6 +101,20 @@ cmake --build --preset dm1701 --target distclean
 ```
 
 **Note:** After running `distclean` or manually deleting the build directory, you must run `cmake --preset dm1701` again to reconfigure the project.
+
+## Codeplug
+
+The codeplug can be read from and written to the radio with [dmrconf](https://github.com/hmatuschek/qdmr) (the qdmr CLI), which supports this firmware through its `openuv380` driver.
+
+```bash
+# Read the codeplug into an editable YAML file
+dmrconf -y -D <device> -R openuv380 read codeplug.yaml
+
+# Write a codeplug back to the radio
+dmrconf -y -D <device> -R openuv380 write codeplug.yaml
+```
+
+`<device>` is the radio's serial port specified **without the `/dev/` prefix** — the bare name as listed by dmrconf (e.g. `cu.usbmodem...` on macOS, `ttyACM0` on Linux). `-R openuv380` selects the radio explicitly.
 
 ## User guide
 
