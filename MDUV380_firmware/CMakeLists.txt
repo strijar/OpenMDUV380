@@ -145,12 +145,44 @@ set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/STM32F405VGTX_FLASH.ld)
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -T${LINKER_SCRIPT}")
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-Map=${TARGET}.map,--cref")
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--gc-sections")
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--noinhibit-exec")
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lc -lm")
 
 ######################################
 # Target
 ######################################
+
+# codec_interface.c contains inline asm that sets up AMBE codec arguments via
+# register variables without asm operand lists; any optimization level above
+# -O0 deletes those register loads and the codec is called with garbage
+# pointers (hard fault on DMR TX). Matches the per-file override in .cproject.
+set_source_files_properties(application/source/dmr_codec/codec_interface.c
+    PROPERTIES COMPILE_OPTIONS "-O0")
+
+# Git revision stamped into the firmware (firmware-info screen, hotspot HARDWARE
+# string). Precedence: -DGITVERSION=... (CI injecting a known SHA) > GITVERSION
+# environment variable > git in the source tree > UNKNOWN. The build image ships
+# git, so container and CI builds self-stamp without any override.
+if(NOT GITVERSION)
+    if(DEFINED ENV{GITVERSION} AND NOT "$ENV{GITVERSION}" STREQUAL "")
+        set(GITVERSION "$ENV{GITVERSION}")
+    else()
+        execute_process(
+            COMMAND git rev-parse --short HEAD
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            OUTPUT_VARIABLE GITVERSION
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET
+        )
+    endif()
+endif()
+if(NOT GITVERSION)
+    set(GITVERSION UNKNOWN)
+endif()
+message(STATUS "Firmware git revision: ${GITVERSION}")
+set_source_files_properties(
+    application/source/functions/hotspot.c
+    application/source/usb/usb_com.c
+    application/source/user_interface/menuFirmwareInfoScreen.c
+    PROPERTIES COMPILE_DEFINITIONS "GITVERSION=${GITVERSION}")
 
 add_executable(${TARGET}.elf ${C_SOURCES} ${ASM_SOURCES})
 

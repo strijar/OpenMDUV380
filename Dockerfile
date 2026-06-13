@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y \
     gcc \
     curl \
     ca-certificates \
+    usbutils \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv for Python management
@@ -34,5 +35,9 @@ RUN gcc -Wall -O2 -s /tmp/codec_cleaner.c -o /usr/local/bin/codec_cleaner \
 
 # Create codec placeholder
 RUN mkdir -p /codec_placeholder && cd /codec_placeholder && codec_cleaner -C
+
+RUN apt-get update && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/* \
+    && git config --global --add safe.directory '*'
 
 WORKDIR /src

@@ -195,7 +195,7 @@ void displayInit() {
 	HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_RESET);
 
 	// Init
-    if((DISPLAYLCD_GET_TYPE(displayLCD_Type == 2)) || (DISPLAYLCD_GET_TYPE(displayLCD_Type) == 3))
+    if((DISPLAYLCD_GET_TYPE(displayLCD_Type) == 2) || (DISPLAYLCD_GET_TYPE(displayLCD_Type) == 3))
     {
         displayWriteCmd(0xfe);
         displayWriteCmd(0xef);
@@ -409,6 +409,20 @@ void displayInit() {
     					(DISPLAYLCD_GET_TYPE(displayLCD_Type) == 2) ? 0xE0 :
     							0xA0
     	};
+
+    	// LVGL renders BGR565 when LV_COLOR_BGR is set (DM1701), RGB565 otherwise.
+    	// Panels flagged DIPLAYLCD_TYPE_RGB expect RGB565, unflagged ones BGR565;
+    	// when the rendered order differs from the panel order, the controller
+    	// swaps it via the MADCTL BGR bit.
+#if defined(LV_COLOR_BGR)
+    	if (DISPLAYLCD_TYPE_IS_RGB(displayLCD_Type))
+#else
+    	if (!DISPLAYLCD_TYPE_IS_RGB(displayLCD_Type))
+#endif
+    	{
+    		opts[0] |= 0x08;
+    	}
+
     	displayWriteCmds(HX8583_CMD_MADCTL, 1, opts);
     }
 
