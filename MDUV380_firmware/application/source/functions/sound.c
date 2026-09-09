@@ -227,7 +227,7 @@ void soundInitBeepTask(void)
 	sine_beep_duration = 0;
 	taskEXIT_CRITICAL();
 
-	xTaskCreate(soundBeepTaskFunction,           /* pointer to the task */
+	BaseType_t taskCreated = xTaskCreate(soundBeepTaskFunction, /* pointer to the task */
 			"beepTask",                          /* task name for kernel awareness debugging */
 			1000L / sizeof(portSTACK_TYPE),      /* task stack size */
 			NULL,                      			 /* optional task startup argument */
@@ -235,6 +235,11 @@ void soundInitBeepTask(void)
 			&beepTask.Handle 					 /* optional task handle to create */
 	);
 
+	configASSERT(taskCreated == pdPASS);
+	if (taskCreated != pdPASS)
+	{
+		return;
+	}
 	beepTask.Running = true;
 	beepTask.AliveCount = TASK_FLAGGED_ALIVE;
 }

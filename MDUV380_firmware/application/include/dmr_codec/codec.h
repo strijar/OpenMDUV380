@@ -34,33 +34,6 @@
 #include "functions/sound.h"
 
 
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380)  || defined(PLATFORM_MD380) || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
-#define CODEC_LOCATION_1 0x807537C
-#else
-#define CODEC_LOCATION_1 0x4400
-#define CODEC_LOCATION_2 0x54000
-#endif
-#define CODEC_DECODE_CONFIG_DATA_LENGTH 0x7ec
-#define CODEC_ENCODE_CONFIG_DATA_LENGTH 0x2000
-#define CODEC_ECC_CONFIG_DATA_LENGTH 0x100
-
-#define QUAUX(X) #X
-#define QU(X) QUAUX(X)
-
-#if defined(PLATFORM_MD9600) || defined(PLATFORM_MDUV380) || defined(PLATFORM_MD380)  || defined(PLATFORM_DM1701) || defined(PLATFORM_MD2017)
-#define AMBE_DECODE 0x08075954;
-#define AMBE_ENCODE 0x080754ac;
-#define AMBE_ENCODE_ECC 0x08075864;
-#else
-#define AMBE_DECODE 0x0005543D;
-#define AMBE_ENCODE 0x00054F94;
-#define AMBE_ENCODE_ECC 0x0005534C;
-#endif
-extern uint8_t ambebuffer_decode[CODEC_DECODE_CONFIG_DATA_LENGTH];
-extern uint8_t ambebuffer_encode[CODEC_ENCODE_CONFIG_DATA_LENGTH];
-extern uint8_t ambebuffer_encode_ecc[CODEC_ECC_CONFIG_DATA_LENGTH];
-
-void initFrame(uint8_t *indata, uint16_t bitbufferDecode[49]);
 void codecInit(bool fromVoicePrompts);
 bool codecIsAvailable(void);
 void codecInitInternalBuffers(void);

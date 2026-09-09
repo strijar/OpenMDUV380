@@ -2607,14 +2607,19 @@ static void hrc6000TaskFunction(void *data)
 
 void HRC6000InitTask(void)
 {
-	xTaskCreate(hrc6000TaskFunction,            /* pointer to the task */
+	BaseType_t taskCreated = xTaskCreate(hrc6000TaskFunction, /* pointer to the task */
 			"hrc6000Task",                      /* task name for kernel awareness debugging */
-			5000L / sizeof(portSTACK_TYPE),     /* task stack size */
+			9000L / sizeof(portSTACK_TYPE),     /* task stack size (source vocoder encoder needs >5 KB) */
 			NULL,                               /* optional task startup argument */
 			(UBaseType_t)osPriorityNormal,      /* initial priority */
 			&hrc6000Task.Handle                 /* optional task handle to create */
 	);
 
+	configASSERT(taskCreated == pdPASS);
+	if (taskCreated != pdPASS)
+	{
+		return;
+	}
 	hrc6000Task.Running = true;
 	hrc6000Task.AliveCount = TASK_FLAGGED_ALIVE;
 }

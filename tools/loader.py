@@ -47,10 +47,10 @@ import usb.core
 import usb.util
 import zlib
 import os.path
-from pathlib import Path
-import configparser
-import hashlib
-from typing import Final
+try:
+    from typing import Final
+except ImportError:  # Python 3.6 compatibility
+    Final = object
 import enum
 import time
 
@@ -123,10 +123,8 @@ class FWPlatformOutput(enum.Enum):
         return self.value
 
 
-config = []
 FWOutputPlatforms = ["MD-9600", "MD-UV380", "DM-1701", "MD-2017", "MD-380", "Unknown"]
 FWPlatformFormat = FWPlatformOutput.UNKNOWN
-FW2645_SHA256_Checksum: Final = "d8a653307222e576ee416ab6d4704d14758fa71c1b0e826ffd840f26266cf11f"
 BLOCK_WRITE_SIZE:Final = 1024
 
 MD9600_ENCODE_CIPHER:Final = [
@@ -403,8 +401,7 @@ DM1801_ENCODE_CIPHER:Final = [
 # Python 2 doesn't have the latter, so detect which one to use
 #getargspec = getattr(inspect, "getfullargspec", inspect.getargspec)
 
-if not hasattr(inspect, 'getargspec'):
-    getargspec = inspect.getfullargspec
+getargspec = getattr(inspect, 'getargspec', inspect.getfullargspec)
 
 if "length" in getargspec(usb.util.get_string).args:
     # PyUSB 1.0.0.b1 has the length argument
@@ -416,20 +413,6 @@ else:
     # PyUSB 1.0.0.b2 dropped the length argument
     def get_string(dev, index):
         return usb.util.get_string(dev, index)
-
-
-def GetSHA256Checksum(filename):
-    fHash = ''
-
-    try:
-        with open(filename,"rb") as f:
-            bytes = f.read()
-
-        fHash = hashlib.sha256(bytes).hexdigest()
-    except:
-        return ''
-
-    return fHash
 
 
 def dfu_get_string(i=0):
@@ -716,10 +699,8 @@ def cli_progress(addr, offset, size, strPrefix=None):
         print("")
 
 
-def patch_and_download_firmware(firmwareFile, platform, progress=None):
-    """Patch the open firmware using the Official one as codec source, then download to the device."""
-    encBuf = []
-    officialFirmware = ""
+def download_firmware(firmwareFile, platform, progress=None):
+    """Encode and download a self-contained open firmware image."""
     firmwareSize = 0
     foundOfficialFirmware = True
     OFFICIAL_FIRMWARE_HEADER = [ 0x4F, 0x75, 0x74, 0x53, 0x65, 0x63, 0x75, 0x72, 0x69, 0x74, 0x79, 0x42, 0x69, 0x6E, 0x00, 0x00 ]
@@ -774,37 +755,8 @@ def patch_and_download_firmware(firmwareFile, platform, progress=None):
             break
 
     if (foundOfficialFirmware == True):
-        print(" !!! " + "You can't flash the official donor firmware file. Exiting...")
+        print(" !!! " + "You can't flash an official firmware image. Exiting...")
         sys.exit(-2)
-
-    ## Get the codec source firmware
-    try:
-        officialFirmware = config['GLOBAL']['SourceSTM32Firmware']
-    except KeyError:
-        officialFirmware = ""
-
-    if ((officialFirmware != '') and (os.path.isfile(officialFirmware) == True)):
-        print(" *** " + "Patching for DMR" + " (using " + officialFirmware + ")")
-        try:
-            with open(officialFirmware, "rb") as f:
-                f.seek(0xC2C7C)
-                encBuf = bytearray(f.read(0x48BB0))
-        except:
-            print(" !!! " + "Patching failed. Exiting...")
-            sys.exit(-8)
-
-	## Decrypt the official MD9600 firmware
-        AMBE_SECTION_CIPHER_OFSET = (0x6937c % 1024)
-        for j in range(0, len(encBuf)):
-            encBuf[j] ^= MD9600_ENCODE_CIPHER[(j + AMBE_SECTION_CIPHER_OFSET) % 1024]
-
-        ## Merge the section of the official fw into the open firmware.
-        if (len(openFirmwareData) >= len(encBuf) + 0x6937c):
-            for j in range(0, len(encBuf)):
-                openFirmwareData[0x6937c + j] = encBuf[j];
-
-    else:
-        print(" *** " + "Flashing FM Only firmware")
 
     ## Encode the open firmware
     print(" *** " + "Flashing a ", end="")
@@ -886,23 +838,11 @@ def patch_and_download_firmware(firmwareFile, platform, progress=None):
 def main():
     """Test program for verifying this files functionality."""
     global __verbose
-    global config
-    home = str(Path.home())
-    configFilename = home + "/.gd77firmwareloader.ini"
-    config = configparser.ConfigParser()
-
-    config.read(configFilename)
-
-    try:
-        officialFirmware = config['GLOBAL']['SourceSTM32Firmware']
-    except KeyError:
-        officialFirmware = ""
-
     # Parse CMD args
     parser = argparse.ArgumentParser(
         prog="OpenGD77 firmware loader for STM32 transceivers based",
         description="OpenGD77 STM32 FW Loader v{}".format(version),
-        epilog=" -- DMR Enabled -- " if (officialFirmware != '' and os.path.isfile(officialFirmware) == True) else " -- FM Only -- "
+        epilog=" -- Self-contained DMR firmware -- "
     )
 
     parser.add_argument(
@@ -910,9 +850,6 @@ def main():
     )
     parser.add_argument("--vid", help="USB Vendor ID (default: 0x{:X}).".format(defaultVID), type=lambda x: int(x, 0), default=defaultVID)
     parser.add_argument("--pid", help="USB Product ID (default: 0x{:X}).".format(defaultPID), type=lambda x: int(x, 0), default=defaultPID)
-    parser.add_argument(
-        "-s", "--source", help="official firmware file used as codec source (**Note**: you have to select a source firmware at least once, the file location is stored and used by default).", dest="source", default=False
-    )
     parser.add_argument(
         "-f", "--firmware", help="flash the specified firmware.", dest="firmware", default=False
     )
@@ -942,34 +879,6 @@ def main():
     if args.list:
         list_dfu_devices(**kwargs)
         return
-
-
-    if args.source:
-        fwFile = args.source
-        hash256 = GetSHA256Checksum(fwFile)
-
-        # The checksum doesn't match, ignoring this SGL file
-        if (hash256 != FW2645_SHA256_Checksum):
-            print(" !!! " + "The specified codec source firmware isn't valid...")
-            fwFile = ''
-
-        try:
-            config.set('GLOBAL', 'SourceSTM32Firmware', fwFile)
-        except:
-            config['GLOBAL'] = { 'SourceSTM32Firmware': fwFile }
-
-        # Save configuration file
-        if (fwFile != ''):
-            print(" *** " + "Use {} as codec source.".format(fwFile))
-        else:
-            print(" *** " + "Unset codec source firmware file.")
-
-        with open(configFilename, 'w') as cfgFile:
-            config.write(cfgFile)
-
-        # Re-read the configuration file
-        config.read(configFilename)
-        officialFirmware = fwFile
 
 
     if args.model:
@@ -1004,8 +913,7 @@ def main():
             print(" !!! " + "You should specify a radio model (available models are: {}). Exiting...".format(", ".join(str(x) for x in FWOutputPlatforms[:-1])))
             sys.exit(-5)
 
-        ## Download the firmware (and optionnaly patch it for the codec) to the device.
-        patch_and_download_firmware(args.firmware, FWPlatformFormat, cli_progress)
+        download_firmware(args.firmware, FWPlatformFormat, cli_progress)
         command_run = True
 
 

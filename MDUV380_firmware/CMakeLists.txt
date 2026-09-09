@@ -41,6 +41,11 @@ file(GLOB RTT_SRC "SeggerRTT/RTT/*.c")
 file(GLOB RTT_SYSCALLS_SRC "SeggerRTT/Syscalls/SEGGER_RTT_Syscalls_GCC.c")
 file(GLOB APP_SRC "application/source/*.c")
 file(GLOB APP_CODEC_SRC "application/source/dmr_codec/*.c")
+# Public API/FEC and initial states only; signal processing is assembly.
+set(APP_VOCODER_SRC
+    application/source/vocoder/vocoder.c
+    application/source/vocoder/portable_initial_state.c
+)
 file(GLOB APP_FUNC_SRC "application/source/functions/*.c")
 file(GLOB APP_HW_SRC "application/source/hardware/*.c")
 file(GLOB APP_IF_SRC "application/source/interfaces/*.c")
@@ -66,6 +71,7 @@ set(C_SOURCES
     ${RTT_SYSCALLS_SRC}
     ${APP_SRC}
     ${APP_CODEC_SRC}
+    ${APP_VOCODER_SRC}
     ${APP_FUNC_SRC}
     ${APP_HW_SRC}
     ${APP_IF_SRC}
@@ -80,8 +86,8 @@ set(C_SOURCES
 # ASM sources
 set(ASM_SOURCES
     Core/Startup/startup_stm32f405vgtx.s
-    application/source/dmr_codec/codec_bin.S
     SeggerRTT/RTT/SEGGER_RTT_ASM_ARMv7M.S
+    application/source/vocoder/vocoder_thumb.S
 )
 
 ######################################
@@ -105,6 +111,7 @@ set(INCLUDES
     SeggerRTT/Config
     SeggerRTT/RTT
     application/include
+    application/source
     .
 )
 
@@ -150,13 +157,6 @@ set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--gc-sections")
 # Target
 ######################################
 
-# codec_interface.c contains inline asm that sets up AMBE codec arguments via
-# register variables without asm operand lists; any optimization level above
-# -O0 deletes those register loads and the codec is called with garbage
-# pointers (hard fault on DMR TX). Matches the per-file override in .cproject.
-set_source_files_properties(application/source/dmr_codec/codec_interface.c
-    PROPERTIES COMPILE_OPTIONS "-O0")
-
 # Git revision stamped into the firmware (firmware-info screen, hotspot HARDWARE
 # string). Precedence: -DGITVERSION=... (CI injecting a known SHA) > GITVERSION
 # environment variable > git in the source tree > UNKNOWN. The build image ships
@@ -186,6 +186,11 @@ set_source_files_properties(
 
 add_executable(${TARGET}.elf ${C_SOURCES} ${ASM_SOURCES})
 
+# Keep the C packing/FEC adapter fast on the real-time audio path.
+# The DSP core is assembled directly; C optimization does not alter it.
+set_source_files_properties(${APP_VOCODER_SRC}
+    PROPERTIES COMPILE_OPTIONS "-O3;-fno-strict-aliasing;-fwrapv")
+
 target_include_directories(${TARGET}.elf PRIVATE ${INCLUDES})
 target_compile_definitions(${TARGET}.elf PRIVATE ${DEFINES})
 
@@ -196,53 +201,20 @@ else()
     set(OUTPUT_BIN Open${PLATFORM}.bin)
 endif()
 
-set(RAW_BIN ${TARGET}.bin)
-
-# Codec cleaner tool
-find_program(CODEC_CLEANER NAMES codec_cleaner)
-
-if(NOT CODEC_CLEANER)
-    # Not in PATH, build it
-    set(CODEC_CLEANER_SRC ${CMAKE_SOURCE_DIR}/../tools/codec_cleaner/codec_cleaner.c)
-    set(CODEC_CLEANER ${CMAKE_SOURCE_DIR}/../tools/codec_cleaner/codec_cleaner${CMAKE_EXECUTABLE_SUFFIX})
-
-    find_program(HOST_CC NAMES gcc cc clang)
-    if(NOT HOST_CC)
-        message(FATAL_ERROR "Host C compiler not found (needed to build codec_cleaner)")
-    endif()
-
-    if(NOT EXISTS ${CODEC_CLEANER})
-        message(STATUS "Building codec_cleaner with host compiler: ${HOST_CC}")
-        execute_process(
-            COMMAND ${HOST_CC} -Wall -O2 -s ${CODEC_CLEANER_SRC} -o ${CODEC_CLEANER}
-            RESULT_VARIABLE CODEC_BUILD_RESULT
-        )
-        if(NOT CODEC_BUILD_RESULT EQUAL 0)
-            message(FATAL_ERROR "Failed to build codec_cleaner")
-        endif()
-    endif()
-endif()
-
-message(STATUS "Using codec_cleaner: ${CODEC_CLEANER}")
-
-# Generate .bin file and clean codec regions
+# Generate a standalone image; the vocoder is built entirely from source.
 add_custom_command(TARGET ${TARGET}.elf POST_BUILD
-    COMMAND ${CMAKE_OBJCOPY} -O binary -S ${TARGET}.elf ${RAW_BIN}
-    COMMAND ${CODEC_CLEANER} -i ${RAW_BIN} -o ${OUTPUT_BIN}
+    COMMAND ${CMAKE_OBJCOPY} -O binary -S ${TARGET}.elf ${OUTPUT_BIN}
     COMMAND ${CMAKE_SIZE} ${TARGET}.elf
     COMMENT "Building ${OUTPUT_BIN}"
 )
 
 # Add binary files to clean target
 set_property(TARGET ${TARGET}.elf APPEND PROPERTY ADDITIONAL_CLEAN_FILES
-    "${CMAKE_BINARY_DIR}/${RAW_BIN}"
     "${CMAKE_BINARY_DIR}/${OUTPUT_BIN}"
     "${CMAKE_BINARY_DIR}/${TARGET}.map"
 )
 
 # Flash target
-set(DONOR_DEFAULT "${CMAKE_SOURCE_DIR}/../blobs/MD9600-CSV-2571V5-V26.45.bin")
-set(DONOR "${DONOR_DEFAULT}" CACHE FILEPATH "Donor firmware")
 if(PLATFORM STREQUAL "DM1701")
     set(MODEL "DM-1701")
 else()
@@ -251,7 +223,7 @@ endif()
 
 # Flash firmware to device (independent, no rebuild)
 add_custom_target(flash
-    COMMAND python3 "${CMAKE_SOURCE_DIR}/../tools/loader.py" -s "${DONOR}" -f "${CMAKE_BINARY_DIR}/${OUTPUT_BIN}" -m "${MODEL}"
+    COMMAND python3 "${CMAKE_SOURCE_DIR}/../tools/loader.py" -f "${CMAKE_BINARY_DIR}/${OUTPUT_BIN}" -m "${MODEL}"
     USES_TERMINAL
     COMMENT "Flashing ${OUTPUT_BIN} to ${MODEL}"
 )
@@ -259,7 +231,7 @@ add_custom_target(flash
 # Build and flash in one command
 add_custom_target(build-and-flash
     COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
-    COMMAND python3 "${CMAKE_SOURCE_DIR}/../tools/loader.py" -s "${DONOR}" -f "${CMAKE_BINARY_DIR}/${OUTPUT_BIN}" -m "${MODEL}"
+    COMMAND python3 "${CMAKE_SOURCE_DIR}/../tools/loader.py" -f "${CMAKE_BINARY_DIR}/${OUTPUT_BIN}" -m "${MODEL}"
     USES_TERMINAL
     COMMENT "Building and flashing ${OUTPUT_BIN} to ${MODEL}"
 )
@@ -269,4 +241,3 @@ add_custom_target(distclean
     COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}
     COMMENT "Removing entire build directory"
 )
-

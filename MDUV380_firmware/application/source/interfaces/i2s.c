@@ -39,13 +39,14 @@ uint16_t i2s_Rx_Buffer[NUM_I2S_BUFFERS][2][WAV_BUFFER_SIZE];
 
 static void clearI2SBuffersAndFlags(void)
 {
+	// Stop the peripheral before touching buffers still owned by DMA.
+	HAL_I2S_DMAStop(&hi2s3);
+	__HAL_I2SEXT_FLUSH_RX_DR(&hi2s3);
 	memset(i2s_Tx_Buffer, 0x00, (NUM_I2S_BUFFERS * 2 * (WAV_BUFFER_SIZE * sizeof(uint16_t))));
 	memset(i2s_Rx_Buffer, 0x00, (NUM_I2S_BUFFERS * 2 * (WAV_BUFFER_SIZE * sizeof(uint16_t))));
 	stopOnNextI2SDMAInterrupt = false;
 	isSending = false;
 	isReceiving = false;
-	 HAL_I2S_DMAStop(&hi2s3);
-	 __HAL_I2SEXT_FLUSH_RX_DR(&hi2s3);
 	g_TX_SAI_in_use = false;
 	soundInit();
 }
@@ -56,7 +57,9 @@ void HAL_I2SEx_TxRxHalfCpltCallback(I2S_HandleTypeDef *hi2s)
 	{
 		if (isSending)
 		{
-			g_TX_SAI_in_use = soundRefillData(0);
+			// An empty PCM queue is an underrun, not a stopped DMA stream.
+			// soundRefillData supplies silence and later callbacks resume audio.
+			(void)soundRefillData(0);
 		}
 		else if(isReceiving)
 		{
@@ -75,7 +78,7 @@ void HAL_I2SEx_TxRxCpltCallback(I2S_HandleTypeDef *hi2s)
 	{
 		if (isSending)
 		{
-			g_TX_SAI_in_use = soundRefillData(1);
+			(void)soundRefillData(1);
 		}
 		else if(isReceiving)
 		{

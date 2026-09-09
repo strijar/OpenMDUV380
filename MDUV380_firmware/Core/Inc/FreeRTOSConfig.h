@@ -68,7 +68,10 @@
 #define configTICK_RATE_HZ                       ((TickType_t)1000)
 #define configMAX_PRIORITIES                     ( 56 )
 #define configMINIMAL_STACK_SIZE                 ((uint16_t)128)
-#define configTOTAL_HEAP_SIZE                    ((size_t)1024 * 20)
+/* The 8 KB main stack, 9 KB vocoder stack and 1 KB beep stack plus
+ * newlib-enabled task control blocks already exceed 20 KB. ucHeap lives in
+ * CCM RAM; leave room here for all three tasks and the RTOS queues. */
+#define configTOTAL_HEAP_SIZE                    ((size_t)1024 * 32)
 #define configMAX_TASK_NAME_LEN                  ( 16 )
 #define configUSE_TRACE_FACILITY                 1
 #define configUSE_16_BIT_TICKS                   0

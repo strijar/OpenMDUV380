@@ -153,13 +153,6 @@ SECTIONS
   /* Used by the startup to initialize data */
   _sidata = LOADADDR(.data);
   
-	.codec_bin_section_1 : ALIGN(4)
-	{
-	   . = ABSOLUTE(0x807537C) ;
-	   *(.codec_bin_section_1)
-	    KEEP(*(.codec_bin_section_1))
-	} > FLASH
-
   /* Initialized data sections into "RAM" Ram type memory */
   .data :
   {
